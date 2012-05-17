@@ -15,3 +15,5 @@ isle_of_man.osm
 
 #ignore output files
 nodes.bin
+*.csv
+callgrind.out.*

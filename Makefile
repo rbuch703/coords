@@ -16,15 +16,19 @@ CCFLAGS = $(CFLAGS)
 all: filter_osm
 #	 @echo [ALL] $<
 
-filter_osm: mem_map.o filter_osm.o
+filter_osm: mem_map.o filter_osm.o osm_tags.o
 	@echo [LD] $@
-	@g++ $(CCFLAGS) mem_map.o filter_osm.o -o $@
+	@g++ $(CCFLAGS) $^ -o $@
 
 filter_osm.o: filter_osm.cc
 	@echo [C+] $<
 	@g++ $(CCFLAGS) $< -c -o $@
 
 mem_map.o: mem_map.c
+	@echo [CC] $<
+	@gcc $(CFLAGS) $< -c -o $@
+
+osm_tags.o: osm_tags.c osm_tags.h
 	@echo [CC] $<
 	@gcc $(CFLAGS) $< -c -o $@
     

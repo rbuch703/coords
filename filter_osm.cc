@@ -11,21 +11,38 @@
 #include <string.h>
 
 #include <fcntl.h>
+
+#include <map>
+#include <set>
 //#define EXTRACT_NODES
 #undef EXTRACT_COASTLINE
 #include "mem_map.h"
+#include "osm_tags.h"
 
 const char* getValue(const char* line, const char* key)
 {
-    const char* in = strstr(line, key);
+    static char* buffer = NULL;
+    static uint32_t buffer_size = 0;
+
+    uint32_t len = strlen(key)+3;
+    if (buffer_size < len)
+    {
+        if (buffer) free(buffer);
+        buffer = (char*)malloc(len);
+        buffer_size = strlen(key)+3;
+    }
+    strcpy(buffer, key);
+    buffer[ len-3] = '=';
+    buffer[ len-2] = '"';
+    buffer[ len-1] = '\0';
+    
+    const char* in = strstr(line, buffer);
     assert (in != NULL);
-    in += (strlen(key) + 2); //skip key + '="'
+    in += (strlen(buffer)); //skip key + '="'
     const char* out = strstr(in, "\"");
     assert(out != NULL);
 
-    static char* buffer = NULL;
-    static int buffer_size = 0;
-    int size = out - in;
+    uint32_t size = out - in;
     if (buffer_size <= size)
     {
         if (buffer) free(buffer);
@@ -151,16 +168,46 @@ const char* file_name = "nodes.bin";
 //int32_t fd;
 //int64_t file_no_nodes = 0;
 
+typedef enum PARENT_ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } PARENT_ELEMENT;
+
 int main()
 {
     mmap_t node_map;
     node_map = init_mmap( file_name);
+    
+    //for situations where several annotation keys exist with the same meaning
+    //this dictionary maps them to a common unique key
+    std::map<std::string, std::string> rename_key; 
+    rename_key.insert( std::pair<std::string, std::string>("postal_code", "addr:postcode"));
+    rename_key.insert( std::pair<std::string, std::string>("website", "url"));
+    rename_key.insert( std::pair<std::string, std::string>("phone", "contact:phone"));
+    rename_key.insert( std::pair<std::string, std::string>("fax", "contact:fax"));
+    rename_key.insert( std::pair<std::string, std::string>("email", "contact:email"));
+    rename_key.insert( std::pair<std::string, std::string>("addr:housenumber", "addr:streetnumber"));
+    
+    std::set<std::string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
 
+    
+    for (uint32_t i = 0; i < num_ignore_keys; i++)
+        ignore_key.insert(ignore_keys[i]);
+    
+    std::set<std::string> direct_storage_key; // keys whose values are unlikely to occur more than once and thus should be 
+                                              // stored directly along with the node
+    
+    const char * ds_keys[]={"name", "name_en", "name:ko_rm", "name:uk", "name:ru", "name_ja", "name_de", "int_name", 
+                            "name_fr", "name_ar", "name_ar1", "ref", "website", "url", "wikipedia", "note","comment","description",
+                            "contact:phone", "contact:fax", "contact:email", "addr:full"};
+    
+    for (uint32_t i = 0; i < sizeof(ds_keys) / sizeof(const char*); i++)
+        direct_storage_key.insert(ds_keys[i]);
+   
+    
     int in_fd = 0; //default to standard input
     //in_fd = open("isle_of_man.osm", O_RDONLY);
     in_file = fdopen(in_fd, "r"); 
 
     std::string line;
+    int64_t nChangesets = 0;
     int64_t nNodes = 0;
     int64_t nWays = 0;
     int64_t nRelations = 0;
@@ -169,6 +216,9 @@ int main()
     char* line_buffer = NULL;
     size_t line_buffer_size = 0;
 
+    std::map<std::pair<std::string, std::string>, int64_t> kv_map;
+    
+    PARENT_ELEMENT parent = OTHER;
     while (0 <= getline(&line_buffer, &line_buffer_size, in_file))
     {   
     
@@ -180,13 +230,19 @@ int main()
         //std::string line(line_buffer);
         //std::cout << line << std::endl;
 //        if (line.length() < 4) assert(false && "Unexpected empty line");
+        if (strstr(line_buffer, "<changeset")) { 
+            parent = CHANGESET; 
+            nChangesets++;
+            if (nChangesets % 1000000 == 0)
+                std::cout << (nChangesets/1000000) << "M changesets processed" << std::endl;
+        }
+        else
         if (strstr(line_buffer, "<node"))
         //line.find("<node") != std::string::npos)
         {
             nNodes++;
             if (nNodes % 10000000 == 0)
                 std::cout << (nNodes/1000000) << "M nodes processed" << std::endl;
-
             //continue;
             node_refs.clear();
 #ifdef EXTRACT_NODES
@@ -196,6 +252,7 @@ int main()
             int64_t id = strtoul(getValue(line_buffer, "id"), NULL, 10);
             dumpNode(&node_map, id, lat, lon);
 #endif
+            parent = NODE;
         } else if (strstr(line_buffer, "<way"))
         // (line.find("<way") != std::string::npos)
         {
@@ -203,6 +260,7 @@ int main()
             if (nWays % 1000000 == 0)
                 std::cout << (nWays/1000000) << "M ways processed" << std::endl;
             node_refs.clear();
+            parent = WAY;
         }
         else if (strstr(line_buffer, "<relation"))
         //(line.find("<relation") != std::string::npos)
@@ -212,18 +270,33 @@ int main()
                 std::cout << (nRelations/1000000) << "M relations processed" << std::endl;
             
             node_refs.clear();
+            parent = RELATION;
         }
         else if (strstr(line_buffer, "<nd"))
         //(line.find("<nd") != std::string::npos)
         {
+            if (parent != WAY)
+            { std::cout << "[ERR] at '" << line_buffer << "'" << std::endl; assert(parent == WAY);}
+            
             int64_t ref = strtoul( getValue(line_buffer, "ref"), NULL, 10);
             node_refs.push_back( ref);
+            //dont set "parent", since this is a child node
         }
         else if (strstr(line_buffer, "<tag"))
         //line.find("<tag") != std::string::npos)
         {
+            if (parent == OTHER)
+            { std::cout << "[ERR] at '" << line_buffer << "'" << std::endl; assert (parent != OTHER);}
             std::string key = getValue(line_buffer, "k");
+            if (rename_key.count(key)) key = rename_key[key];
             std::string val = getValue(line_buffer, "v");
+            if (ignore_key.count(key)) continue;
+            if (direct_storage_key.count(key)) continue;    
+            
+            std::pair<std::string, std::string> kv(key, val);
+            if (kv_map.count(kv)) kv_map[kv]++;
+            else kv_map.insert(std::pair<std::pair<std::string, std::string>, int64_t>(kv, 1));
+            
             //if ((key == "admin_level") && (val == "2"))
             if ((key == "natural") && (val == "coastline"))
             {
@@ -242,20 +315,57 @@ int main()
         else if (strstr(line_buffer, "<?xml ")) { continue;}
         else if (strstr(line_buffer, "<osm ")) { continue;}
         else if (strstr(line_buffer, "</")) { continue;}
+        else if (strstr(line_buffer, "<!--")) { continue;}
+        else if (strstr(line_buffer, "<bound box")) { continue;}
         else
         {
             printf("[ERROR] unknown tag in %s\n", line_buffer);
-            exit(0);
+            //exit(0);
         }
     } //while (line_buffer[line_length-1] == '\n');
     free (line_buffer);
 
     free_mmap(&node_map);    
     fclose(in_file);
+    
+    //std::list<std::pair<int64_t, std::pair<std::string, std::string> > > lst_kv;
+    std::map<std::string, std::pair<int64_t, int64_t> > keys;    
+    for (std::map<std::pair<std::string, std::string>, int64_t>::const_iterator it = kv_map.begin(); it!= kv_map.end(); it++)
+    {
+        //lst_kv.push_back( std::pair<int64_t, std::pair<std::string, std::string> >(it->second, it->first));
+
+        std::string key = it->first.first;
+        int64_t n = it->second;
+        if (keys.count(key)) 
+        {
+            keys[key].first+=1;
+            keys[key].second+=n;
+        }
+        else keys.insert( std::pair<std::string, std::pair<int64_t, int64_t> >(key, std::pair<int64_t, int64_t>(1, n)));
+    }
+    
+    for (std::map<std::string, std::pair<int64_t, int64_t> >::const_iterator it = keys.begin(); it != keys.end(); it++)
+    {
+        std::cerr << it->first << "§" << it->second.first << "§" << it->second.second << std::endl;
+    }
+    /*
+    lst_kv.sort();
+    lst_kv.reverse();
+
+
+
+    for (std::list<std::pair<int64_t, std::pair<std::string, std::string> > >::const_iterator it = lst_kv.begin(); it!= lst_kv.end(); it++)
+    {
+        //std::cerr << it->first << "§" << it->second.first << "§" << it->second.second << std::endl;
+    }*/
+        
     std::cout << "statistics\n==========" << std::endl;
     std::cout << "#nodes: " << nNodes << std::endl;
     std::cout << "#ways: " << nWays << std::endl;
     std::cout << "#relations: " << nRelations << std::endl;
+    std::cout << "#changesets: " << nChangesets << std::endl;
+    std::cout << "#key-value pairs: " << kv_map.size() << std::endl;
+
 	return 0;
 	
 }
