@@ -1,0 +1,17 @@
+
+syntax: glob
+
+# ignore compiled executables
+filter_osm
+
+# ignore backup files
+*~
+
+# ignore OSM data files
+isle_of_man.osm
+
+#ignore compiled objects
+*.o
+
+#ignore output files
+nodes.bin
