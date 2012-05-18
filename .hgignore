@@ -8,7 +8,8 @@ filter_osm
 *~
 
 # ignore OSM data files
-isle_of_man.osm
+*.osm
+*.osm.bz2
 
 #ignore compiled objects
 *.o
@@ -17,3 +18,5 @@ isle_of_man.osm
 nodes.bin
 *.csv
 callgrind.out.*
+*.db
+*.idx
