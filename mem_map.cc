@@ -65,8 +65,11 @@ void ensure_mmap_size( mmap_t *map, uint64_t size)
     }
     size_t ps = sysconf (_SC_PAGESIZE);
     
-    size_t new_file_size = (size+ps-1)/ps*ps;
-    assert(new_file_size % ps == 0); //needs to be multiple of page size for mmap
+    //increase map file by 50% to reduce the number of times that a resize is necessary;
+    size_t new_file_size = ( (size + ps)*3/2)/ps*ps;   
+    //size_t new_file_size = (size+ps-1)/ps*ps;
+    assert(new_file_size % ps == 0); //needs to be a multiple of page size for mmap
+    if (new_file_size < size) { printf("error resizing memory map\n"); exit(0);}
     if (0 != ftruncate(map->fd, new_file_size)) { perror("[ERR]"); exit(0);}
    
     //std::cout << "Resizing file to hold " << file_no_nodes << " nodes (" << (file_no_nodes / ps) << " pages)" << std::endl;

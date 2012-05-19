@@ -1,8 +1,7 @@
 
-OSM_C_SRC = mem_map.c
-OSM_CC_SRC = filter_osm.cc
+OSM_SRC = filter_osm.cc mem_map.cc osm_types.cc osm_tags.cc
 
-OSM_SRC = $(OSM_C_SRC) $(OSM_CC_SRC)
+OSM_OBJ = $(OSM_SRC:.cc=.o)
 
 #COAST_SRC = filter_coastline.cc
 #OSM_OBJS = filter_osm.o
@@ -16,31 +15,29 @@ CCFLAGS = $(CFLAGS)
 all: filter_osm dump_kv
 #	 @echo [ALL] $<
 
-filter_osm: mem_map.o filter_osm.o osm_tags.o
-	@echo [LD] $@
-	@g++ $(CCFLAGS) $^ -o $@
+filter_osm: $(OSM_OBJ) make.dep
+	@echo [LD ] $@
+	@g++ $(CCFLAGS) $(OSM_OBJ) -o $@
 
-filter_osm.o: filter_osm.cc
-	@echo [C+] $<
+%.o: %.cc
+	@echo [C++] $<
 	@g++ $(CCFLAGS) $< -c -o $@
 
-mem_map.o: mem_map.c
-	@echo [CC] $<
-	@gcc $(CFLAGS) $< -c -o $@
-
-osm_tags.o: osm_tags.c osm_tags.h
-	@echo [CC] $<
-	@gcc $(CFLAGS) $< -c -o $@
-
 dump_kv: dump_kv.c
-	@echo [CC] $@
+	@echo [LD ] $@
 	@gcc $(CFLAGS) $< -o $@
 
 clean:
 	@echo [CLEAN]
-	@rm *~ *.o
-	@rm filter_osm
-#filter_coastline: $(COAST_SRC)
-#	g++ -g $(CCFLAGS) $(COAST_SRC) -o $@
+	@test -f filter_osm && rm filter_osm
+	@test -f dump_kv && rm dump_kv
+	@test -f make.dep && rm make.dep
+	@rm *.o
+	@rm *~
 
+make.dep: $(OSM_SRC)
+	@echo [DEP]
+	@g++ -MM $(OSM_SRC) > make.dep
+
+include make.dep
 

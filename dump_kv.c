@@ -65,6 +65,9 @@ int main()
     FILE* out_file = fopen("kv_dump.c.csv", "wb");
     
     uint64_t num_lines = 0;
+    char *key = malloc(1000);
+    uint32_t key_size = 1000;
+    
     while (0 <= getline(&line_buffer, &line_buffer_size, in_file))
     {   
         num_lines++;
@@ -75,12 +78,25 @@ int main()
         }
         if (! strstr(line_buffer, "<tag") ) continue;
         
-        fprintf(out_file, "%s§%s\n", getValue(line_buffer, "k"), getValue(line_buffer, "v"));
+        // getValue returns a pointer to its internal buffer. So we need to copy its result
+        // before calling getValue() again;
+        const char* tmp = getValue(line_buffer, "k");
+        uint32_t tmp_len = strlen(tmp)+1;
+        if (key_size < tmp_len)
+        {
+            free(key);
+            key = malloc(tmp_len);
+            key_size = tmp_len;
+        }
+        strcpy(key, tmp);
+        
+        fprintf(out_file, "%s§%s\n", key, getValue(line_buffer, "v") );
         /*std::string key = getValue(line_buffer, "k");
         std::string val = getValue(line_buffer, "v");
         of_kv << key << "§" << val << std::endl;*/
     } 
     free (line_buffer);
+    free(key);
     fclose(in_file);
     fclose(out_file);
 //    of_kv.close();    
