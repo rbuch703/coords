@@ -15,12 +15,19 @@
 
 #include <map>
 #include <set>
-//#define EXTRACT_NODES
 #include "mem_map.h"
 #include "osm_tags.h"
 
+//#include "symbolic_tags.h"
 
+#define CREATE_KV_HISTOGRAM
 using namespace std;
+
+typedef pair<string, string> OSMKeyValuePair;
+
+mmap_t node_index;
+FILE* node_data;
+map<OSMKeyValuePair, uint16_t> symbolic_tags;
 
 const char* getValue(const char* line, const char* key)
 {
@@ -163,16 +170,14 @@ void print_nodes( mmap_t *node_map, std::list<int64_t> node_refs)
 }
 
 
-FILE * in_file = NULL;
-
-
 //int32_t* map = NULL;
-const char* file_name = "nodes.bin";
+//const char* file_name = "nodes.bin";
 //int32_t fd;
 //int64_t file_no_nodes = 0;
 
 typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
 const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
+
 
 struct OSMRelationMember
 {
@@ -182,6 +187,95 @@ struct OSMRelationMember
     uint64_t ref;  //the node/way/relation id
     string role;   //the role the member play to the relation
 };
+
+struct OSMNode
+{
+    uint32_t lat;
+    uint32_t lon;
+    uint64_t id;
+    list<OSMKeyValuePair> tags;
+};
+
+struct OSMWay
+{
+    uint64_t id;
+    list<OSMKeyValuePair> tags;
+};
+
+struct OSMRelation
+{
+    uint64_t id;
+    list<OSMRelationMember> members;
+    list<OSMKeyValuePair> tags;
+};
+
+/** on-file layout:
+    uint16_t num_symbolic_tags;
+    uint16_t num_verbose_tags;
+    uint16_t symbolic_tags[num_symbolic_tags];
+    uint64_t verbose_tag_data_len; (total data size of all verbose tags, in bytes); optional, present only if num_verbose_tags > 0
+    <2*num_verbose_tags> zero-terminated strings containing interleaved keys and values 
+    (key_0, value_0, key_1, value_1, ...)
+
+*/
+void serializeTags( const list<OSMKeyValuePair> tags, FILE* file, const map<OSMKeyValuePair, uint16_t> &tag_symbols)
+{
+    list<OSMKeyValuePair> verbose_tags;
+    list<uint16_t> symbolic_tags;
+    
+    uint64_t verbose_tag_data_len = 0;
+    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+    {
+        if ( tag_symbols.count(*it)) symbolic_tags.push_back( tag_symbols.find(*it)->second);
+        else 
+        {
+            verbose_tag_data_len += strlen(it->first.c_str() )+1; //including null-termination
+            verbose_tag_data_len += strlen(it->second.c_str())+1; //including null-termination
+            verbose_tags.push_back(*it);
+        }
+    }
+    
+    assert(symbolic_tags.size() < (1<<16));
+    uint16_t num_symbolic_tags = symbolic_tags.size();
+    fwrite(&num_symbolic_tags, sizeof(num_symbolic_tags), 1, file);
+    
+    assert(verbose_tags.size() < (1<<16));
+    uint16_t num_verbose_tags = verbose_tags.size();
+    fwrite(&num_verbose_tags, sizeof(num_verbose_tags), 1, file);
+    
+    for (list<uint16_t>::const_iterator it = symbolic_tags.begin(); it!= symbolic_tags.end(); it++)
+    {
+        uint16_t tmp = *it;
+        fwrite( &tmp, sizeof(tmp), 1, file);
+    }
+    
+    if (num_verbose_tags == 0) return;
+    fwrite( &verbose_tag_data_len, sizeof(verbose_tag_data_len), 1, file);
+    for (list<OSMKeyValuePair>::const_iterator it = verbose_tags.begin(); it!= verbose_tags.end(); it++)
+    {
+        fwrite( it->first.c_str(),  strlen(it->first.c_str()) + 1, 1, file);    //both including their null-termination
+        fwrite( it->second.c_str(), strlen(it->second.c_str())+ 1, 1, file);
+    }
+}
+
+void serializeNode( const OSMNode &node, FILE* data_file, mmap_t *index_map)
+{
+    /** temporary nodes in OSM editors are allowed to have negative node IDs, 
+      * but those in the official maps are guaranteed to be positive.
+      * Also, negative ids would mess up the memory map (would lead to negative indices*/
+    assert (node.id > 0);  
+
+    uint64_t offset = ftello(data_file);    //get offset at which the dumped node *starts*
+    fwrite( &node.lat, sizeof(node.lat), 1, data_file);
+    fwrite( &node.lon, sizeof(node.lon), 1, data_file);
+
+    //map<OSMKeyValuePair, uint16_t> dummy; //empty dummy map TODO: replace by actual map of most-frequently used kv-pairs
+    serializeTags( node.tags, data_file, symbolic_tags );
+    
+    ensure_mmap_size( index_map, (node.id+1)*sizeof(uint64_t));
+    uint64_t* ptr = (uint64_t*)index_map->ptr;
+    ptr[node.id] = offset;
+}
 
 class ParserState
 {
@@ -199,6 +293,16 @@ public:
             case WAY:
             case RELATION:
             case CHANGESET:
+            
+                if (current_parent == NODE)
+                {
+                    OSMNode n;
+                    n.lat = node_lat;
+                    n.lon = node_lon;
+                    n.id =  node_id;
+                    n.tags = tags;
+                    serializeNode(n, node_data, &node_index);
+                }
                 current_parent = new_element;
                 node_refs.clear();
                 tags.clear();
@@ -243,19 +347,25 @@ private:
     uint64_t node_id, way_id, relation_id;
 };
 
-typedef pair<string, string> KeyValuePair;
-
-void serializeTags( list<KeyValuePair> tags, FILE* file, const map<KeyValuePair, uint16_t> &symbolic_tags)
-{
-    
-
-}
 
 int main()
 {
-    mmap_t node_map;
-    node_map = init_mmap( file_name);
+    //mmap_t node_index;
+    /*uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
+    assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistence check #keys<->#values
+    assert( nSymbolicTags <= (1<<16));  // we assign 16bit numbers to these, so there must not be more than 2^16
+    for (uint32_t i = 0; i < nSymbolicTags; i++)
+    {
+        OSMKeyValuePair kv(symbolic_tags_keys[i], symbolic_tags_values[i]);
+        symbolic_tags.insert( pair<OSMKeyValuePair, uint16_t>(kv, i));
+    }
+    cout << "Read " << symbolic_tags.size() << " symbolic tags" << endl;
+    */
     
+    truncate("node.idx", 0);    // clear indices. Since the data itself is overwritten, old indices are invalid
+    node_index = init_mmap( "node.idx");
+    
+    node_data = fopen("node.db", "wb");
     //for situations where several annotation keys exist with the same meaning
     //this dictionary maps them to a common unique key
     std::map<std::string, std::string> rename_key; 
@@ -275,8 +385,11 @@ int main()
     std::set<std::string> direct_storage_key; // keys whose values are unlikely to occur more than once and thus should be 
                                               // stored directly along with the node
     
+    //TODO: find a way to verify this list. The assumption that the values for these keys are too various for them
+    //      to be some of the most-often used KV-combinations is only an educated guess
     const char * ds_keys[]={"name", "name:en", "name:ko_rm", "name:uk", "name:ru", "name:ja", "name:de", "name_1", "name_2", "int_name", 
-                            "name:fr", "name:ar", "name:ar1", "ele", "ref", "website", "url", "wikipedia", "note","comment","description",
+                            "name:fr", "name:ar", "name:ar1", "ele", "ref", "website", "url", "wikipedia", "note",
+                            "comment","description",
                             "contact:phone", "contact:fax", "contact:email", "addr:full", "wikipedia:de", "wikipedia:ru", "alt_name"};
     
     for (uint32_t i = 0; i < sizeof(ds_keys) / sizeof(const char*); i++)
@@ -285,14 +398,17 @@ int main()
     
     int in_fd = 0; //default to standard input
     //in_fd = open("isle_of_man.osm", O_RDONLY);
-    in_file = fdopen(in_fd, "r"); 
+    FILE * in_file = fdopen(in_fd, "r"); 
 
-    std::string line;
+    //std::string line;
     
     char* line_buffer = NULL;
     size_t line_buffer_size = 0;
 
-    map<pair<string, string>, int64_t> kv_map;
+#ifdef CREATE_KV_HISTOGRAM
+    #warning creating key-value histogram. This is going to be slooooow
+    map<OSMKeyValuePair, int64_t> kv_map;
+#endif
     
 //    PARENT_ELEMENT parent = OTHER;
     
@@ -306,14 +422,21 @@ int main()
         {
             state.update(NODE);
             //continue;
-#ifdef EXTRACT_NODES
             int32_t lat = degValueToInt(line_buffer, "lat"); 
             int32_t lon = degValueToInt(line_buffer, "lon");
             int64_t id = strtoul(getValue(line_buffer, "id"), NULL, 10);
-            dumpNode(&node_map, id, lat, lon);
-#endif
-        } else if (strstr(line_buffer, "<way")) { state.update(WAY); }
-        else if (strstr(line_buffer, "<relation")) { state.update(RELATION); }
+            state.setNodeProperties(lat, lon, id);
+
+            //dumpNode(&node_map, id, lat, lon);
+        } else if (strstr(line_buffer, "<way")) { 
+            state.update(WAY); 
+            state.setWayProperties( strtoul(getValue(line_buffer, "id"), NULL, 10));
+        }
+        else if (strstr(line_buffer, "<relation")) 
+        { 
+            state.update(RELATION); 
+            state.setRelationProperties( strtoul(getValue(line_buffer, "id"), NULL, 10));
+        }
         else if (strstr(line_buffer, "<nd"))
         {
             if (state.getCurrentElement() != WAY)
@@ -341,11 +464,12 @@ int main()
             
             state.addTag(key, val);
 
+#ifdef CREATE_KV_HISTOGRAM
             pair<string, string> kv(key, val);
             if (kv_map.count(kv)) kv_map[kv]++;
             else kv_map.insert(std::pair<std::pair<std::string, std::string>, int64_t>(kv, 1));
-         
             if (kv_map.size() > 15000000) break; //FIXME: arbitrary break to prevent OOM
+#endif
             //if ((key == "admin_level") && (val == "2"))
 #undef EXTRACT_COASTLINE
 #ifdef EXTRACT_COASTLINE
@@ -375,49 +499,59 @@ int main()
     } //while (line_buffer[line_length-1] == '\n');
     free (line_buffer);
 
-    free_mmap(&node_map);    
+    free_mmap(&node_index);    
+    fclose(node_data);
+    
     fclose(in_file);
     
+
+#ifdef CREATE_KV_HISTOGRAM
     std::list<std::pair<int64_t, std::pair<std::string, std::string> > > lst_kv;
     
-    std::map<std::string, std::pair<int64_t, int64_t> > keys;    
     for (std::map<std::pair<std::string, std::string>, int64_t>::const_iterator it = kv_map.begin(); it!= kv_map.end(); it++)
     {
         if (it->second > 10000)
             lst_kv.push_back( std::pair<int64_t, std::pair<std::string, std::string> >(it->second, it->first));
-
-        std::string key = it->first.first;
-        int64_t n = it->second;
-        if (keys.count(key)) 
-        {
-            keys[key].first+=1;
-            keys[key].second+=n;
-        }
-        else keys.insert( std::pair<std::string, std::pair<int64_t, int64_t> >(key, std::pair<int64_t, int64_t>(1, n)));
     }
-
 
 #define DUMP_KV_FREQUENCY
 #ifdef DUMP_KV_FREQUENCY
+    ofstream of_kvs;
+    of_kvs.open("kv_.csv");
+
     lst_kv.sort();
     lst_kv.reverse();
 
     for (std::list<std::pair<int64_t, std::pair<std::string, std::string> > >::const_iterator it = lst_kv.begin(); it!= lst_kv.end(); it++)
     {
-        std::cerr << it->first << "§" << it->second.first << "§" << it->second.second << std::endl;
+        of_kvs << it->first << "§" << it->second.first << "§" << it->second.second << std::endl;
     }
+    of_kvs.close();
 #endif
     
-#undef DUMP_KEY_FREQUENCY
-#ifdef DUMP_KEY_FREQUENCY
-    for (std::map<std::string, std::pair<int64_t, int64_t> >::const_iterator it = keys.begin(); it != keys.end(); it++)
+#define DUMP_KEY_FREQUENCY
+#ifdef  DUMP_KEY_FREQUENCY
+    ofstream of_keys;
+    of_keys.open("keys_.csv");
+    
+    std::map<std::string, int64_t> keys;    
+
+    for (map<pair<string, string>, int64_t>::const_iterator it = kv_map.begin(); it!= kv_map.end(); it++)
     {
-        std::cerr << it->first << "§" << it->second.first << "§" << it->second.second << std::endl;
+        std::string key = it->first.first;
+        int64_t n = it->second;
+        if (keys.count(key))  { keys[key] +=n; }
+        else keys.insert( std::pair<std::string, int64_t>(key, n));
     }
+    
+    for (map<string, int64_t>::const_iterator it = keys.begin(); it != keys.end(); it++)
+        of_keys << it->first << "§" << it->second << std::endl;
+    of_keys.close();
 #endif
 
-#undef DUMP_KV_PAIRS    
-#ifdef DUMP_KV_PAIRS    
+#endif
+
+#if 0
     FILE* f_kv_data = fopen("kv.db", "wb");
     
     const char* magic_kv_data  = "KVD1";    //key-value data, version 1
@@ -458,8 +592,9 @@ int main()
     std::cout << "#ways: " << state.getElementCount(WAY) << std::endl;
     std::cout << "#relations: " << state.getElementCount(RELATION) << std::endl;
     std::cout << "#changesets: " << state.getElementCount(CHANGESET) << std::endl;
+#ifdef CREATE_KV_HISTOGRAM
     std::cout << "#key-value pairs: " << kv_map.size() << std::endl;
-
+#endif
 	return 0;
 	
 }

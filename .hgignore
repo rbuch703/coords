@@ -1,22 +1,24 @@
 
 syntax: glob
 
-# ignore compiled executables
-filter_osm
-
 # ignore backup files
 *~
+
+# ignore compiled executables
+filter_osm
+dump_kv
+
+#ignore compiled objects
+*.o
 
 # ignore OSM data files
 *.osm
 *.osm.bz2
 
-#ignore compiled objects
-*.o
-
 #ignore output files
 nodes.bin
 *.csv
 callgrind.out.*
+massif.out.*
 *.db
 *.idx

@@ -7,13 +7,13 @@ OSM_SRC = $(OSM_C_SRC) $(OSM_CC_SRC)
 #COAST_SRC = filter_coastline.cc
 #OSM_OBJS = filter_osm.o
 
-CFLAGS = -g -Wall -Wextra #-O2
+CFLAGS = -g -Wall -Wextra -O2
 CCFLAGS = $(CFLAGS)
 
 .PHONY: all clean
 
 
-all: filter_osm
+all: filter_osm dump_kv
 #	 @echo [ALL] $<
 
 filter_osm: mem_map.o filter_osm.o osm_tags.o
@@ -31,7 +31,11 @@ mem_map.o: mem_map.c
 osm_tags.o: osm_tags.c osm_tags.h
 	@echo [CC] $<
 	@gcc $(CFLAGS) $< -c -o $@
-    
+
+dump_kv: dump_kv.c
+	@echo [CC] $@
+	@gcc $(CFLAGS) $< -o $@
+
 clean:
 	@echo [CLEAN]
 	@rm *~ *.o
