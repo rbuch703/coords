@@ -1,23 +1,29 @@
 
 OSM_SRC = filter_osm.cc mem_map.cc osm_types.cc osm_tags.cc
+CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
 
 OSM_OBJ = $(OSM_SRC:.cc=.o)
+CONV_OBJ = $(CONV_SRC:.cc=.o)
 
 #COAST_SRC = filter_coastline.cc
 #OSM_OBJS = filter_osm.o
 
-CFLAGS = -g -Wall -Wextra -O2
+CFLAGS = -g -Wall -Wextra #-O2
 CCFLAGS = $(CFLAGS)
 
 .PHONY: all clean
 
 
-all: filter_osm dump_kv
+all: filter_osm dump_kv data_converter
 #	 @echo [ALL] $<
 
 filter_osm: $(OSM_OBJ) make.dep
 	@echo [LD ] $@
 	@g++ $(CCFLAGS) $(OSM_OBJ) -o $@
+
+data_converter: $(CONV_OBJ) make.dep
+	@echo [LD ] $@
+	@g++ $(CCFLAGS) $(CONV_OBJ) -o $@
 
 %.o: %.cc
 	@echo [C++] $<

@@ -10,17 +10,8 @@ typedef struct mmap_t {
     uint64_t size;
 } mmap_t;
 
-//temporary workaround while we are mixing C and C++ code
-#ifdef __cplusplus
- extern "C" {
- #endif 
-
-mmap_t init_mmap ( const char* file_name);
+mmap_t init_mmap ( const char* file_name, bool readable=true, bool writeable=true);
 void   free_mmap ( mmap_t *mmap);
 void   ensure_mmap_size( mmap_t *mmap, uint64_t size);
-
-#ifdef __cplusplus
-}
-#endif 
 
 #endif

@@ -1,4 +1,4 @@
-const char* symbolic_tags_keys[] = {
+static const char* symbolic_tags_keys[] = {
   "building",
   "highway",
   "wall",
@@ -257,7 +257,7 @@ const char* symbolic_tags_keys[] = {
   "surface"
 };
 
-const char* symbolic_tags_values[] = {
+static const char* symbolic_tags_values[] = {
   "yes",
   "residential",
   "no",

@@ -7,6 +7,7 @@ syntax: glob
 # ignore compiled executables
 filter_osm
 dump_kv
+data_converter
 
 #ignore compiled objects
 *.o
@@ -16,6 +17,7 @@ dump_kv
 *.osm.bz2
 
 #ignore output files
+make.dep
 nodes.bin
 *.csv
 callgrind.out.*

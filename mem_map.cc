@@ -11,10 +11,14 @@
 #include <stdlib.h>
 #include <assert.h>
 
-mmap_t init_mmap ( const char* file_name)
+mmap_t init_mmap ( const char* file_name, bool readable, bool writeable)
 {
+    assert(readable || writeable);  //no use otherwise
+    
     mmap_t res;
-    res.fd = open(file_name, O_CREAT|O_RDWR, S_IRUSR | S_IWUSR);  
+    /** the underlying file always needs to be readable. Even if the map itself is only writeable,
+        the OS needs to be able to *read* the whole data page which is changed by *writing* */
+    res.fd = open(file_name, O_CREAT|(writeable? O_RDWR : O_RDONLY), S_IRUSR | S_IWUSR);  
     
     struct stat stats;
     if (0 != fstat(res.fd, &stats)) { perror ("fstat"); exit(0); }
@@ -24,7 +28,7 @@ mmap_t init_mmap ( const char* file_name)
         res.ptr = NULL;
     else
     {
-        res.ptr = mmap(NULL, stats.st_size, PROT_WRITE | PROT_READ, MAP_SHARED, res.fd, 0);
+        res.ptr = mmap(NULL, stats.st_size, (writeable? PROT_WRITE:0) | (readable?PROT_READ:0), MAP_SHARED, res.fd, 0);
         if (res.ptr == MAP_FAILED) { perror("mmap"); exit(0);}
     }
     

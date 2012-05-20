@@ -248,6 +248,13 @@ int main()
     relation_index = init_mmap( "relation.idx" );
     
     data_file = fopen("osm.db", "wb");
+
+    //to identify the database
+    //positive side-effect: no node, way or relation has the file offset 0, 
+    //so that offset 0 ca be used as an error code
+    static const char* magic_dword="OSM1"; 
+    fwrite( &magic_dword, strlen(magic_dword), 1, data_file);
+    
     //for situations where several annotation keys exist with the same meaning
     //this dictionary maps them to a common unique key
     std::map<std::string, std::string> rename_key; 
@@ -375,6 +382,21 @@ int main()
     free (line_buffer);
 
     free_mmap(&node_index);    
+
+    //pad the data file to a multiple of the page size, so that it can be open using a memory map
+    uint64_t file_size = ftello(data_file);
+    uint32_t page_size = sysconf(_SC_PAGESIZE);
+
+    if (file_size % page_size != 0)
+    {
+        uint32_t padding = page_size - (file_size % page_size);
+	uint8_t dummy = 0;
+	assert(sizeof(dummy) == 1);
+	while (padding--)
+	    fwrite(&dummy, sizeof(dummy), 1, data_file);
+    }
+    assert( ftello(data_file) % page_size == 0);
+
     fclose(data_file);
     
     fclose(in_file);
