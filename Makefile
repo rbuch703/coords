@@ -1,6 +1,6 @@
 
 OSM_SRC = filter_osm.cc mem_map.cc osm_types.cc osm_tags.cc
-CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
+CONV_SRC = data_converter.cc osm_types.cc mem_map.cc geometric_types.cc # geometry_processing.cc
 
 OSM_OBJ = $(OSM_SRC:.cc=.o)
 CONV_OBJ = $(CONV_SRC:.cc=.o)

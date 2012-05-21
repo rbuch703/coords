@@ -8,6 +8,8 @@
 
 #include <stdint.h> 
 #include "mem_map.h"
+#include "geometric_types.h"
+
 using namespace std;
 
 typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
@@ -16,19 +18,6 @@ typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
 typedef pair<string, string> OSMKeyValuePair;
 
 
-struct OSMRelationMember
-{
-    OSMRelationMember( ELEMENT member_type, uint64_t member_ref, string member_role):
-        type(member_type), ref(member_ref), role(member_role) { }
-
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
-    uint32_t getDataSize() const;
-    ELEMENT type;  //whether the member is a node, way or relation
-    uint64_t ref;  //the node/way/relation id
-    string role;   //the role the member play to the relation
-    
-};
-
 struct OSMNode
 {
     OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, list<OSMKeyValuePair> node_tags);
@@ -36,7 +25,11 @@ struct OSMNode
     OSMNode( const uint8_t* data_ptr, uint64_t node_id);
         
     void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
-
+    bool operator==(const OSMNode &other) const;
+    bool operator!=(const OSMNode &other) const;
+    bool operator< (const OSMNode &other) const;
+    
+    Vertex toVertex() const {return Vertex(lat, lon);}
     int32_t lat;    //needs to be signed! -180° < lat < 180°
     int32_t lon;    //                     -90° < lon <  90°
     uint64_t id;
@@ -59,8 +52,21 @@ struct OSMWay
     list<OSMKeyValuePair> tags;
     
 };
-
 ostream& operator<<(ostream &out, const OSMWay &way);
+
+struct OSMRelationMember
+{
+    OSMRelationMember( ELEMENT member_type, uint64_t member_ref, string member_role):
+        type(member_type), ref(member_ref), role(member_role) { }
+
+    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    uint32_t getDataSize() const;
+    ELEMENT type;  //whether the member is a node, way or relation
+    uint64_t ref;  //the node/way/relation id
+    string role;   //the role the member play to the relation
+    
+};
+
 
 struct OSMRelation
 {

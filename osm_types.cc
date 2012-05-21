@@ -203,6 +203,10 @@ void OSMNode::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyVal
     ptr[id] = offset;
 }
 
+bool OSMNode::operator==(const OSMNode &other) const {return lat == other.lat && lon == other.lon;}
+bool OSMNode::operator!=(const OSMNode &other) const {return lat != other.lat || lon != other.lon;}
+bool OSMNode::operator< (const OSMNode &other) const {return id < other.id;}
+
 ostream& operator<<(ostream &out, const OSMNode &node)
 {
     out << "Node " << node.id <<" (" << (node.lat/10000000.0) << "°, " << (node.lon/10000000.0) << "°)";

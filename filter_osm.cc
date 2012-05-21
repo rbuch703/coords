@@ -154,7 +154,6 @@ public:
         for (int i = 0; i < nElements; i++) element_count[i] = 0;
     }    
 
-   
     //FIXME: current approach (serialize on element once the next one is discovered) does not dump the last relation
     void update( ELEMENT new_element)
     {
@@ -379,6 +378,7 @@ int main()
             printf("[ERROR] unknown tag in %s\n", line_buffer);
         }
     }
+    state.update(RELATION); //workaround to push the last relation from the parser state into the files
     free (line_buffer);
 
     free_mmap(&node_index);    
