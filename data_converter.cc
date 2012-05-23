@@ -43,8 +43,6 @@ OSMRelation getRelation(uint64_t relation_id) { return OSMRelation(&osm_data[rel
 
 map<string, uint32_t> zone_entries;
 
-string timezone_basedir = "timezones";
-
 void ensureDirectoryExists(string directory)
 {
     struct stat dummy;
@@ -66,9 +64,9 @@ static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "o
 
 //obtains all "outer" ways that belong to a given relation, including those of possible sub-relations
 //FIXME: blacklist those timezone relations that are part of other timezone relations
-list<OSMRelationMember> getTZWayListRecursive( uint64_t relation_id)
+list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
 {
-    list<OSMRelationMember> res;
+    list<uint64_t> res;
     if (! relation_index[relation_id]) {cout << "[WARN] non-existent relation " << relation_id << endl; return res; }
     OSMRelation rel = getRelation(relation_id);
 
@@ -95,7 +93,7 @@ list<OSMRelationMember> getTZWayListRecursive( uint64_t relation_id)
         
         if (member.type == RELATION && (member.role == "outer" || member.role == ""))
         {
-            list<OSMRelationMember> tmp = getTZWayListRecursive(member.ref);
+            list<uint64_t> tmp = getTZWayListRecursive(member.ref);
             res.insert(res.end(), tmp.begin(), tmp.end());
             continue;
         }
@@ -109,7 +107,7 @@ list<OSMRelationMember> getTZWayListRecursive( uint64_t relation_id)
                       << ") with role '" << member.role << "' in rel " << rel.id << endl; 
            continue;
        }
-       res.push_back(member);
+       res.push_back(member.ref);
     }
     return res;
 }
@@ -130,17 +128,22 @@ PolygonSegment createPolygonSegment(uint64_t way_id)
 }
 
 
-/** takes a list of OSMWays and connects these to form closed polygons*/
-list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
+class PolygonReconstructor
 {
-    list<PolygonSegment> res;
-    map<Vertex, PolygonSegment*> openEndPoints;
-    for (list<OSMRelationMember>::const_iterator way = ways.begin(); way != ways.end(); way++)
-    {
-        if (! way_index[way->ref]) 
-            { cout << "[WARN] non-existent way " << way->ref << ", skipping" << endl; continue; }
+public:
+    ~PolygonReconstructor() {clear();} 
     
-        PolygonSegment *seg = new PolygonSegment(createPolygonSegment(way->ref));
+    /** adds a PolygonSegment to the Reconstructor state. 
+      * if this addition results in the generation of a new closed polygon, a pointer to said polygon is returned
+      * otherwise, NULL is returned
+      * Returns true 
+    */
+    PolygonSegment* add(const PolygonSegment &s)
+    {
+//        if (! way_index[*way_ref]) 
+//            { cout << "[WARN] non-existent way " << *way_ref << ", skipping" << endl; continue; }
+    
+        PolygonSegment *seg = new PolygonSegment(s);
 
           //if there is another segment that connects seemlessly  to this one
         while ( openEndPoints.count(seg->front()) || openEndPoints.count(seg->back()))
@@ -190,7 +193,7 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
         { 
             res.push_back(*seg); 
             delete seg; 
-            continue;
+            return &res.back();
         } else
         {
             assert( seg->front() != seg->back() );
@@ -200,117 +203,129 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
             openEndPoints[seg->front()] = seg;
             openEndPoints[seg->back()] = seg;
         }
+        return false;
     }
     
-    
-    /** at this point, all polygons that can be closed have been closed.
-      * or the remaining segments, we attempt to find segments that are as close together as possible*/
-    uint32_t nEndPoints = openEndPoints.size();
-    Vertex vEndPoints[nEndPoints];
-    uint32_t i = 0;
-    for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
-        vEndPoints[i] = poly->first;
-        
-    while (nEndPoints)
+    /** uses heuristics to create polygons from the PolygonSegments in openEndPoints, even if
+        the segments do not connect directly to each other */
+    void forceClosePolygons()
     {
-        uint64_t minDist = 0xFFFFFFFFFFFFFFFFll;
-        int min_i=1, min_j=0;
-        for (i = 1; i < nEndPoints; i++)
-            for (uint32_t j = 0; j < i; j++)
-            {
-                uint64_t dist = vEndPoints[i].squaredDistanceTo( vEndPoints[j]);
-                if (dist < minDist) { minDist = dist; min_i = i; min_j = j;}
-            }
-        assert(minDist != 0xFFFFFFFFFFFFFFFFll);
-        cout << "Minimum gap size is " << (sqrt(minDist)/100) << "m" << endl;
-        assert( openEndPoints.count(vEndPoints[min_i]) && openEndPoints.count(vEndPoints[min_j]) );
-        PolygonSegment* seg1 = openEndPoints[vEndPoints[min_i]];
-        PolygonSegment* seg2 = openEndPoints[vEndPoints[min_j]];
-        
-        Vertex v1 = vEndPoints[min_i];
-        Vertex v2 = vEndPoints[min_j];
-
-        i = 0;
-        while (i < nEndPoints)
-        {
-            if (vEndPoints[i] == seg1->front() || vEndPoints[i] == seg1->back() ||
-                vEndPoints[i] == seg2->front() || vEndPoints[i] == seg2->back()   )
-                {
-                    --nEndPoints;
-                    vEndPoints[i] = vEndPoints[nEndPoints];
-                }
-            else i++;
-        }
-        
-        if (seg1 == seg2) // same polygon segment --> close the loop
-        {
-            cout << "closing gap of  " 
-                 << sqrt( seg1->back().squaredDistanceTo(seg1->front()))/100.0 << "m"<< endl;
-        
-            openEndPoints.erase( seg1->front());
-            openEndPoints.erase( seg1->back());
-            seg1->append(seg1->front()); // to really make it closed
-            res.push_back(*seg1);
-            delete seg1;
-        } else
-        {
-            openEndPoints.erase( seg1->front());
-            openEndPoints.erase( seg1->back());
-            openEndPoints.erase( seg2->front());
-            openEndPoints.erase( seg2->back());
-                
-            if      (v1 == seg1->front() && v2 == seg2->front()) { seg1->reverse(); seg1->append(*seg2, false); }
-            else if (v1 == seg1->back()  && v2 == seg2->front()) {                  seg1->append(*seg2, false); }
-            else if (v1 == seg1->front() && v2 == seg2->back() ) { seg2->append(*seg1, false); *seg1 = *seg2;   }
-            else if (v1 == seg1->back()  && v2 == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, false); }
-            else assert(false);
+        /** at this point, all polygons that can be closed have been closed.
+          * or the remaining segments, we attempt to find segments that are as close together as possible*/
+        uint32_t nEndPoints = openEndPoints.size();
+        Vertex vEndPoints[nEndPoints];
+        uint32_t i = 0;
+        for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
+            vEndPoints[i] = poly->first;
             
-            delete seg2;
-            assert ( openEndPoints.count(seg1->front()) == 0);
-            assert ( openEndPoints.count(seg1->back() ) == 0);
-            openEndPoints[seg1->front()] = seg1;
-            openEndPoints[seg1->back()]  = seg1;
-            vEndPoints[nEndPoints++] = seg1->front();
-            vEndPoints[nEndPoints++] = seg1->back();
+        while (nEndPoints)
+        {
+            uint64_t minDist = 0xFFFFFFFFFFFFFFFFll;
+            int min_i=1, min_j=0;
+            for (i = 1; i < nEndPoints; i++)
+                for (uint32_t j = 0; j < i; j++)
+                {
+                    uint64_t dist = vEndPoints[i].squaredDistanceTo( vEndPoints[j]);
+                    if (dist < minDist) { minDist = dist; min_i = i; min_j = j;}
+                }
+            assert(minDist != 0xFFFFFFFFFFFFFFFFll);
+            cout << "Minimum gap size is " << (sqrt(minDist)/100) << "m" << endl;
+            assert( openEndPoints.count(vEndPoints[min_i]) && openEndPoints.count(vEndPoints[min_j]) );
+            PolygonSegment* seg1 = openEndPoints[vEndPoints[min_i]];
+            PolygonSegment* seg2 = openEndPoints[vEndPoints[min_j]];
+            
+            Vertex v1 = vEndPoints[min_i];
+            Vertex v2 = vEndPoints[min_j];
 
+            i = 0;
+            while (i < nEndPoints)
+            {
+                if (vEndPoints[i] == seg1->front() || vEndPoints[i] == seg1->back() ||
+                    vEndPoints[i] == seg2->front() || vEndPoints[i] == seg2->back()   )
+                    {
+                        --nEndPoints;
+                        vEndPoints[i] = vEndPoints[nEndPoints];
+                    }
+                else i++;
+            }
+            
+            if (seg1 == seg2) // same polygon segment --> close the loop
+            {
+                cout << "closing gap of  " 
+                     << sqrt( seg1->back().squaredDistanceTo(seg1->front()))/100.0 << "m"<< endl;
+            
+                openEndPoints.erase( seg1->front());
+                openEndPoints.erase( seg1->back());
+                seg1->append(seg1->front()); // to really make it closed
+                res.push_back(*seg1);
+                delete seg1;
+            } else
+            {
+                openEndPoints.erase( seg1->front());
+                openEndPoints.erase( seg1->back());
+                openEndPoints.erase( seg2->front());
+                openEndPoints.erase( seg2->back());
+                    
+                if      (v1 == seg1->front() && v2 == seg2->front()) { seg1->reverse(); seg1->append(*seg2, false); }
+                else if (v1 == seg1->back()  && v2 == seg2->front()) {                  seg1->append(*seg2, false); }
+                else if (v1 == seg1->front() && v2 == seg2->back() ) { seg2->append(*seg1, false); *seg1 = *seg2;   }
+                else if (v1 == seg1->back()  && v2 == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, false); }
+                else assert(false);
+                
+                delete seg2;
+                assert ( openEndPoints.count(seg1->front()) == 0);
+                assert ( openEndPoints.count(seg1->back() ) == 0);
+                openEndPoints[seg1->front()] = seg1;
+                openEndPoints[seg1->back()]  = seg1;
+                vEndPoints[nEndPoints++] = seg1->front();
+                vEndPoints[nEndPoints++] = seg1->back();
+
+            }    
         }
+        assert(openEndPoints.size() == 0);
     }
     
-    /*
-    cout << res.size() << " closed polygons, " << (openEndPoints.size()) << " open polygon segments" << endl;
-    static int num = 0;
-    
-    for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++)
-    {
-        num++;
-        char c_num[200];
-        snprintf(c_num, 200, "%d", num);
-        ofstream f( (string("tmp/poly_") + c_num + ".csv").c_str());
-        f << *poly->second;
-    }*/
-    
-    
-    
-    assert(openEndPoints.size() == 0);
-    return res;
-}
+    void clear() {
+        set<PolygonSegment*> segs;
+        /** we need to delete all remaining manually allocated polygon segments
+          * These are all registered in openEndPoints, but each polygon segment appears twice in this list.
+          * So, we first have to obtain a list of unique pointers to these segments*/
+        for (map<Vertex, PolygonSegment*>::iterator it = openEndPoints.begin(); it != openEndPoints.end(); it++)
+            if (!segs.count(it->second)) segs.insert(it->second);
+         //delete remaining PolygonSegment
 
-void dumpPolygon(string zone, const PolygonSegment& segment)
+        for (set<PolygonSegment*>::iterator seg = segs.begin(); seg != segs.end(); seg++)
+            delete *seg;
+            
+        openEndPoints.clear();
+        res.clear();
+            
+    }
+    void clearPolygonList() { res.clear();}
+    const list<PolygonSegment>& getClosedPolygons() const {return res;}
+
+private:
+    map<Vertex, PolygonSegment*> openEndPoints;
+    list<PolygonSegment> res;
+    
+};
+
+
+void dumpPolygon(string file_base, const PolygonSegment& segment)
 {
-    zone = timezone_basedir + "/" + zone;
-    size_t pos = zone.rfind('/');
-    string directory = zone.substr(0, pos);
+    size_t pos = file_base.rfind('/');
+    string directory = file_base.substr(0, pos);
     //zone = zone.substr(pos+1);
     ensureDirectoryExists(directory);
     
     int file_num = 1;
-    if ( zone_entries.count(zone) )
-        file_num = ++zone_entries[zone];
-    else (zone_entries.insert( pair<string, uint32_t>(zone, 1)));
+    if ( zone_entries.count(file_base) )
+        file_num = ++zone_entries[file_base];
+    else (zone_entries.insert( pair<string, uint32_t>(file_base, 1)));
     
     ofstream out;
     char tmp[200];
-    snprintf(tmp, 200, "%s_%u.csv", zone.c_str(), file_num);
+    snprintf(tmp, 200, "%s_%u.csv", file_base.c_str(), file_num);
     //string filename = zone+"_"+ file_num+".csv";
     out.open(tmp);
     for (list<Vertex>::const_iterator vertex = segment.vertices().begin(); vertex != segment.vertices().end(); vertex++)
@@ -332,9 +347,11 @@ void getSubRelations( uint64_t relation_id, set<uint64_t> &outSubRelations)
             outSubRelations.insert(it->ref);
             getSubRelations( it->ref, outSubRelations);
         }
-    }
-            
+    }         
 }
+
+string timezone_basedir = "timezones";
+/*
 void extractTimeZonesRelations()
 {
     std::cout << "Scanning " << num_relations/1000 << "k relations" << std::endl;
@@ -351,9 +368,12 @@ void extractTimeZonesRelations()
         getSubRelations(rel.id, timezoneSubRelations);
     }
     
-    timezoneSubRelations.clear(); //FIXME: cleared blacklist for debugging
-    cout << numTimezoneRelations << " timezone relations, " << timezoneSubRelations.size() << "black-listed sub-relations." << endl;
+    //timezoneSubRelations.clear(); //FIXME: cleared blacklist for debugging
+    cout << numTimezoneRelations << " timezone relations, " << timezoneSubRelations.size() << " black-listed sub-relations." << endl;
+    PolygonReconstructor recon;
     for (uint64_t i = 0; i < num_relations; i++)
+    
+    //for (uint64_t i = 120027; i == 120027; i++)
     //for (uint64_t i = 153557; i == 153557; i++)
     {
         if (! relation_index[i]) continue;
@@ -361,21 +381,79 @@ void extractTimeZonesRelations()
         
         OSMRelation rel = getRelation(i);
         if (!rel.hasKey("timezone")) continue;
-        list<OSMRelationMember> ways = getTZWayListRecursive(i);
+        list<uint64_t> ways = getTZWayListRecursive(i);
         cout << "Timezone " << rel.getValue("timezone") << "(relation " << rel.id << ") with " << ways.size() << " ways" << endl;
-        list<PolygonSegment> polygons = createPolygons(ways);
-        for (list<PolygonSegment>::const_iterator polygon = polygons.begin(); polygon != polygons.end(); polygon++)
-            dumpPolygon( rel.getValue("timezone"), *polygon);
         
-        //break; //FIXME: debug break
-        /*for (list<OSMRelationMember>::const_iterator it = rel.members.begin(); it!= rel.members.end(); it++)
-            std::cout << it->role << std::endl;*/
-        //std::cout << rel << std::endl;
+        for (list<uint64_t>::const_iterator way_id = ways.begin(); way_id != ways.end(); way_id++)
+        {
+            recon.add(createPolygonSegment(*way_id));
+        }
+        recon.forceClosePolygons();
+        //list<PolygonSegment> polygons = createPolygons(ways);
+        for (list<PolygonSegment>::const_iterator polygon = recon.getClosedPolygons().begin(); 
+                polygon != recon.getClosedPolygons().end(); polygon++)
+            dumpPolygon( timezone_basedir+"/"+"all", *polygon);
+            //dumpPolygon( timezone_basedir+"/"+rel.getValue("timezone"), *polygon);
+        recon.clear();
     }
+}*/
+
+
+
+
+void extractCoastline()
+{
+    double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
+
+    PolygonReconstructor recon;
+    cout << "Generating coastline polygons" << endl;
+    //list<uint64_t> coastline_ways;
+    for (uint64_t i = 0; i < num_ways; i++)
+    {
+        if (i % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
+        if (! way_index[i]) continue;
+        OSMWay way = getWay(i);
+        
+        if (way.getValue("natural") == "coastline")
+        {
+            //cout << "coastline segment " << i << endl;
+            PolygonSegment s =createPolygonSegment(i);
+            PolygonSegment *poly = recon.add(s);
+            if (poly) // if a new closed polygon has been created
+            {
+                //int nVertices = seg->getVerticesDEBUG().size();
+                if (poly->simplify(allowedDeviation))
+                {
+                    //cout << "Simplified: " << seg->getVerticesDEBUG().size() << "/" << nVertices << endl;
+                    dumpPolygon("coastline/seg",*poly);
+                }
+                recon.clearPolygonList();
+            }
+        }
+    }
+
+    assert( recon.getClosedPolygons().size() == 0);
+    //recon.clear();
+    recon.forceClosePolygons();
+    cout << "Done simplifying proper polygons; now processing 'unclean' ones" << endl;
+    int nUnclean = 0;
+    for (list<PolygonSegment>::const_iterator seg =recon.getClosedPolygons().begin(); seg != recon.getClosedPolygons().end(); seg++)
+    {
+        nUnclean++;
+        PolygonSegment poly = *seg;
+        //int nVertices = poly.getVerticesDEBUG().size();
+        if (poly.simplify(allowedDeviation))
+        {
+            //cout << "Simplified: " << poly.getVerticesDEBUG().size() << "/" << nVertices << endl;
+            dumpPolygon("coastline/seg",poly);
+        }
+        
+    }
+    cout << "Found " << zone_entries["coastline/seg"] << " coastline ways, " << nUnclean << " unclean" << endl;
+    
 }
 
-
-
+/*
 void extractTimeZonesWays()
 {
     std::cout << "Scanning " << num_ways/1000000 << "M ways" << std::endl;
@@ -394,32 +472,37 @@ void extractTimeZonesWays()
             continue;
         }
         
-        dumpPolygon(zone, createPolygonSegment( way.id));
+        dumpPolygon(timezone_basedir + "/" + zone, createPolygonSegment( way.id));
         
     }
-}
+}*/
 
 int main()
 {
+    extractCoastline();
+    //TODO: store all unsimplified coastlines in a single binary file for fast later processing
+    
+    
+    //extractTimeZonesRelations();
+    //extractTimeZonesWays();
     /*
     for (uint64_t i = 0; i < num_relations; i++)
     //for (uint64_t i = 153557; i == 153557; i++)
     {
         if (! relation_index[i]) continue;
         OSMRelation rel = getRelation(i);
-        if (rel.hasKey("name") && rel.getValue("name").find("Kentucky") !=string::npos &&
-            rel.hasKey("admin_level") && rel.getValue("admin_level") == "4")
+        if (rel.hasKey("name") && rel.getValue("name").find("Jefferson County") !=string::npos &&
+            rel.hasKey("admin_level") && rel.getValue("admin_level") == "6")
+            //rel.hasKey("nist:state_fips") && rel.getValue("nist:state_fips") == "21")
             
-            std::cout << rel << std::endl << endl;
+            //std::cout << rel << std::endl << endl;
     }*/
     
     //cout << getRelation(11980) << endl;
     //return 0;
 
 
-    //ensureDirectoryExists(timezone_basedir);    
-    extractTimeZonesRelations();
-    //extractTimeZonesWays();
+    
     //getTZWayListRecursive(79981);
     
     //cout << getRelation(16240) << endl;
@@ -427,15 +510,8 @@ int main()
     //cout << getRelation(179296) << endl;
     //cout << getRelation(82675) << endl;   //part of 79981, why?
     
-    /*
-    for (uint64_t i = 0; i < num_ways; i++)
-    {
-        if (i % 1000000 == 0) std::cout << i/1000000 << "M ways scanned" << std::endl;
-        if (! way_index[i]) continue;
-        OSMWay way = getWay(i);
-        if (way.hasKey("timezone"))
-            std::cout << way.getValue("timezone") << std::endl;
-    }*/
+ 
+    //std::cout << "Found " << coastline_ways.size() << " coastline ways" << endl;
     
     
     free_mmap(&mmap_node);

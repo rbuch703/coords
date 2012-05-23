@@ -24,3 +24,5 @@ callgrind.out.*
 massif.out.*
 *.db
 *.idx
+timezones
+coastline
