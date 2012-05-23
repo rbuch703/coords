@@ -41,9 +41,9 @@ clean:
 	@rm *.o
 	@rm *~
 
-make.dep: $(OSM_SRC)
+make.dep: $(OSM_SRC) $(CONV_SRC)
 	@echo [DEP]
-	@g++ -MM $(OSM_SRC) > make.dep
+	@g++ -MM $(OSM_SRC) $(CONV_SRC) > make.dep
 
 include make.dep
 

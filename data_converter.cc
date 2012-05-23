@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <fstream>
+#include <list>
+#include <set>
 
 #include <sys/stat.h>
 #include <sys/types.h>  //for mkdir
@@ -46,14 +48,24 @@ string timezone_basedir = "timezones";
 void ensureDirectoryExists(string directory)
 {
     struct stat dummy;
-    if (0!= stat(directory.c_str(), &dummy)) //directory does not yet exist
-        if (0 != mkdir(directory.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) //755
-            { perror("[ERR] mkdir");}
+    size_t start_pos = 0;
+    
+    do
+    {
+        size_t pos = directory.find('/', start_pos);
+        string basedir = directory.substr(0, pos);  //works even if no slash is present --> pos == string::npos
+        if (0!= stat(basedir.c_str(), &dummy)) //directory does not yet exist
+            if (0 != mkdir(basedir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) //755
+                { perror("[ERR] mkdir");}
+        if (pos == string::npos) break;
+        start_pos = pos+1;
+    } while ( true);
 }
 
 static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
 
 //obtains all "outer" ways that belong to a given relation, including those of possible sub-relations
+//FIXME: blacklist those timezone relations that are part of other timezone relations
 list<OSMRelationMember> getTZWayListRecursive( uint64_t relation_id)
 {
     list<OSMRelationMember> res;
@@ -143,11 +155,12 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
                 {
                     seg->reverse(); //have to fit front-to-back
                     assert( seg->back() == other->front() );
-                    *seg = *seg + *other;
+                    seg->append(*other);
                 } else
                 {
                     assert( other->back() == seg->front() );
-                    *seg = *other + *seg;
+                    other->append(*seg);
+                    *seg = *other;
                 }
                 delete other;
             }
@@ -162,11 +175,12 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
                 {
                     seg->reverse();
                     assert( other->back() == seg->front());
-                    *seg = *other + *seg;
+                    other->append(*seg);
+                    *seg = *other;
                 } else
                 {
                     assert( seg->back() == other->front() );
-                    *seg = *seg + *other;
+                    seg->append(*other);
                 }
                 delete other;
             }
@@ -197,14 +211,14 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
     for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
         vEndPoints[i] = poly->first;
         
-    uint64_t minDist = 0xFFFFFFFFFFFFFFFFll;
-    int min_i=1, min_j=0;
     while (nEndPoints)
     {
+        uint64_t minDist = 0xFFFFFFFFFFFFFFFFll;
+        int min_i=1, min_j=0;
         for (i = 1; i < nEndPoints; i++)
             for (uint32_t j = 0; j < i; j++)
             {
-                uint64_t dist = vEndPoints[i].distanceFrom( vEndPoints[j]);
+                uint64_t dist = vEndPoints[i].squaredDistanceTo( vEndPoints[j]);
                 if (dist < minDist) { minDist = dist; min_i = i; min_j = j;}
             }
         assert(minDist != 0xFFFFFFFFFFFFFFFFll);
@@ -212,27 +226,57 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
         assert( openEndPoints.count(vEndPoints[min_i]) && openEndPoints.count(vEndPoints[min_j]) );
         PolygonSegment* seg1 = openEndPoints[vEndPoints[min_i]];
         PolygonSegment* seg2 = openEndPoints[vEndPoints[min_j]];
-        vEndPoints[min_i] = vEndPoints[--nEndPoints];   //is a noop if min_i was the last element, but is still a valid op;
-        /** The element that has just been moved cannot be min_j, because min_j is guaranteed to be smaller than min_i*/
-        vEndPoints[min_j] = vEndPoints[--nEndPoints];
+        
+        Vertex v1 = vEndPoints[min_i];
+        Vertex v2 = vEndPoints[min_j];
+
+        i = 0;
+        while (i < nEndPoints)
+        {
+            if (vEndPoints[i] == seg1->front() || vEndPoints[i] == seg1->back() ||
+                vEndPoints[i] == seg2->front() || vEndPoints[i] == seg2->back()   )
+                {
+                    --nEndPoints;
+                    vEndPoints[i] = vEndPoints[nEndPoints];
+                }
+            else i++;
+        }
         
         if (seg1 == seg2) // same polygon segment --> close the loop
         {
+            cout << "closing gap of  " 
+                 << sqrt( seg1->back().squaredDistanceTo(seg1->front()))/100.0 << "m"<< endl;
+        
             openEndPoints.erase( seg1->front());
             openEndPoints.erase( seg1->back());
-            seg1->append(seg1->back()); // to really make it closed
+            seg1->append(seg1->front()); // to really make it closed
             res.push_back(*seg1);
             delete seg1;
         } else
         {
-            //TODO: vEndPoints still contains the other end points of seg1 and seg2. Make sure their references in
-            //      openEndPoints point to the merged segments
-            break;
-            assert(false && "Not Implemented");
+            openEndPoints.erase( seg1->front());
+            openEndPoints.erase( seg1->back());
+            openEndPoints.erase( seg2->front());
+            openEndPoints.erase( seg2->back());
+                
+            if      (v1 == seg1->front() && v2 == seg2->front()) { seg1->reverse(); seg1->append(*seg2, false); }
+            else if (v1 == seg1->back()  && v2 == seg2->front()) {                  seg1->append(*seg2, false); }
+            else if (v1 == seg1->front() && v2 == seg2->back() ) { seg2->append(*seg1, false); *seg1 = *seg2;   }
+            else if (v1 == seg1->back()  && v2 == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, false); }
+            else assert(false);
+            
+            delete seg2;
+            assert ( openEndPoints.count(seg1->front()) == 0);
+            assert ( openEndPoints.count(seg1->back() ) == 0);
+            openEndPoints[seg1->front()] = seg1;
+            openEndPoints[seg1->back()]  = seg1;
+            vEndPoints[nEndPoints++] = seg1->front();
+            vEndPoints[nEndPoints++] = seg1->back();
+
         }
     }
     
-    
+    /*
     cout << res.size() << " closed polygons, " << (openEndPoints.size()) << " open polygon segments" << endl;
     static int num = 0;
     
@@ -243,7 +287,7 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
         snprintf(c_num, 200, "%d", num);
         ofstream f( (string("tmp/poly_") + c_num + ".csv").c_str());
         f << *poly->second;
-    }
+    }*/
     
     
     
@@ -253,11 +297,11 @@ list<PolygonSegment> createPolygons(list<OSMRelationMember> &ways)
 
 void dumpPolygon(string zone, const PolygonSegment& segment)
 {
-    size_t pos = zone.find('/');
+    zone = timezone_basedir + "/" + zone;
+    size_t pos = zone.rfind('/');
     string directory = zone.substr(0, pos);
-    zone = timezone_basedir+"/"+zone;
     //zone = zone.substr(pos+1);
-    ensureDirectoryExists(timezone_basedir+"/"+directory);
+    ensureDirectoryExists(directory);
     
     int file_num = 1;
     if ( zone_entries.count(zone) )
@@ -276,17 +320,47 @@ void dumpPolygon(string zone, const PolygonSegment& segment)
     out.close();
 }
 
+void getSubRelations( uint64_t relation_id, set<uint64_t> &outSubRelations)
+{
+    if (! relation_index[relation_id]) {cout << "[WARN] non-existent relation " << relation_id << endl; return; }
+    OSMRelation rel = getRelation(relation_id);
+
+    for (list<OSMRelationMember>::const_iterator it = rel.members.begin(); it != rel.members.end(); it++)
+    {
+        if (it->type == RELATION)
+        {
+            outSubRelations.insert(it->ref);
+            getSubRelations( it->ref, outSubRelations);
+        }
+    }
+            
+}
 void extractTimeZonesRelations()
 {
     std::cout << "Scanning " << num_relations/1000 << "k relations" << std::endl;
     list<PolygonSegment> polygons;
-    //for (uint64_t i = 0; i < num_relations; i++)
-    for (uint64_t i = 120027; i == 120027; i++)
+    int numTimezoneRelations = 0;
+    //relations that are part of timezone-relations and not by themselves timezones (even if they are tagged as such)
+    set<uint64_t> timezoneSubRelations; 
+    for (uint64_t i = 0; i < num_relations; i++)
     {
         if (! relation_index[i]) continue;
         OSMRelation rel = getRelation(i);
         if (!rel.hasKey("timezone")) continue;
+        numTimezoneRelations++;
+        getSubRelations(rel.id, timezoneSubRelations);
+    }
+    
+    timezoneSubRelations.clear(); //FIXME: cleared blacklist for debugging
+    cout << numTimezoneRelations << " timezone relations, " << timezoneSubRelations.size() << "black-listed sub-relations." << endl;
+    for (uint64_t i = 0; i < num_relations; i++)
+    //for (uint64_t i = 153557; i == 153557; i++)
+    {
+        if (! relation_index[i]) continue;
+        if (timezoneSubRelations.count(i)) continue; // if a parent relation is already a time zone
         
+        OSMRelation rel = getRelation(i);
+        if (!rel.hasKey("timezone")) continue;
         list<OSMRelationMember> ways = getTZWayListRecursive(i);
         cout << "Timezone " << rel.getValue("timezone") << "(relation " << rel.id << ") with " << ways.size() << " ways" << endl;
         list<PolygonSegment> polygons = createPolygons(ways);
@@ -327,7 +401,23 @@ void extractTimeZonesWays()
 
 int main()
 {
-    ensureDirectoryExists(timezone_basedir);    
+    /*
+    for (uint64_t i = 0; i < num_relations; i++)
+    //for (uint64_t i = 153557; i == 153557; i++)
+    {
+        if (! relation_index[i]) continue;
+        OSMRelation rel = getRelation(i);
+        if (rel.hasKey("name") && rel.getValue("name").find("Kentucky") !=string::npos &&
+            rel.hasKey("admin_level") && rel.getValue("admin_level") == "4")
+            
+            std::cout << rel << std::endl << endl;
+    }*/
+    
+    //cout << getRelation(11980) << endl;
+    //return 0;
+
+
+    //ensureDirectoryExists(timezone_basedir);    
     extractTimeZonesRelations();
     //extractTimeZonesWays();
     //getTZWayListRecursive(79981);
