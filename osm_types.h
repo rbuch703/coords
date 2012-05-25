@@ -45,15 +45,32 @@ struct OSMWay
 
     void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
     bool hasKey(string key) const;
-    string getValue(string key) const;
+    const string &getValue(string key) const;
+    const string &operator[](string key) const {return getValue(key);}
 
     uint64_t id;
     list<uint64_t> refs;
     list<OSMKeyValuePair> tags;
-    
 };
-ostream& operator<<(ostream &out, const OSMWay &way);
 
+// a representation of an OSM way that includes the data of all of its nodes (as opposed to just references to them)
+struct OSMIntegratedWay
+{
+    OSMIntegratedWay( uint64_t way_id, list<Vertex> way_vertices, list<OSMKeyValuePair> way_tags);
+    OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id);
+
+    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    bool hasKey(string key) const;
+    const string &getValue(string key) const;
+    const string &operator[](string key) const {return getValue(key);}
+    PolygonSegment toPolygonSegment() const;
+public:
+    uint64_t id;
+    list<Vertex> vertices;
+    list<OSMKeyValuePair> tags;
+};
+
+ostream& operator<<(ostream &out, const OSMWay &way);
 struct OSMRelationMember
 {
     OSMRelationMember( ELEMENT member_type, uint64_t member_ref, string member_role):

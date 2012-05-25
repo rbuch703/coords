@@ -36,6 +36,8 @@ public:
     
     void reverse() { m_vertices.reverse();}
     void append(const Vertex& node) {m_vertices.push_back(node);}
+    void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end ) 
+                {m_vertices.insert(m_vertices.end(),begin, end);}
     void append(const PolygonSegment &other, bool exactMatch = true);
 
     /** returns whether the resulting polygon is a proper one, or if it is smaller than the given threshold 

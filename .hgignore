@@ -15,14 +15,14 @@ data_converter
 # ignore OSM data files
 *.osm
 *.osm.bz2
+*.osm.gz
 
 #ignore output files
 make.dep
-nodes.bin
 *.csv
 callgrind.out.*
 massif.out.*
-*.db
+*.data
 *.idx
 timezones
 coastline

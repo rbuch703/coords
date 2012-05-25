@@ -27,16 +27,12 @@ void serializeTags( const list<OSMKeyValuePair> tags, FILE* file, const map<OSMK
     list<OSMKeyValuePair> verbose_tags;
     list<uint8_t> symbolic_tags;
     
-    uint32_t verbose_tag_data_len = 0;
     for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
     {
-        if ( tag_symbols.count(*it)) symbolic_tags.push_back( tag_symbols.find(*it)->second);
+        if ( tag_symbols.count(*it)) 
+            symbolic_tags.push_back( tag_symbols.find(*it)->second);
         else 
-        {
-            verbose_tag_data_len += strlen(it->first.c_str() )+1; //including null-termination
-            verbose_tag_data_len += strlen(it->second.c_str())+1; //including null-termination
             verbose_tags.push_back(*it);
-        }
     }
     
     assert(symbolic_tags.size() < (1<<16));
@@ -55,7 +51,6 @@ void serializeTags( const list<OSMKeyValuePair> tags, FILE* file, const map<OSMK
     
     if (num_verbose_tags == 0) return;
 
-    fwrite( &verbose_tag_data_len, sizeof(verbose_tag_data_len), 1, file);
     for (list<OSMKeyValuePair>::const_iterator it = verbose_tags.begin(); it!= verbose_tags.end(); it++)
     {
         fwrite( it->first.c_str(),  strlen(it->first.c_str()) + 1, 1, file);    //both including their null-termination
@@ -69,7 +64,7 @@ void fread( void* dest, uint64_t size, FILE* file)
     { perror("[ERR] fread"); exit(0);}
 }
 
-
+/*
 list<OSMKeyValuePair> deserializeTags(FILE* data_file)
 {
     list<OSMKeyValuePair> tags;
@@ -89,9 +84,6 @@ list<OSMKeyValuePair> deserializeTags(FILE* data_file)
     }
     if (num_verbose_tags == 0) return tags;
     
-    uint32_t verbose_tag_data_len;
-    fread(&verbose_tag_data_len, sizeof(verbose_tag_data_len), data_file);
-    
     //TODO: maybe replace this with a static buffer to reduce number of reallocations;
     // however, this would mean that the method cannot be used in multithread-applications
     char *buf = new char[verbose_tag_data_len];
@@ -107,7 +99,7 @@ list<OSMKeyValuePair> deserializeTags(FILE* data_file)
     
     delete [] buf;
     return tags;
-}
+}*/
 
 list<OSMKeyValuePair> deserializeTags(const uint8_t* data_ptr)
 {
@@ -125,10 +117,6 @@ list<OSMKeyValuePair> deserializeTags(const uint8_t* data_ptr)
     }
     if (num_verbose_tags == 0) return tags;
     
-    //seems we don't needs this after all when working with memory maps, but it is still stored in the data file
-    //uint32_t verbose_tag_data_len = *((const uint32_t*)data_ptr); 
-    data_ptr+=4;
-
     const char* str = (const char*)data_ptr;
     while (num_verbose_tags--)
     {
@@ -142,12 +130,12 @@ list<OSMKeyValuePair> deserializeTags(const uint8_t* data_ptr)
     
 }
 
-
+/*
 list<OSMKeyValuePair> deserializeTags(FILE* data_file, uint64_t file_offset)
 {
     fseeko(data_file, file_offset, SEEK_SET);
     return deserializeTags(data_file);
-}
+}*/
 
 ostream& operator<<(ostream &out, const list<OSMKeyValuePair> &tags)
 {
@@ -162,6 +150,7 @@ ostream& operator<<(ostream &out, const list<OSMKeyValuePair> &tags)
     return out;
 }
 
+/*
 OSMNode::OSMNode( FILE* data_file, uint64_t offset, uint64_t node_id)
 {
     fseeko(data_file, offset, SEEK_SET);
@@ -169,7 +158,7 @@ OSMNode::OSMNode( FILE* data_file, uint64_t offset, uint64_t node_id)
     fread(&lon, sizeof(lon), data_file);
     tags = deserializeTags(data_file);
     id = node_id;
-}
+}*/
 
 OSMNode::OSMNode( const uint8_t* data_ptr, uint64_t node_id)
 {
@@ -195,9 +184,9 @@ void OSMNode::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyVal
     fwrite( &lat, sizeof(lat), 1, data_file);
     fwrite( &lon, sizeof(lon), 1, data_file);
 
-    //map<OSMKeyValuePair, uint16_t> dummy; //empty dummy map TODO: replace by actual map of most-frequently used kv-pairs
     serializeTags( tags, data_file, tag_symbols );
-    
+
+    //std::cout << id << endl;    
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
     uint64_t* ptr = (uint64_t*)index_map->ptr;
     ptr[id] = offset;
@@ -259,11 +248,12 @@ bool OSMWay::hasKey(string key) const
     return false;
 }
 
-string OSMWay::getValue(string key) const
+const string& OSMWay::getValue(string key) const
 {
+    static const string empty="";
     for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
         if (it->first == key) return it->second;
-    return "";
+    return empty;
 }
 
 ostream& operator<<(ostream &out, const OSMWay &way)
@@ -278,6 +268,90 @@ ostream& operator<<(ostream &out, const OSMWay &way)
     out << ") " << way.tags;
     return out;
 }
+
+//===================================
+
+OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<Vertex> way_vertices, list<OSMKeyValuePair> way_tags):
+        id(way_id), vertices(way_vertices), tags(way_tags) {}
+
+OSMIntegratedWay::OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
+{
+    uint32_t num_vertices = *(uint32_t*)data_ptr;
+    data_ptr+=4;
+    while (num_vertices--)
+    {
+        int32_t lat = *(int32_t*)data_ptr;
+        data_ptr+=4;
+        int32_t lon = *(int32_t*)data_ptr;
+        data_ptr+=4;
+        vertices.push_back( Vertex(lat, lon));
+    }
+    tags = deserializeTags(data_ptr);
+}
+
+        
+
+void OSMIntegratedWay::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const
+{
+    assert (id > 0);  
+
+    uint64_t offset = ftello(data_file);    //get offset at which the dumped way *starts*
+    
+    uint32_t num_vertices = vertices.size();
+    fwrite(&num_vertices, sizeof(num_vertices), 1, data_file);
+    
+    for (list<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
+    {
+        uint32_t lat = it->x;
+        fwrite(&lat, sizeof(lat), 1, data_file);
+        uint32_t lon = it->y;
+        fwrite(&lon, sizeof(lon), 1, data_file);
+    }
+    
+    serializeTags(tags, data_file, tag_symbols);
+    ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
+    uint64_t* ptr = (uint64_t*)index_map->ptr;
+    assert (ptr[id] == 0 || ptr[id] == offset);
+    ptr[id] = offset;
+}
+
+bool OSMIntegratedWay::hasKey(string key) const
+{
+    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+        if (it->first == key) return true;
+    return false;
+}
+
+const string& OSMIntegratedWay::getValue(string key) const
+{
+    static const string empty="";
+    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+        if (it->first == key) return it->second;
+    return empty;
+}
+
+PolygonSegment OSMIntegratedWay::toPolygonSegment() const
+{
+    PolygonSegment seg;
+    seg.append( vertices.begin(), vertices.end() );
+    return seg;
+}
+
+ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
+{
+    out << "Way " << way.id << " (";
+    for (list<Vertex>::const_iterator it = way.vertices.begin(); it!= way.vertices.end(); it++)
+    {
+        Vertex v = *it;
+        out << v;
+        if (++it != way.vertices.end()) out << ", ";
+        it--;
+    }
+    out << ") " << way.tags;
+    return out;
+}
+
+//==================================
 
 OSMRelation::OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags):
     id(relation_id), members(relation_members), tags(relation_tags) {}

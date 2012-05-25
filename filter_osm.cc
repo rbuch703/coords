@@ -17,6 +17,8 @@
 #include <set>
 #include "mem_map.h"
 
+#include "osmxmlparser.h"
+
 #include "osm_types.h"
 #include "osm_tags.h"
 
@@ -24,388 +26,230 @@
 
 using namespace std;
 
-mmap_t node_index, way_index, relation_index;
-FILE* data_file;
-map<OSMKeyValuePair, uint8_t> symbolic_tags;
 
-const char* getValue(const char* line, const char* key)
-{
-    static char* buffer = NULL;
-    static uint32_t buffer_size = 0;
-
-    uint32_t len = strlen(key)+3;
-    if (buffer_size < len)
-    {
-        if (buffer) free(buffer);
-        buffer = (char*)malloc(len);
-        buffer_size = strlen(key)+3;
-    }
-    strcpy(buffer, key);
-    buffer[ len-3] = '=';
-    buffer[ len-2] = '"';
-    buffer[ len-1] = '\0';
-    
-    const char* in = strstr(line, buffer);
-    assert (in != NULL);
-    in += (strlen(buffer)); //skip key + '="'
-    const char* out = strstr(in, "\"");
-    assert(out != NULL);
-
-    uint32_t size = out - in;
-    if (buffer_size <= size)
-    {
-        if (buffer) free(buffer);
-        buffer = (char*)malloc(size+1);
-        buffer_size = size+1;
-    }
-    memcpy(buffer, in, size);
-    buffer[size] ='\0';
-    //std::cout << buffer << std::endl;
-    return buffer;
-}
-
-
-
-/** find the value associated to 'key' in 'line', and return its degree value as an int32_t 
-    (by multiplying the float value by 10,000,000*/
-int32_t degValueToInt(const char* line, const char* key)
-{
-    const char* in = strstr(line, key);
-    assert (in != NULL);
-    in += (strlen(key) + 2); //skip key + '="'
-    bool isNegative = false;
-    if (*in == '-')
-    { isNegative = true; in++;}
-    
-    int32_t val = 0;
-    bool after_decimal_point = false;
-    int n_digits = 0;
-    for (; *in != '"'; in++)
-    {
-        if (*in == '.') {after_decimal_point = true; continue;}
-        assert (*in >= '0' && *in <= '9' && "Not a digit");
-        val = val * 10 + (*in - 0x30);
-        if (after_decimal_point) n_digits++;
-    }
-    for (; n_digits < 7; n_digits++) val*=10;
-    return isNegative? -val : val;
-}
-
-
-/*
-void dumpNode(mmap_t *node_map, int64_t node_id, int32_t lat, int32_t lon)
-{
-    //temporary nodes in OSM editors are allowed to have negative node IDs, but those in the official maps should be guaranteed to be positive
-    //also, negative ids would mess up the memory map
-    assert (node_id > 0);  
-
-    ensure_mmap_size(node_map, (node_id+1)* 2*sizeof(int32_t));
-    int32_t* map = (int32_t*)node_map->ptr;
-    map[node_id*2] = lat;
-    map[node_id*2+1] = lon;
-} */
-
-#if 0
-void print_nodes( mmap_t *node_map, std::list<int64_t> node_refs)
-{
-    static int seg_count = 0;
-    int c = seg_count;
-    std::string seg_str;
-    while (c > 0) 
-    {
-        seg_str = (char)(c % 10 +0x30) + seg_str;
-        c = c/10;
-    }
-    while (seg_str.length() < 6) seg_str = '0' + seg_str;
-    
-    std::ofstream out;
-    out.open((std::string("coastline_segments/seg_")+ seg_str + ".seg").c_str());
-    uint32_t* map = (uint32_t*)node_map->ptr;
-    for (std::list<int64_t>::const_iterator node = node_refs.begin(); node != node_refs.end(); node++)
-    {
-        assert(*node < (node_map->size / 8) && "Reading beyond end of map");
-        assert(*node >= 0 && "Negative node number");
-        if ((map[*node * 2] != 0) && (map[*node * 2 + 1] != 0))
-            out << map[*node * 2+1] << "," << map[*node * 2] <<"," << (*node) << std::endl;
-    }
-//            std::cerr << map[*node *2+1] << ", ";
-/*    std::cerr << std::endl;
-    for (std::list<int64_t>::const_iterator node = node_refs.begin(); node != node_refs.end(); node++)
-        if ((map[*node * 2] != 0) && (map[*node * 2 + 1] != 0))
-            std::cerr << map[*node *2] << ", ";
-    std::cerr << std::endl;*/
-    out.close();
-    seg_count++;
-}
-#endif
-
-//int32_t* map = NULL;
-//const char* file_name = "nodes.bin";
-//int32_t fd;
-//int64_t file_no_nodes = 0;
-
-static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
-
-class ParserState
+class OsmXmlDumpingParser: public OsmXmlParser
 {
 public:
-    ParserState(): current_parent(OTHER)
+    OsmXmlDumpingParser(FILE * f): OsmXmlParser(f) 
     {
-        for (int i = 0; i < nElements; i++) element_count[i] = 0;
-    }    
-
-    //FIXME: current approach (serialize on element once the next one is discovered) does not dump the last relation
-    void update( ELEMENT new_element)
-    {
-        switch (new_element)
+        uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
+        assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistence check #keys<->#values
+        assert( nSymbolicTags <= (256));  // we assign 8bit numbers to these, so there must not be more than 2^8
+        for (uint32_t i = 0; i < nSymbolicTags; i++)
         {
-            case NODE:
-            case WAY:
-            case RELATION:
-            case CHANGESET:
-                switch (current_parent)
-                {
-                    case NODE:
-                        OSMNode (node_lat, node_lon, node_id, tags).serialize( data_file, &node_index, symbolic_tags);
-                        break;
-                    case WAY:
-                        OSMWay( way_id, node_refs, tags).serialize( data_file, &way_index, symbolic_tags);
-                        break;
-                    case RELATION:
-                        OSMRelation(relation_id, members, tags).serialize(data_file, &relation_index, symbolic_tags);
-                        break;
-                    default:
-                        break;
-                }            
-                current_parent = new_element;
-                node_refs.clear();
-                tags.clear();
-                members.clear();
-                element_count[new_element]++;
-                if (element_count[new_element] % 1000000 == 0)
-                    std::cout <<  (element_count[new_element]/1000000) << "M " 
-                              << ELEMENT_NAMES[new_element] << "s processed" << std::endl;
-                break;
-            case OTHER:
-                break;
+            OSMKeyValuePair kv(symbolic_tags_keys[i], symbolic_tags_values[i]);
+            symbolic_tags.insert( pair<OSMKeyValuePair, uint8_t>(kv, i));
+        }
+        cout << "Read " << symbolic_tags.size() << " symbolic tags" << endl;
+        
+        //for situations where several annotation keys exist with the same meaning
+        //this dictionary maps them to a common unique key
+        rename_key.insert( std::pair<std::string, std::string>("postal_code", "addr:postcode"));
+        rename_key.insert( std::pair<std::string, std::string>("url", "website")); //according to OSM specs, "url" is obsolete
+        rename_key.insert( std::pair<std::string, std::string>("phone", "contact:phone"));
+        rename_key.insert( std::pair<std::string, std::string>("fax", "contact:fax"));
+        rename_key.insert( std::pair<std::string, std::string>("email", "contact:email"));
+        rename_key.insert( std::pair<std::string, std::string>("addr:housenumber", "addr:streetnumber"));
+    
+        for (uint32_t i = 0; i < num_ignore_keys; i++)
+            ignore_key.insert(ignore_keys[i]);
+            
+        truncateFile("nodes.idx");
+        truncateFile("nodes.data");
+        truncateFile("/mnt/ssd/vertices.data");
+        truncateFile("ways.idx");
+        truncateFile("ways_int.idx");
+        truncateFile("relations.idx");
+        truncateFile("ways.data");
+        truncateFile("ways_int.data");
+        truncateFile("relations.data");
+
+    };
+    virtual ~OsmXmlDumpingParser() {};
+protected:
+
+    static const string base_path;
+    //pad the data file to a multiple of the page size, so that it can be opened using a memory map
+    void padFile(FILE* file)
+    {
+        uint64_t file_size = ftello(file);
+        uint32_t page_size = sysconf(_SC_PAGESIZE);
+
+        if (file_size % page_size != 0)
+        {
+            uint32_t padding = page_size - (file_size % page_size);
+	        uint8_t dummy = 0;
+	        assert(sizeof(dummy) == 1);
+	        while (padding--)
+	        fwrite(&dummy, sizeof(dummy), 1, file);
+        }
+        assert( ftello(file) % page_size == 0);
+    }
+    
+    void truncateFile(string filename) {
+/*        FILE* f= fopen(filename.c_str() , "wb+"); 
+        if (f == NULL) {perror("[ERR] fopen:"); exit(0);} 
+        fclose(f);*/
+    }
+    virtual void beforeParsingNodes () {
+        node_index = init_mmap( "nodes.idx" );
+        
+        node_data = fopen("nodes.data", "wb+");
+        const char* node_magic = "ON10"; //OSM Nodes v. 1.0
+        fwrite(node_magic, 4, 1, node_data);
+
+        vertex_data = init_mmap("/mnt/ssd/vertices.data"); //holds just raw vertex coordinates indexed by node_id; no tags
+    };  
+    
+    virtual void afterParsingNodes () {
+        padFile(node_data);
+        fclose( node_data ); //don't need node data any more
+        free_mmap(&node_index);
+        /** do not free the vertex map. We still it, because generating
+          * integrated ways (ways that include vertices) depends on it.*/
+      cout << "== Done parsing Nodes ==" << endl;
+    };
+    
+    virtual void beforeParsingWays () 
+    {
+        way_index = init_mmap("ways.idx");
+        
+        way_data = fopen("ways.data", "wb+");
+        const char* way_magic = "OW10"; //OSM Ways v. 1.0
+        fwrite(way_magic, 4, 1, way_data);
+        
+        //way_int_index = init_mmap("ways_int.idx");
+
+        way_int_data = fopen("ways_int.data", "wb+");
+        const char* way_int_magic = "OI10"; //OSM Integrated ways v. 1.0
+        fwrite(way_int_magic, 4, 1, way_int_data);
+        
+        
+
+    };
+    
+    virtual void afterParsingWays () {
+        free_mmap(&vertex_data);
+        free_mmap(&way_index);
+        //free_mmap(&way_int_index);
+        
+        padFile(way_data);
+        fclose(way_data);
+        
+        padFile(way_int_data);
+        fclose(way_int_data);
+        
+        cout << "== Done parsing Ways ==" << endl;
+    };   
+
+    virtual void beforeParsingRelations () {
+        relation_index = init_mmap("relations.idx");
+        
+        relation_data = fopen("relations.data", "wb+");
+        const char* relation_magic = "OR10"; //OSM Relation v. 1.0
+        fwrite(relation_magic, 4, 1, relation_data);
+    }; 
+
+    virtual void afterParsingRelations () {
+        free_mmap(&relation_index);
+        padFile(relation_data);
+        fclose( relation_data);
+    }; 
+
+    void processTags(list<OSMKeyValuePair> &tags)
+    {
+        list<OSMKeyValuePair>::iterator tag = tags.begin();
+        while (tag != tags.end())
+        {
+            if ( rename_key.count(tag->first) ) tag->first = rename_key[tag->first];
+            
+            if ( ignore_key.count(tag->first) ) 
+            {
+                list<OSMKeyValuePair>::iterator prev = tag;
+                tag++;
+                tags.erase(prev);
+            } else tag++;
         }
     }
+
+    virtual void completedNode( OSMNode &node) 
+    {
+/*        processTags(node.tags);
+        node.serialize(node_data, &node_index, symbolic_tags);
+        
+        ensure_mmap_size( &vertex_data, (node.id+1) * 2 * sizeof(uint32_t));
+        uint32_t* vertex_ptr = (uint32_t*)vertex_data.ptr;
+        vertex_ptr[2*node.id]   = node.lat;
+        vertex_ptr[2*node.id+1] = node.lon;
+*/    }
     
-    void setNodeProperties( int32_t lat, int32_t lon, uint64_t id) { node_lat = lat; node_lon = lon; node_id = id;}
-    void setWayProperties(uint64_t id){way_id = id;}
-    void setRelationProperties(uint64_t id) { relation_id = id;}
+    virtual void completedWay ( OSMWay  &way) 
+    {
+/*        processTags(way.tags);
+        way.serialize(way_data, &way_index, symbolic_tags);
+        
+        list<Vertex> vertices;
+        uint32_t* vertices_ptr = (uint32_t*) vertex_data.ptr;
+        for (list<uint64_t>::const_iterator ref = way.refs.begin(); ref != way.refs.end(); ref++)
+        {
+            if (*ref == 0) //there is no node with id = 0, this is likely a dummy
+                //create a dummy node so that the sizes of the way and the integrated way match
+                vertices.push_back( Vertex( 0, 0) );
+            else
+                vertices.push_back( Vertex( vertices_ptr[*ref * 2], vertices_ptr[*ref * 2+1]) );
+        }
+        
+        OSMIntegratedWay int_way(way.id, vertices, way.tags);
+        // the "way_index" here is deliberate.
+        // an integrated way always has the same size as the corresponding normal OSM way
+        // (in an integrated way, the uint64_t node refs are replaced by 2xint32_t lat/lon coordinates)
+        // thus, a single index is sufficient for both data files
+        int_way.serialize(way_int_data, &way_index, symbolic_tags);
+*/    }
     
-    void addNodeRef(uint64_t ref) { node_refs.push_back(ref); }
-    void addTag (string key, string value) { tags.push_back( pair<string,string>(key, value));}
-    void addMember(ELEMENT type, uint64_t ref, string role) {
-        assert(current_parent == RELATION);
-        assert( type == NODE || type == WAY || type == RELATION);
-        members.push_back( OSMRelationMember(type, ref, role));
+    virtual void completedRelation( OSMRelation &relation) 
+    {
+        processTags(relation.tags);
+        relation.serialize( relation_data, &relation_index, symbolic_tags);
     }
-    
-    ELEMENT getCurrentElement() const { return current_parent;}
-    uint64_t getElementCount( ELEMENT el) const { return element_count[el];}
-
+    virtual void doneParsingNodes () {cout << "===============================================" << endl;}
 private:
-    static const int nElements = 5;
-
-private:
-    ELEMENT current_parent;
-    uint64_t element_count[nElements];
-    
-    list<uint64_t> node_refs;
-    list<pair<string, string> > tags;
-    list<OSMRelationMember> members;
-    
-    int32_t node_lat, node_lon;
-    uint64_t node_id, way_id, relation_id;
+    mmap_t node_index, vertex_data, way_index/*, way_int_index*/, relation_index;
+    FILE *node_data, *way_data, *way_int_data, *relation_data;
+    map<OSMKeyValuePair, uint8_t> symbolic_tags;
+    map<string, string> rename_key; 
+    set<string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
 };
 
 
+class OsmXmlCountingParser: public OsmXmlParser
+{
+public:
+    OsmXmlCountingParser(FILE* f): OsmXmlParser(f), nWays(0), nRelations(0), nNodes(0) {}
+    virtual void completedNode    ( OSMNode &) {nNodes++;}
+    virtual void completedWay     ( OSMWay  &) {nWays++;}
+    virtual void completedRelation( OSMRelation &) {nRelations++;}
+
+    uint64_t nWays, nRelations, nNodes;
+};
+
 int main()
 {
-    //#warning symbolic tags disabled. This may dramatically increase the node_db size
-    uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
-    assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistence check #keys<->#values
-    assert( nSymbolicTags <= (256));  // we assign 8bit numbers to these, so there must not be more than 2^8
-    for (uint32_t i = 0; i < nSymbolicTags; i++)
-    {
-        OSMKeyValuePair kv(symbolic_tags_keys[i], symbolic_tags_values[i]);
-        symbolic_tags.insert( pair<OSMKeyValuePair, uint8_t>(kv, i));
-    }
-    cout << "Read " << symbolic_tags.size() << " symbolic tags" << endl;
 
-    
-    // clear indices. Since the data itself is overwritten, old indices are invalid
-    FILE *f;
-    f= fopen("node.idx"    , "wb"); if (f == NULL) {perror("[ERR] fopen:"); exit(0);} fclose(f);
-    f= fopen("way.idx"     , "wb"); if (f == NULL) {perror("[ERR] fopen:"); exit(0);} fclose(f);
-    f= fopen("relation.idx", "wb"); if (f == NULL) {perror("[ERR] fopen:"); exit(0);} fclose(f);
-    
-    node_index     = init_mmap( "node.idx" );
-    way_index      = init_mmap( "way.idx" );
-    relation_index = init_mmap( "relation.idx" );
-    
-    data_file = fopen("osm.db", "wb");
-
-    //to identify the database
-    //positive side-effect: no node, way or relation has the file offset 0, 
-    //so that offset 0 ca be used as an error code
-    static const char* magic_dword="OSM1"; 
-    fwrite( &magic_dword, strlen(magic_dword), 1, data_file);
-    
-    //for situations where several annotation keys exist with the same meaning
-    //this dictionary maps them to a common unique key
-    std::map<std::string, std::string> rename_key; 
-    rename_key.insert( std::pair<std::string, std::string>("postal_code", "addr:postcode"));
-    rename_key.insert( std::pair<std::string, std::string>("url", "website")); //according to OSM specs, "url" is obsolete
-    rename_key.insert( std::pair<std::string, std::string>("phone", "contact:phone"));
-    rename_key.insert( std::pair<std::string, std::string>("fax", "contact:fax"));
-    rename_key.insert( std::pair<std::string, std::string>("email", "contact:email"));
-    rename_key.insert( std::pair<std::string, std::string>("addr:housenumber", "addr:streetnumber"));
-    
-    std::set<std::string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
-    for (uint32_t i = 0; i < num_ignore_keys; i++)
-        ignore_key.insert(ignore_keys[i]);
-
-    /*
-    std::set<std::string> direct_storage_key; // keys whose values are unlikely to occur more than once and thus should be 
-                                              // stored directly along with the node
-    //TODO: find a way to verify this list. The assumption that the values for these keys are too various for them
-    //      to be some of the most-often used KV-combinations is only an educated guess
-    const char * ds_keys[]={"name", "name:en", "name:ko_rm", "name:uk", "name:ru", "name:ja", "name:de", "name_1", "name_2", "int_name", 
-                            "name:fr", "name:ar", "name:ar1", "ele", "ref", "website", "url", "wikipedia", "note",
-                            "comment","description",
-                            "contact:phone", "contact:fax", "contact:email", "addr:full", "wikipedia:de", "wikipedia:ru", "alt_name"};
-    
-    for (uint32_t i = 0; i < sizeof(ds_keys) / sizeof(const char*); i++)
-        direct_storage_key.insert(ds_keys[i]);
-    */
-    
-    int in_fd = 0; //default to standard input
     //in_fd = open("isle_of_man.osm", O_RDONLY);
-    FILE * in_file = fdopen(in_fd, "r"); 
-
-    char* line_buffer = NULL;
-    size_t line_buffer_size = 0;
+    int in_fd = 0; //default to standard input
+    FILE *f = fdopen(in_fd, "rb");
     
-    ParserState state;
-    
-    while (0 <= getline(&line_buffer, &line_buffer_size, in_file))
-    {   
-        const char* line = line_buffer;
-        while (*line == ' ') line++;
-        
-        //TODO: replace strstr(line_buffer, ...) by strcmp(line, ...)
-        
-        if (strstr(line_buffer, "<changeset")) { state.update(CHANGESET); }
-        else if (strstr(line_buffer, "<node"))
-        {
-            state.update(NODE);
-            //continue;
-            int32_t lat = degValueToInt(line_buffer, "lat"); 
-            int32_t lon = degValueToInt(line_buffer, "lon");
-            int64_t id = strtoul(getValue(line_buffer, "id"), NULL, 10);
-            state.setNodeProperties(lat, lon, id);
-
-        } else if (strstr(line_buffer, "<way")) { 
-            state.update(WAY); 
-            state.setWayProperties( strtoul(getValue(line_buffer, "id"), NULL, 10));
-        }
-        else if (strstr(line_buffer, "<relation")) 
-        { 
-            state.update(RELATION); 
-            state.setRelationProperties( strtoul(getValue(line_buffer, "id"), NULL, 10));
-        }
-        else if (strstr(line_buffer, "<nd"))
-        {
-            if (state.getCurrentElement() != WAY)
-            { std::cout << "[ERR] <nd> element whose parent is not a WAY at " << std::endl;
-              std::cout << "\t'" << line_buffer << "'" << std::endl; }
-            //do not set "parent", since this is a child node inside a WAY node
-            //for the same reason do not clear 'node_refs' or 'tags'
-            
-            state.addNodeRef( strtoul( getValue(line_buffer, "ref"), NULL, 10) );
-        }
-        else if (strstr(line_buffer, "<tag"))
-        {
-            if (state.getCurrentElement() == OTHER)
-            { std::cout << "[ERR] <tag> element whose parent is not a NODE, WAY, RELATION or CHANGESET, at " << std::endl;
-              std::cout << "\t'" << line_buffer << "'" << std::endl; }
-            //do not set "parent", since this is a child node inside a WAY node
-            //for the same reason do not clear 'node_refs' or 'tags'
-              
-            std::string key = getValue(line_buffer, "k");
-            if (rename_key.count(key)) key = rename_key[key];
-            std::string val = getValue(line_buffer, "v");
-            if (ignore_key.count(key)) continue;
-            
-            state.addTag(key, val);
-
-#undef EXTRACT_COASTLINE
-#ifdef EXTRACT_COASTLINE
-            if ((key == "natural") && (val == "coastline"))
-            {
-                print_nodes(&node_map, node_refs);
-            }
-#endif
-        } 
-        else if (strstr(line_buffer, "<member ")) 
-        { 
-            if (state.getCurrentElement() != RELATION)
-            {printf("[ERR] relation member outside of relation element at: \n\t'%s'\n", line_buffer); continue;}
-            
-            const char* type_str = getValue(line_buffer, "type");
-            ELEMENT type;
-            if (strcmp(type_str, "node") == 0) type = NODE;
-            else if (strcmp(type_str, "way") == 0) type = WAY;
-            else if (strcmp(type_str, "relation") == 0) type = RELATION;
-            else {printf("[ERR] relation member with unknown type '%s'\n", type_str); continue;}
-            
-            uint64_t ref = strtoul( getValue(line_buffer, "ref"), NULL, 10);
-            
-            string role = getValue(line_buffer, "role");
-            state.addMember(type, ref, role);
-        }
-        
-        else if (strstr(line_buffer, "<?xml ")) { continue;}
-        else if (strstr(line_buffer, "<osm ")) { continue;}
-        else if (strstr(line_buffer, "</")) { continue;}
-        else if (strstr(line_buffer, "<!--")) { continue;}
-        else if (strstr(line_buffer, "<bound box")) { continue;}
-        else
-        {
-            printf("[ERROR] unknown tag in %s\n", line_buffer);
-        }
-    }
-    state.update(RELATION); //workaround to push the last relation from the parser state into the files
-    free (line_buffer);
-
-    free_mmap(&node_index);    
-
-    //pad the data file to a multiple of the page size, so that it can be open using a memory map
-    uint64_t file_size = ftello(data_file);
-    uint32_t page_size = sysconf(_SC_PAGESIZE);
-
-    if (file_size % page_size != 0)
-    {
-        uint32_t padding = page_size - (file_size % page_size);
-	uint8_t dummy = 0;
-	assert(sizeof(dummy) == 1);
-	while (padding--)
-	    fwrite(&dummy, sizeof(dummy), 1, data_file);
-    }
-    assert( ftello(data_file) % page_size == 0);
-
-    fclose(data_file);
-    
-    fclose(in_file);
-    
+    OsmXmlDumpingParser parser( f );
+    parser.parse();
+    fclose(f);
+/*
     std::cout << "statistics\n==========" << std::endl;
-    std::cout << "#nodes: " << state.getElementCount(NODE) << std::endl;
-    std::cout << "#ways: " << state.getElementCount(WAY) << std::endl;
-    std::cout << "#relations: " << state.getElementCount(RELATION) << std::endl;
-    std::cout << "#changesets: " << state.getElementCount(CHANGESET) << std::endl;
+    std::cout << "#nodes: " << parser.nNodes << std::endl;
+    std::cout << "#ways: " << parser.nWays << std::endl;
+    std::cout << "#relations: " << parser.nRelations << std::endl;
+    //std::cout << "#changesets: " << state.getElementCount(CHANGESET) << std::endl;
+  */  
 	return 0;
 	
 }
