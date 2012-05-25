@@ -38,11 +38,12 @@ public:
     void append(const Vertex& node) {m_vertices.push_back(node);}
     void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end ) 
                 {m_vertices.insert(m_vertices.end(),begin, end);}
-    void append(const PolygonSegment &other, bool exactMatch = true);
+    void append(const PolygonSegment &other, bool shareEndpoint);
 
     /** returns whether the resulting polygon is a proper one, or if it is smaller than the given threshold 
         and should be discarded completely. In the latter case, the state of the polygon is undefined. */
-    bool simplify(double allowedDeviation);
+    bool simplifyArea(double allowedDeviation);
+    void simplifyStroke(double allowedDeviation);
     
 private:
     void simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);

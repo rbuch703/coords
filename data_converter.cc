@@ -119,6 +119,7 @@ list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
     return res;
 }
 
+/*
 PolygonSegment createPolygonSegment(uint64_t way_id)
 {
     
@@ -132,7 +133,7 @@ PolygonSegment createPolygonSegment(uint64_t way_id)
     }
     return seg;
 
-}
+}*/
 
 void dumpPolygon(string file_base, const PolygonSegment& segment)
 {
@@ -226,7 +227,7 @@ void extractTimeZonesRelations()
 
 void extractCoastline()
 {
-    double allowedDeviation = 100* 400000.0; // about 40km (~1/1000th of the earth circumference)
+    double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
 
     PolygonReconstructor recon;
     cout << "Generating coastline polygons" << endl;
@@ -240,12 +241,12 @@ void extractCoastline()
         if (way.getValue("natural") == "coastline")
         {
             //cout << "coastline segment " << i << endl;
-            PolygonSegment s =createPolygonSegment(i);
+            PolygonSegment s =way.toPolygonSegment();
             PolygonSegment *poly = recon.add(s);
             if (poly) // if a new closed polygon has been created
             {
                 //int nVertices = seg->getVerticesDEBUG().size();
-                if (poly->simplify(allowedDeviation))
+                if (poly->simplifyArea(allowedDeviation))
                 {
                     //cout << "Simplified: " << seg->getVerticesDEBUG().size() << "/" << nVertices << endl;
                     dumpPolygon("coastline/seg",*poly);
@@ -265,7 +266,7 @@ void extractCoastline()
         nUnclean++;
         PolygonSegment poly = *seg;
         //int nVertices = poly.getVerticesDEBUG().size();
-        if (poly.simplify(allowedDeviation))
+        if (poly.simplifyArea(allowedDeviation))
         {
             //cout << "Simplified: " << poly.getVerticesDEBUG().size() << "/" << nVertices << endl;
             dumpPolygon("coastline/seg",poly);
@@ -273,6 +274,87 @@ void extractCoastline()
         
     }
     cout << "Found " << zone_entries["coastline/seg"] << " coastline ways, " << nUnclean << " unclean" << endl;
+    
+}
+
+void extractBorders()
+{
+    double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
+    
+    map<Vertex, list<PolygonSegment*> > borders;
+    set<PolygonSegment*> border_storage;
+    
+    //list<Way> loops;
+    for (uint64_t i = 0; i < num_ways; i++)
+    {
+        if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
+        if (! way_index[i]) continue;
+        OSMIntegratedWay way = getWay(i);
+        
+        if (way["boundary"] == "administrative" && way["admin_level"] == "2")
+        {
+            PolygonSegment s = way.toPolygonSegment();
+            if (s.front() == s.back()) { 
+                if (s.simplifyArea(allowedDeviation))
+                    dumpPolygon("borders/border",s);
+                continue; 
+            }
+            
+            PolygonSegment *seg = new PolygonSegment(s);
+            
+            borders[seg->front()].push_back(seg);
+            borders[seg->back()].push_back (seg);
+            border_storage.insert(seg);
+        }
+    }
+    // copy of endpoint vertices from 'borders', so that we can iterate over the endpoints and still safely modify the map
+    list<Vertex> endpoints; 
+    for (map<Vertex, list<PolygonSegment*> >::const_iterator v = borders.begin(); v != borders.end(); v++)
+        endpoints.push_back(v->first);
+    
+    cout << "Found " << border_storage.size() << " border segments" << endl;
+    for (list<Vertex>::const_iterator it = endpoints.begin(); it!= endpoints.end(); it++)
+    {
+        Vertex v = *it;
+        if (borders[v].size() == 2)  //exactly two border segments meet here --> merge them
+        {
+            PolygonSegment *seg1 = borders[v].front();
+            PolygonSegment *seg2 = borders[v].back();        
+            borders[ seg1->front()].remove(seg1);
+            borders[ seg1->back() ].remove(seg1);
+            borders[ seg2->front()].remove(seg2);
+            borders[ seg2->back() ].remove(seg2);
+            border_storage.erase(seg2);
+
+            if      (seg1->front() == seg2->front()) { seg1->reverse(); seg1->append(*seg2, true); }
+            else if (seg1->back()  == seg2->front()) {                  seg1->append(*seg2, true); }
+            else if (seg1->front() == seg2->back() ) { seg2->append(*seg1, true); *seg1 = *seg2;   }
+            else if (seg1->back()  == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, true); }
+            else assert(false);
+            delete seg2;
+            if (seg1->front() == seg1->back())
+            {
+                if (seg1->simplifyArea(allowedDeviation))
+                    dumpPolygon("borders/border",*seg1);
+                border_storage.erase(seg1);
+                delete seg1;
+                continue; 
+            }
+            borders[seg1->front()].push_back(seg1);
+            borders[seg1->back() ].push_back(seg1);
+        }
+    }
+    
+    cout << "Merged them to " << border_storage.size() << " border segments" << endl;
+    for (set<PolygonSegment*>::iterator it = border_storage.begin(); it != border_storage.end(); it++)
+    {
+        PolygonSegment *seg = *it;
+        seg->simplifyStroke(allowedDeviation);
+        dumpPolygon("borders/border", *seg);
+        delete seg;
+    }
+    
+    cout << "Altogether " << zone_entries["borders/border"] << " country boundary segments (including loops)" << endl;
     
 }
 
@@ -306,7 +388,8 @@ int main()
             mmap_node_data.size && mmap_way_data.size && mmap_relation_data.size &&
             "Empty data file(s)");
 
-    extractCoastline();
+    extractBorders();
+    //extractCoastline();
     
     
     //extractTimeZonesRelations();

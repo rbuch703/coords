@@ -24,9 +24,9 @@ std::ostream& operator <<(std::ostream& os, const Vertex v)
 
 /** =================================================*/
 
-void PolygonSegment::append(const PolygonSegment &other, bool exactMatch)
+void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
 {
-    if (exactMatch) 
+    if (shareEndpoint) 
     {
         assert(back() == other.front());
         m_vertices.insert( m_vertices.end(), ++other.m_vertices.begin(), other.m_vertices.end());
@@ -42,10 +42,11 @@ void PolygonSegment::append(const PolygonSegment &other, bool exactMatch)
     //return res;
 }
 
-bool PolygonSegment::simplify(double allowedDeviation)
+bool PolygonSegment::simplifyArea(double allowedDeviation)
 {
-    int nVertices = 0;
-
+    assert( m_vertices.front() == m_vertices.back() && "Not a Polygon");
+    int nVertices = m_vertices.size();
+    /*
     int64_t min_lat = m_vertices.front().x;
     int64_t max_lat = min_lat;
     int64_t min_lon = m_vertices.front().y;
@@ -59,9 +60,9 @@ bool PolygonSegment::simplify(double allowedDeviation)
         if ( vertex->x > max_lat) max_lat = vertex->x;
         if ( vertex->y > max_lon) max_lon = vertex->y;
 
-    }
+    }*/
     // since first and last vertex are identical, we need at least four vertices to define any area
-    if (nVertices < 4) return false;
+    //if (nVertices < 4) return false;
 
     //uint64_t area = (max_lat - min_lat)*(max_lon - min_lon);
     //cout << "Area (Equatorial equivalent): " << area/(100000.0*100000.0) << "km²" << std::endl;
@@ -71,18 +72,25 @@ bool PolygonSegment::simplify(double allowedDeviation)
     {   return false;
     }*/
     //return true;
-    int mid_point = nVertices/2;
-    list<Vertex>::iterator it_mid = m_vertices.begin();
-    while (mid_point--) it_mid++;
-    simplifySection( m_vertices.begin(), it_mid, allowedDeviation);
+    //int mid_point = nVertices/2;
+    //list<Vertex>::iterator it_mid = m_vertices.begin();
+    //while (mid_point--) it_mid++;
+    simplifySection( m_vertices.begin(), m_vertices.end(), allowedDeviation);
     
-    list<Vertex>::iterator it_last = m_vertices.end();
-    it_last--;
-    simplifySection( it_mid, it_last, allowedDeviation);
-    if (m_vertices.size() > 3)
-        cout << nVertices << " --> " << m_vertices.size() << " vertices"<< endl;
-    
-    return m_vertices.size() > 3; //since start==end, a polygon with three vertices would be a line
+    //list<Vertex>::iterator it_last = m_vertices.end();
+    //it_last--;
+    //simplifySection( it_mid, it_last, allowedDeviation);
+
+    // Need three vertices to form an area; four since first and last are identical
+    if (m_vertices.size() < 4) return false;
+
+    cout << nVertices << " --> " << m_vertices.size() << " vertices"<< endl;
+    return true;
+}
+
+void PolygonSegment::simplifyStroke(double allowedDeviation)
+{
+    simplifySection( m_vertices.begin(), m_vertices.end(), allowedDeviation);
 }
 
 void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)

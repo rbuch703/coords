@@ -19,10 +19,16 @@ data_converter
 
 #ignore output files
 make.dep
-*.csv
+
 callgrind.out.*
 massif.out.*
-*.data
-*.idx
+
 timezones
 coastline
+borders
+
+*.data
+*.idx
+*.csv
+*.pdf
+

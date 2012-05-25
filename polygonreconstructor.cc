@@ -19,11 +19,11 @@ PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
             {
                 seg->reverse(); //have to fit front-to-back
                 assert( seg->back() == other->front() );
-                seg->append(*other);
+                seg->append(*other, true);
             } else
             {
                 assert( other->back() == seg->front() );
-                other->append(*seg);
+                other->append(*seg, true);
                 *seg = *other;
             }
             delete other;
@@ -39,12 +39,12 @@ PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
             {
                 seg->reverse();
                 assert( other->back() == seg->front());
-                other->append(*seg);
+                other->append(*seg, true);
                 *seg = *other;
             } else
             {
                 assert( seg->back() == other->front() );
-                seg->append(*other);
+                seg->append(*other, true);
             }
             delete other;
         }
