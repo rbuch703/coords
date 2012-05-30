@@ -26,6 +26,14 @@
 
 using namespace std;
 
+const char* nodes_data_filename = "/mnt/data/nodes.data";
+const char* nodes_index_filename= "/mnt/data/nodes.idx";
+const char* vertices_data_filename =    "vertices.data"; //stored on ssd for fast random access
+const char* ways_data_filename =  "/mnt/data/ways.data";
+const char* ways_index_filename=  "/mnt/data/ways.idx";
+const char* ways_int_data_filename="/mnt/data/ways_int.data"; // does not need an index, can use the same as the ways
+const char* relations_data_filename="/mnt/data/relations.data";
+const char* relations_index_filename="/mnt/data/relations.idx";
 
 class OsmXmlDumpingParser: public OsmXmlParser
 {
@@ -50,19 +58,18 @@ public:
         rename_key.insert( std::pair<std::string, std::string>("fax", "contact:fax"));
         rename_key.insert( std::pair<std::string, std::string>("email", "contact:email"));
         rename_key.insert( std::pair<std::string, std::string>("addr:housenumber", "addr:streetnumber"));
-    
+        //TODO: replace natural=lake by natural=water
         for (uint32_t i = 0; i < num_ignore_keys; i++)
             ignore_key.insert(ignore_keys[i]);
             
-        truncateFile("nodes.idx");
-        truncateFile("nodes.data");
-        truncateFile("/mnt/ssd/vertices.data");
-        truncateFile("ways.idx");
-        truncateFile("ways_int.idx");
-        truncateFile("relations.idx");
-        truncateFile("ways.data");
-        truncateFile("ways_int.data");
-        truncateFile("relations.data");
+        truncateFile(nodes_index_filename);
+        truncateFile(nodes_data_filename);
+        truncateFile(vertices_data_filename);
+        truncateFile(ways_index_filename);
+        truncateFile(ways_data_filename);
+        truncateFile(ways_int_data_filename);
+        truncateFile(relations_index_filename);
+        truncateFile(relations_data_filename);
 
     };
     virtual ~OsmXmlDumpingParser() {};
@@ -87,18 +94,18 @@ protected:
     }
     
     void truncateFile(string filename) {
-/*        FILE* f= fopen(filename.c_str() , "wb+"); 
+        FILE* f= fopen(filename.c_str() , "wb+"); 
         if (f == NULL) {perror("[ERR] fopen:"); exit(0);} 
-        fclose(f);*/
+        fclose(f);
     }
     virtual void beforeParsingNodes () {
-        node_index = init_mmap( "nodes.idx" );
+        node_index = init_mmap( nodes_index_filename );
         
-        node_data = fopen("nodes.data", "wb+");
+        node_data = fopen(nodes_data_filename, "wb+");
         const char* node_magic = "ON10"; //OSM Nodes v. 1.0
         fwrite(node_magic, 4, 1, node_data);
 
-        vertex_data = init_mmap("/mnt/ssd/vertices.data"); //holds just raw vertex coordinates indexed by node_id; no tags
+        vertex_data = init_mmap(vertices_data_filename); //holds just raw vertex coordinates indexed by node_id; no tags
     };  
     
     virtual void afterParsingNodes () {
@@ -112,15 +119,15 @@ protected:
     
     virtual void beforeParsingWays () 
     {
-        way_index = init_mmap("ways.idx");
+        way_index = init_mmap(ways_index_filename);
         
-        way_data = fopen("ways.data", "wb+");
+        way_data = fopen(ways_data_filename, "wb+");
         const char* way_magic = "OW10"; //OSM Ways v. 1.0
         fwrite(way_magic, 4, 1, way_data);
         
         //way_int_index = init_mmap("ways_int.idx");
 
-        way_int_data = fopen("ways_int.data", "wb+");
+        way_int_data = fopen(ways_int_data_filename, "wb+");
         const char* way_int_magic = "OI10"; //OSM Integrated ways v. 1.0
         fwrite(way_int_magic, 4, 1, way_int_data);
         
@@ -143,9 +150,9 @@ protected:
     };   
 
     virtual void beforeParsingRelations () {
-        relation_index = init_mmap("relations.idx");
+        relation_index = init_mmap(relations_index_filename);
         
-        relation_data = fopen("relations.data", "wb+");
+        relation_data = fopen(relations_data_filename, "wb+");
         const char* relation_magic = "OR10"; //OSM Relation v. 1.0
         fwrite(relation_magic, 4, 1, relation_data);
     }; 
@@ -174,19 +181,19 @@ protected:
 
     virtual void completedNode( OSMNode &node) 
     {
-/*        processTags(node.tags);
-        node.serialize(node_data, &node_index, symbolic_tags);
+        processTags(node.tags);
+        node.serialize(node_data, &node_index, &symbolic_tags);
         
         ensure_mmap_size( &vertex_data, (node.id+1) * 2 * sizeof(uint32_t));
         uint32_t* vertex_ptr = (uint32_t*)vertex_data.ptr;
         vertex_ptr[2*node.id]   = node.lat;
         vertex_ptr[2*node.id+1] = node.lon;
-*/    }
+    }
     
     virtual void completedWay ( OSMWay  &way) 
     {
-/*        processTags(way.tags);
-        way.serialize(way_data, &way_index, symbolic_tags);
+        processTags(way.tags);
+        way.serialize(way_data, &way_index, &symbolic_tags);
         
         list<Vertex> vertices;
         uint32_t* vertices_ptr = (uint32_t*) vertex_data.ptr;
@@ -204,13 +211,13 @@ protected:
         // an integrated way always has the same size as the corresponding normal OSM way
         // (in an integrated way, the uint64_t node refs are replaced by 2xint32_t lat/lon coordinates)
         // thus, a single index is sufficient for both data files
-        int_way.serialize(way_int_data, &way_index, symbolic_tags);
-*/    }
+        int_way.serialize(way_int_data, &way_index, &symbolic_tags);
+    }
     
     virtual void completedRelation( OSMRelation &relation) 
     {
         processTags(relation.tags);
-        relation.serialize( relation_data, &relation_index, symbolic_tags);
+        relation.serialize( relation_data, &relation_index, &symbolic_tags);
     }
     virtual void doneParsingNodes () {cout << "===============================================" << endl;}
 private:
@@ -219,19 +226,9 @@ private:
     map<OSMKeyValuePair, uint8_t> symbolic_tags;
     map<string, string> rename_key; 
     set<string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
+    
 };
 
-
-class OsmXmlCountingParser: public OsmXmlParser
-{
-public:
-    OsmXmlCountingParser(FILE* f): OsmXmlParser(f), nWays(0), nRelations(0), nNodes(0) {}
-    virtual void completedNode    ( OSMNode &) {nNodes++;}
-    virtual void completedWay     ( OSMWay  &) {nWays++;}
-    virtual void completedRelation( OSMRelation &) {nRelations++;}
-
-    uint64_t nWays, nRelations, nNodes;
-};
 
 int main()
 {

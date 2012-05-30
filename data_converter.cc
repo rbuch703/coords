@@ -25,17 +25,18 @@ uint64_t* relation_index;
 
 uint8_t* osm_data;
 */
-mmap_t mmap_node =          init_mmap("nodes.idx",      true, false);  //read-only memory maps
-mmap_t mmap_way =           init_mmap("ways.idx",       true, false);
-mmap_t mmap_relation =      init_mmap("relations.idx",  true, false);
-mmap_t mmap_node_data =     init_mmap("nodes.data",     true, false);
-mmap_t mmap_way_data =      init_mmap("ways_int.data",  true, false);
-mmap_t mmap_relation_data = init_mmap("relations.data", true, false);
 
-uint64_t* node_index =     (uint64_t*) mmap_node.ptr;
+//mmap_t mmap_node =          init_mmap("/mnt/data/nodes.idx",      true, false);  //read-only memory maps
+mmap_t mmap_way =           init_mmap("/mnt/data/ways.idx",       true, false);
+mmap_t mmap_relation =      init_mmap("/mnt/data/relations.idx",  true, false);
+//mmap_t mmap_node_data =     init_mmap("/mnt/data/nodes.data",     true, false);
+mmap_t mmap_way_data =      init_mmap("/mnt/data/ways_int.data",  true, false);
+mmap_t mmap_relation_data = init_mmap("/mnt/data/relations.data", true, false);
+
+//uint64_t* node_index =     (uint64_t*) mmap_node.ptr;
 uint64_t* way_index =      (uint64_t*) mmap_way.ptr;
 uint64_t* relation_index = (uint64_t*) mmap_relation.ptr;
-uint8_t*  node_data =      (uint8_t*)  mmap_node_data.ptr;
+//uint8_t*  node_data =      (uint8_t*)  mmap_node_data.ptr;
 uint8_t*  way_data =       (uint8_t*)  mmap_way_data.ptr;
 uint8_t*  relation_data =  (uint8_t*)  mmap_relation_data.ptr;
 
@@ -44,7 +45,7 @@ static const uint64_t num_relations = mmap_relation.size / sizeof(uint64_t);
 //static const uint64_t num_nodes = mmap_node.size / sizeof(uint64_t);
 
 
-OSMNode             getNode(uint64_t node_id)    { return OSMNode(&node_data[node_index[node_id]], node_id);}
+//OSMNode             getNode(uint64_t node_id)    { return OSMNode(&node_data[node_index[node_id]], node_id);}
 OSMIntegratedWay    getWay(uint64_t way_id)      { return OSMIntegratedWay(&way_data[way_index[way_id]], way_id);}
 OSMRelation         getRelation(uint64_t relation_id) { return OSMRelation(&relation_data[relation_index[relation_id]], relation_id);}
 
@@ -277,86 +278,132 @@ void extractCoastline()
     
 }
 
-void extractBorders()
+void getOutlineWaysRecursive(const OSMRelation &relation, set<uint64_t> &ways_out)
 {
-    double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
+    for (list<OSMRelationMember>::const_iterator member = relation.members.begin(); member != relation.members.end(); member++)
+    {
+        if (member->type == WAY) ways_out.insert(member->ref);
+        else if (member->type == RELATION)
+        {
+            if (member->role == "outer" || member->role == "exclave" || member->role == "") 
+                getOutlineWaysRecursive( getRelation(member->ref), ways_out);
+        }
+    }
+}
+
+void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
+{
+
+    map<FILE*, set<uint64_t> > ways_from_relations;
+
+    /** 
+        scan all relations for the tags from 'extract_config' and record their ways.
+        This is done because a way (e.g. a coastline) may either be tagged correctly,
+        or may not be tagged at all but is part of a relation that is tagged correctly,
+        or both! Thus, we have to make sure that each way matching the criteria is 
+        read and dumped exactly once, independent of whether it is tagged, or belongs 
+        to a tagged relation.
+        To ensure this, 
+        for each tag list corresponding to a certain set of data (e.g. all country
+        borders), we first record the IDs of all ways that are part of relations 
+        matching these tags. Later, we scan all ways for these tags as well, dump their 
+        data to a file, and *remove* their IDs from the ID lists we create here.
+        As a result, these ID lists should contain all those ways that are part of 
+        relations meeting the tag criteria, but who themselves do not. Finally, those
+        ways have to be read and dumped to file as well.
+      */
+    cout << "First phase, scanning relations" << endl;
+    for (uint64_t i = 0; i < num_relations; i++)
+    {
+        if (! relation_index[i]) continue;
+        OSMRelation rel = getRelation(i);
+        //cout << rel << endl;
+        for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
+        {
+            const list<OSMKeyValuePair> &tags = it->first;
+            FILE* file = it->second;
+            bool matches = true;
+            for (list<OSMKeyValuePair>::const_iterator tag = tags.begin(); tag != tags.end() && matches; tag++)
+            {
+                if (! rel.hasKey(tag->first)) matches = false;
+                // value= "*" --> match any value
+                if ((tag->second != "*") && (rel[tag->first] != tag->second))
+                    matches= false;
+            }
+            if (matches)
+                getOutlineWaysRecursive(rel, ways_from_relations[file]);
+        }
+        
+    }
     
-    map<Vertex, list<PolygonSegment*> > borders;
-    set<PolygonSegment*> border_storage;
+    for ( map<FILE*, set<uint64_t> >::const_iterator it = ways_from_relations.begin(); it!= ways_from_relations.end(); it++)
+    {
+        cout << it->second.size() << " ways from relations" << endl;
+    }
     
+    cout << "Second phase, scanning ways" << endl;
+    /** second phase, dump all ways matching the tag criteria, but remove 
+        them from the relations lists*/    
     //list<Way> loops;
     for (uint64_t i = 0; i < num_ways; i++)
     {
         if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
         if (! way_index[i]) continue;
         OSMIntegratedWay way = getWay(i);
-        
-        if (way["boundary"] == "administrative" && way["admin_level"] == "2")
+        for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
         {
-            PolygonSegment s = way.toPolygonSegment();
-            if (s.front() == s.back()) { 
-                if (s.simplifyArea(allowedDeviation))
-                    dumpPolygon("borders/border",s);
-                continue; 
-            }
-            
-            PolygonSegment *seg = new PolygonSegment(s);
-            
-            borders[seg->front()].push_back(seg);
-            borders[seg->back()].push_back (seg);
-            border_storage.insert(seg);
-        }
-    }
-    // copy of endpoint vertices from 'borders', so that we can iterate over the endpoints and still safely modify the map
-    list<Vertex> endpoints; 
-    for (map<Vertex, list<PolygonSegment*> >::const_iterator v = borders.begin(); v != borders.end(); v++)
-        endpoints.push_back(v->first);
-    
-    cout << "Found " << border_storage.size() << " border segments" << endl;
-    for (list<Vertex>::const_iterator it = endpoints.begin(); it!= endpoints.end(); it++)
-    {
-        Vertex v = *it;
-        if (borders[v].size() == 2)  //exactly two border segments meet here --> merge them
-        {
-            PolygonSegment *seg1 = borders[v].front();
-            PolygonSegment *seg2 = borders[v].back();        
-            borders[ seg1->front()].remove(seg1);
-            borders[ seg1->back() ].remove(seg1);
-            borders[ seg2->front()].remove(seg2);
-            borders[ seg2->back() ].remove(seg2);
-            border_storage.erase(seg2);
-
-            if      (seg1->front() == seg2->front()) { seg1->reverse(); seg1->append(*seg2, true); }
-            else if (seg1->back()  == seg2->front()) {                  seg1->append(*seg2, true); }
-            else if (seg1->front() == seg2->back() ) { seg2->append(*seg1, true); *seg1 = *seg2;   }
-            else if (seg1->back()  == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, true); }
-            else assert(false);
-            delete seg2;
-            if (seg1->front() == seg1->back())
+            const list<OSMKeyValuePair> &tags = it->first;
+            FILE* file = it->second;
+            bool matches = true;
+            for (list<OSMKeyValuePair>::const_iterator tag = tags.begin(); tag != tags.end() && matches; tag++)
             {
-                if (seg1->simplifyArea(allowedDeviation))
-                    dumpPolygon("borders/border",*seg1);
-                border_storage.erase(seg1);
-                delete seg1;
-                continue; 
+                if (! way.hasKey(tag->first)) matches = false;
+                // value= "*" --> match any value
+                if ((tag->second != "*") && (way[tag->first] != tag->second))
+                    matches= false;
             }
-            borders[seg1->front()].push_back(seg1);
-            borders[seg1->back() ].push_back(seg1);
+            if (matches)
+            {
+                way.serialize(file);
+                ways_from_relations[file].erase( way.id);
+            }
         }
     }
     
-    cout << "Merged them to " << border_storage.size() << " border segments" << endl;
-    for (set<PolygonSegment*>::iterator it = border_storage.begin(); it != border_storage.end(); it++)
+    /** third phase, read the remaining ways (those that did not match the 
+        criteria by themselves) from the relations lists, and dump their 
+        contents to the files*/
+
+    cout << "Third phase, reading non-duplicate ways from relations" << endl;
+
+    for ( map<FILE*, set<uint64_t> >::const_iterator it = ways_from_relations.begin(); it!= ways_from_relations.end(); it++)
     {
-        PolygonSegment *seg = *it;
-        seg->simplifyStroke(allowedDeviation);
-        dumpPolygon("borders/border", *seg);
-        delete seg;
+        FILE* file = it->first;
+        const set<uint64_t> &ids = it->second;
+        cout << ids.size() << " ways from relations" << endl;
+        for ( set<uint64_t>::const_iterator it = ids.begin(); it != ids.end(); it++)
+            getWay(*it).serialize(file);
     }
-    
-    cout << "Altogether " << zone_entries["borders/border"] << " country boundary segments (including loops)" << endl;
-    
+
 }
+
+/*
+void dumpWays( list<string, FILE*> > map)
+{
+    //list<Way> loops;
+    for (uint64_t i = 0; i < num_ways; i++)
+    {
+        if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
+        if (! way_index[i]) continue;
+        OSMIntegratedWay way = getWay(i);
+        for (list<string, FILE* > >::const_iterator it = map.begin(); it != map.end(); it++)
+        {
+            const string &key = it->first;
+            FILE* file = it->second;
+            if (way.hasKey(key)) way.serialize(file);
+        }
+    }
+}*/
 
 /*
 void extractTimeZonesWays()
@@ -384,11 +431,54 @@ void extractTimeZonesWays()
 
 int main()
 {
-    assert( mmap_node.size && mmap_way.size && mmap_relation.size && 
-            mmap_node_data.size && mmap_way_data.size && mmap_relation_data.size &&
+    assert( /*mmap_node.size && */mmap_way.size && mmap_relation.size && 
+            /*mmap_node_data.size &&*/ mmap_way_data.size && mmap_relation_data.size &&
             "Empty data file(s)");
 
-    extractBorders();
+    //double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
+    
+    
+    list<pair<list<OSMKeyValuePair>, FILE*> > extract_config;
+    
+    
+    list<OSMKeyValuePair> country_border_tags;
+    country_border_tags.push_back( OSMKeyValuePair("boundary", "administrative"));
+    country_border_tags.push_back( OSMKeyValuePair("admin_level", "2"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( country_border_tags, fopen("countries.dump", "wb")));
+
+    list<OSMKeyValuePair> regions;
+    regions.push_back( OSMKeyValuePair("boundary", "administrative"));
+    regions.push_back( OSMKeyValuePair("admin_level", "4"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( regions, fopen("regions.dump", "wb")));
+
+    list<OSMKeyValuePair> cities;
+    cities.push_back( OSMKeyValuePair("boundary", "administrative"));
+    cities.push_back( OSMKeyValuePair("admin_level", "8"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( cities, fopen("cities.dump", "wb")));
+    
+    list<OSMKeyValuePair> autobahn;
+    autobahn.push_back( OSMKeyValuePair("highway", "motorway"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( autobahn, fopen("autobahn.dump", "wb")));
+    
+    list<OSMKeyValuePair> buildings;
+    buildings.push_back( OSMKeyValuePair("building", "*"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("buildings.dump", "wb")));
+    
+    list<OSMKeyValuePair> coastline;
+    coastline.push_back( OSMKeyValuePair("natural", "coastline"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("coastline.dump", "wb")));
+
+    list<OSMKeyValuePair> water;
+    water.push_back( OSMKeyValuePair("natural", "water"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("water.dump", "wb")));
+    
+    dumpWays(extract_config);
+    
+    for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = extract_config.begin(); it != extract_config.end(); it++)
+    {
+        FILE* file = it->second;
+        fclose(file);
+    }
     //extractCoastline();
     
     
@@ -423,10 +513,10 @@ int main()
     //std::cout << "Found " << coastline_ways.size() << " coastline ways" << endl;
     
     
-    free_mmap(&mmap_node);
+    //free_mmap(&mmap_node);
     free_mmap(&mmap_way);
     free_mmap(&mmap_relation);
-    free_mmap(&mmap_node_data);
+    //free_mmap(&mmap_node_data);
     free_mmap(&mmap_way_data);
     free_mmap(&mmap_relation_data);
 }

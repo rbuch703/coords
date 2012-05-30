@@ -84,7 +84,7 @@ void PolygonReconstructor::forceClosePolygons()
         for (i = 1; i < nEndPoints; i++)
             for (uint32_t j = 0; j < i; j++)
             {
-                uint64_t dist = vEndPoints[i].squaredDistanceTo( vEndPoints[j]);
+                uint64_t dist = (vEndPoints[i] - vEndPoints[j]).squaredLength( );
                 if (dist < minDist) { minDist = dist; min_i = i; min_j = j;}
             }
         assert(minDist != 0xFFFFFFFFFFFFFFFFll);
@@ -111,7 +111,7 @@ void PolygonReconstructor::forceClosePolygons()
         if (seg1 == seg2) // same polygon segment --> close the loop
         {
             cout << "closing gap of  " 
-                 << sqrt( seg1->back().squaredDistanceTo(seg1->front()))/100.0 << "m"<< endl;
+                 << sqrt( (seg1->back() - seg1->front()).squaredLength())/100.0 << "m"<< endl;
         
             openEndPoints.erase( seg1->front());
             openEndPoints.erase( seg1->back());

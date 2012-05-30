@@ -24,7 +24,7 @@ struct OSMNode
     OSMNode( FILE* data_file, uint64_t  offset, uint64_t node_id);
     OSMNode( const uint8_t* data_ptr, uint64_t node_id);
         
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     bool operator==(const OSMNode &other) const;
     bool operator!=(const OSMNode &other) const;
     bool operator< (const OSMNode &other) const;
@@ -43,7 +43,7 @@ struct OSMWay
     OSMWay( uint64_t way_id, list<uint64_t> way_refs, list<OSMKeyValuePair> way_tags);
     OSMWay( const uint8_t* data_ptr, uint64_t way_id);
 
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
@@ -58,8 +58,9 @@ struct OSMIntegratedWay
 {
     OSMIntegratedWay( uint64_t way_id, list<Vertex> way_vertices, list<OSMKeyValuePair> way_tags);
     OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id);
+    OSMIntegratedWay( FILE* src, uint64_t way_id = -1);
 
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    void serialize( FILE* data_file, mmap_t *index_map= NULL, const map<OSMKeyValuePair, uint8_t> *tag_symbols = NULL) const;
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
@@ -76,7 +77,7 @@ struct OSMRelationMember
     OSMRelationMember( ELEMENT member_type, uint64_t member_ref, string member_role):
         type(member_type), ref(member_ref), role(member_role) { }
 
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     uint32_t getDataSize() const;
     ELEMENT type;  //whether the member is a node, way or relation
     uint64_t ref;  //the node/way/relation id
@@ -90,9 +91,10 @@ struct OSMRelation
     OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags);
     OSMRelation( const uint8_t* data_ptr, uint64_t relation_id);
 
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> &tag_symbols) const;
+    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     bool hasKey(string key) const;
-    string getValue(string key) const;
+    const string& getValue(string key) const;
+    const string& operator[](string key) const {return getValue(key);}
     uint64_t id;
     list<OSMRelationMember> members;
     list<OSMKeyValuePair> tags;
