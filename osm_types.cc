@@ -350,9 +350,9 @@ OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
     fread(&num_vertices, sizeof(num_vertices), src);
     while (num_vertices--)
     {
-        uint32_t lat;
+        int32_t lat;
         fread(&lat, sizeof(lat), 1, src);
-        uint32_t lon;
+        int32_t lon;
         fread(&lon, sizeof(lon), 1, src);
         vertices.push_back( Vertex(lat, lon));
     }
@@ -371,9 +371,9 @@ void OSMIntegratedWay::serialize( FILE* data_file, mmap_t *index_map, const map<
     
     for (list<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
     {
-        uint32_t lat = it->x;
+        int32_t lat = it->x;
         fwrite(&lat, sizeof(lat), 1, data_file);
-        uint32_t lon = it->y;
+        int32_t lon = it->y;
         fwrite(&lon, sizeof(lon), 1, data_file);
     }
     

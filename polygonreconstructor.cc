@@ -1,6 +1,7 @@
 
 #include "polygonreconstructor.h"
 #include <set>
+#include <assert.h>
 
 PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
 {
@@ -64,7 +65,7 @@ PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
         openEndPoints[seg->front()] = seg;
         openEndPoints[seg->back()] = seg;
     }
-    return false;
+    return NULL;
 }
 
 void PolygonReconstructor::forceClosePolygons()
@@ -88,7 +89,7 @@ void PolygonReconstructor::forceClosePolygons()
                 if (dist < minDist) { minDist = dist; min_i = i; min_j = j;}
             }
         assert(minDist != 0xFFFFFFFFFFFFFFFFll);
-        cout << "Minimum gap size is " << (sqrt(minDist)/100) << "m" << endl;
+        //cout << "Minimum gap size is " << (sqrt(minDist)/100) << "m" << endl;
         assert( openEndPoints.count(vEndPoints[min_i]) && openEndPoints.count(vEndPoints[min_j]) );
         PolygonSegment* seg1 = openEndPoints[vEndPoints[min_i]];
         PolygonSegment* seg2 = openEndPoints[vEndPoints[min_j]];
@@ -110,8 +111,8 @@ void PolygonReconstructor::forceClosePolygons()
         
         if (seg1 == seg2) // same polygon segment --> close the loop
         {
-            cout << "closing gap of  " 
-                 << sqrt( (seg1->back() - seg1->front()).squaredLength())/100.0 << "m"<< endl;
+            //cout << "closing gap of  " 
+            //     << sqrt( (seg1->back() - seg1->front()).squaredLength())/100.0 << "m"<< endl;
         
             openEndPoints.erase( seg1->front());
             openEndPoints.erase( seg1->back());

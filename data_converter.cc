@@ -2,19 +2,17 @@
 //#include "symbolic_tags.h"
 
 #include <stdint.h>
-#include <stdlib.h> // for exit() TODO: remove once no longer needed
-#include <math.h>
+//#include <math.h>
+#include <assert.h>
 
 #include <iostream>
 #include <fstream>
 #include <list>
 #include <set>
 
-#include <sys/stat.h>
-#include <sys/types.h>  //for mkdir
-
 #include "osm_types.h"
 #include "mem_map.h"
+#include "helpers.h"
 #include "polygonreconstructor.h"
 using namespace std;
 
@@ -51,27 +49,12 @@ OSMRelation         getRelation(uint64_t relation_id) { return OSMRelation(&rela
 
 map<string, uint32_t> zone_entries;
 
-void ensureDirectoryExists(string directory)
-{
-    struct stat dummy;
-    size_t start_pos = 0;
-    
-    do
-    {
-        size_t pos = directory.find('/', start_pos);
-        string basedir = directory.substr(0, pos);  //works even if no slash is present --> pos == string::npos
-        if (0!= stat(basedir.c_str(), &dummy)) //directory does not yet exist
-            if (0 != mkdir(basedir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) //755
-                { perror("[ERR] mkdir");}
-        if (pos == string::npos) break;
-        start_pos = pos+1;
-    } while ( true);
-}
 
-static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
+//static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
 
 //obtains all "outer" ways that belong to a given relation, including those of possible sub-relations
 //FIXME: blacklist those timezone relations that are part of other timezone relations
+/*
 list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
 {
     list<uint64_t> res;
@@ -95,7 +78,7 @@ list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
         if (member.type == RELATION && member.role == "sub_area") member.role = "subarea";
         if (member.type == RELATION && member.role == "subarea")  continue;  
         
-        if (member.type == WAY && member.role == "exclave") member.role = "inner"; //same as "inner"
+        if (member.type == WAY && member.role == "enclave") member.role = "inner"; //same as "inner"
         if (member.type == WAY && member.role == "inner") continue; //specifies a hole in a polygon FIXME: handle these
         if (member.type == RELATION && member.role == "inner") continue; //DITO
         
@@ -106,7 +89,7 @@ list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
             continue;
         }
         
-        if (member.type == WAY && member.role =="enclave") member.role = "outer";   // those are all supposed to
+        if (member.type == WAY && member.role =="exclave") member.role = "outer";   // those are all supposed to
         if (member.type == WAY && member.role =="") member.role = "outer";          // mean the same in OSM
         
         if ((member.type != WAY) || (member.role != "outer"))
@@ -118,22 +101,6 @@ list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
        res.push_back(member.ref);
     }
     return res;
-}
-
-/*
-PolygonSegment createPolygonSegment(uint64_t way_id)
-{
-    
-    OSMIntegratedWay way = getWay(way_id);
-
-    PolygonSegment seg;
-    for (list<Vertex>::const_iterator vertex = way.vertices.begin(); vertex != way.vertices.end(); vertex++)
-    {
-        //if (! node_index[*node_id]) {cout << "[WARN] non-existent node " << *node_id << ", skipping" << endl; continue;}
-        seg.append(*vertex);
-    }
-    return seg;
-
 }*/
 
 void dumpPolygon(string file_base, const PolygonSegment& segment)
@@ -173,109 +140,6 @@ void getSubRelations( uint64_t relation_id, set<uint64_t> &outSubRelations)
             getSubRelations( it->ref, outSubRelations);
         }
     }         
-}
-
-string timezone_basedir = "timezones";
-/*
-void extractTimeZonesRelations()
-{
-    std::cout << "Scanning " << num_relations/1000 << "k relations" << std::endl;
-    list<PolygonSegment> polygons;
-    int numTimezoneRelations = 0;
-    //relations that are part of timezone-relations and not by themselves timezones (even if they are tagged as such)
-    set<uint64_t> timezoneSubRelations; 
-    for (uint64_t i = 0; i < num_relations; i++)
-    {
-        if (! relation_index[i]) continue;
-        OSMRelation rel = getRelation(i);
-        if (!rel.hasKey("timezone")) continue;
-        numTimezoneRelations++;
-        getSubRelations(rel.id, timezoneSubRelations);
-    }
-    
-    //timezoneSubRelations.clear(); //FIXME: cleared blacklist for debugging
-    cout << numTimezoneRelations << " timezone relations, " << timezoneSubRelations.size() << " black-listed sub-relations." << endl;
-    PolygonReconstructor recon;
-    for (uint64_t i = 0; i < num_relations; i++)
-    
-    //for (uint64_t i = 120027; i == 120027; i++)
-    //for (uint64_t i = 153557; i == 153557; i++)
-    {
-        if (! relation_index[i]) continue;
-        if (timezoneSubRelations.count(i)) continue; // if a parent relation is already a time zone
-        
-        OSMRelation rel = getRelation(i);
-        if (!rel.hasKey("timezone")) continue;
-        list<uint64_t> ways = getTZWayListRecursive(i);
-        cout << "Timezone " << rel.getValue("timezone") << "(relation " << rel.id << ") with " << ways.size() << " ways" << endl;
-        
-        for (list<uint64_t>::const_iterator way_id = ways.begin(); way_id != ways.end(); way_id++)
-        {
-            recon.add(createPolygonSegment(*way_id));
-        }
-        recon.forceClosePolygons();
-        //list<PolygonSegment> polygons = createPolygons(ways);
-        for (list<PolygonSegment>::const_iterator polygon = recon.getClosedPolygons().begin(); 
-                polygon != recon.getClosedPolygons().end(); polygon++)
-            dumpPolygon( timezone_basedir+"/"+"all", *polygon);
-            //dumpPolygon( timezone_basedir+"/"+rel.getValue("timezone"), *polygon);
-        recon.clear();
-    }
-}*/
-
-
-
-
-void extractCoastline()
-{
-    double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
-
-    PolygonReconstructor recon;
-    cout << "Generating coastline polygons" << endl;
-    //list<uint64_t> coastline_ways;
-    for (uint64_t i = 0; i < num_ways; i++)
-    {
-        if (i % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
-        if (! way_index[i]) continue;
-        OSMIntegratedWay way = getWay(i);
-        
-        if (way.getValue("natural") == "coastline")
-        {
-            //cout << "coastline segment " << i << endl;
-            PolygonSegment s =way.toPolygonSegment();
-            PolygonSegment *poly = recon.add(s);
-            if (poly) // if a new closed polygon has been created
-            {
-                //int nVertices = seg->getVerticesDEBUG().size();
-                if (poly->simplifyArea(allowedDeviation))
-                {
-                    //cout << "Simplified: " << seg->getVerticesDEBUG().size() << "/" << nVertices << endl;
-                    dumpPolygon("coastline/seg",*poly);
-                }
-                recon.clearPolygonList();
-            }
-        }
-    }
-
-    assert( recon.getClosedPolygons().size() == 0);
-    //recon.clear();
-    recon.forceClosePolygons();
-    cout << "Done simplifying proper polygons; now processing 'unclean' ones" << endl;
-    int nUnclean = 0;
-    for (list<PolygonSegment>::const_iterator seg =recon.getClosedPolygons().begin(); seg != recon.getClosedPolygons().end(); seg++)
-    {
-        nUnclean++;
-        PolygonSegment poly = *seg;
-        //int nVertices = poly.getVerticesDEBUG().size();
-        if (poly.simplifyArea(allowedDeviation))
-        {
-            //cout << "Simplified: " << poly.getVerticesDEBUG().size() << "/" << nVertices << endl;
-            dumpPolygon("coastline/seg",poly);
-        }
-        
-    }
-    cout << "Found " << zone_entries["coastline/seg"] << " coastline ways, " << nUnclean << " unclean" << endl;
-    
 }
 
 void getOutlineWaysRecursive(const OSMRelation &relation, set<uint64_t> &ways_out)
@@ -387,47 +251,6 @@ void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
 
 }
 
-/*
-void dumpWays( list<string, FILE*> > map)
-{
-    //list<Way> loops;
-    for (uint64_t i = 0; i < num_ways; i++)
-    {
-        if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
-        if (! way_index[i]) continue;
-        OSMIntegratedWay way = getWay(i);
-        for (list<string, FILE* > >::const_iterator it = map.begin(); it != map.end(); it++)
-        {
-            const string &key = it->first;
-            FILE* file = it->second;
-            if (way.hasKey(key)) way.serialize(file);
-        }
-    }
-}*/
-
-/*
-void extractTimeZonesWays()
-{
-    std::cout << "Scanning " << num_ways/1000000 << "M ways" << std::endl;
-    for (uint64_t i = 0; i < num_ways; i++)
-    {
-        if (i % 10000000 == 0) cout << (i/1000000) << "M ways processed" << std::endl;
-        if (! way_index[i]) continue;
-        OSMWay way = getWay(i);
-        if (!way.hasKey("timezone")) continue;
-        
-        string zone = way.getValue("timezone");
-        size_t pos = zone.find('/');
-        if (pos == string::npos)
-        {
-            cout << "Malformed timezone name '" << zone << "', skipping" << endl;
-            continue;
-        }
-        
-        dumpPolygon(timezone_basedir + "/" + zone, createPolygonSegment( way.id));
-        
-    }
-}*/
 
 int main()
 {
@@ -463,6 +286,10 @@ int main()
     list<OSMKeyValuePair> buildings;
     buildings.push_back( OSMKeyValuePair("building", "*"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("buildings.dump", "wb")));
+
+    list<OSMKeyValuePair> timezones;
+    timezones.push_back( OSMKeyValuePair("timezone", "*"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(timezones, fopen("timezones.dump", "wb")));
     
     list<OSMKeyValuePair> coastline;
     coastline.push_back( OSMKeyValuePair("natural", "coastline"));

@@ -3,22 +3,17 @@
 #define GEOMETRIC_TYPES_H
 
 #include <stdint.h>
-#include <assert.h>
-#include <stdlib.h> //for llabs
-#include <math.h>
 
-#include <iostream>
 #include <ostream>
 #include <list>
-using namespace std;
 
-struct LineSegment;
+using namespace std;
 
 
 struct Vertex
 {
     Vertex() :x(0), y(0) {}
-    Vertex(int64_t v_x, int64_t v_y): x(v_x), y(v_y) { assert( x <= 3600000000 && x >= -3600000000 && y <= 1800000000 && y>= -1800000000);}
+    Vertex(int64_t v_x, int64_t v_y): x(v_x), y(v_y) { /*assert( x <= 3600000000 && x >= -3600000000 && y <= 1800000000 && y>= -1800000000);*/}
     //uint64_t squaredDistanceTo(const Vertex other) const;
     uint64_t squaredLength() const { return ((uint64_t)x*x)+((uint64_t)y*y);}
     double   distanceToLine(const Vertex A, const Vertex B) const;
@@ -35,68 +30,44 @@ struct Vertex
     Vertex operator-(const Vertex a) const { return Vertex(x-a.x, y-a.y);}
 };
 
+struct AABoundingBox
+{
+    AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
+    AABoundingBox & operator+=(const Vertex v) {
+        if (v.x < left) left = v.x;
+        if (v.x > right) right = v.x;
+        if (v.y < top) top = v.y;
+        if (v.y > bottom) bottom = v.y;
+        return *this;
+    }
+public:    
+    int64_t top, left, bottom, right;
+};
+
 
 /** semantics:  a line segment starts *at* its vertex 'start', and ends *right before* its vertex end,
                 i.e. 'start' is part of the segment, while 'end' is not.
                 With this definition, adjacent line segments making up a simple closed polygon do not intersect*/
 struct LineSegment
 {
-    LineSegment( const Vertex v_start, const Vertex v_end): start(v_start), end(v_end) 
-    { assert(start != end);}
-    LineSegment( int32_t start_x, int32_t start_y, int32_t end_x, int32_t end_y): start(Vertex(start_x, start_y)), end(Vertex(end_x, end_y)) 
-    { assert(start != end);}
+    LineSegment( const Vertex v_start, const Vertex v_end, int32_t v_tag1, int32_t v_tag2);
+    LineSegment( int32_t start_x, int32_t start_y, int32_t end_x, int32_t end_y, int32_t v_tag1, int32_t v_tag2);
 
     bool parallelTo( const LineSegment &other) const { return (end.x- start.x)*(other.end.y - other.start.y) ==
                                                               (end.y- start.y)*(other.end.x - other.start.x);}
-    bool contains(const Vertex v) const
-    {
-        //test whether the vertex lies on the line (not necessarily the line segment)
-        if (( (int64_t)v.x-start.x)*((int64_t)end.y - start.y) != 
-            ( (int64_t)v.y-start.y)*((int64_t)end.x - start.x)) return false;
-        
-        uint64_t squared_seg_len = (end - start).squaredLength();
-        uint64_t dist_start =      (v - start).squaredLength();
-        uint64_t dist_end =        (v - end).squaredLength();
-        return  dist_start <squared_seg_len && dist_end <= squared_seg_len;
-    }
-                       
-                                                  
-    bool intersects( const LineSegment &other) const
-    {
-        if (parallelTo(other))
-        {
-            // if the two parallel line segments do not lie on the same line, they cannot intersect
-            if (start.pseudoDistanceToLine(other.start, other.end) != 0) return false;
-            return contains(other.start) || contains(other.end) || other.contains(start) || other.contains(end );
-        } else
-        {
-            int64_t num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
-            int64_t num2 = (      end.x-      start.x)*(start.y-other.start.y) - (      end.y-      start.y)*(start.x-other.start.x);
-            int64_t denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
-
-            assert(denom != 0); //should only be zero if the lines are parallel, but this case has already been handled above
-
-            //for the line segments to intersect, num1/denom and num2/denom both have to be inside the range [0, 1);
-            
-            //the absolute of at least one coefficient would be bigger than or equal to one 
-            if (llabs(num1) >=llabs(denom) || llabs(num2) >= llabs(denom)) return false; 
-            
-            // at least one coefficient would be negative
-            if (( num1 < 0 || num2 < 0) && denom > 0) return false; 
-            if (( num1 > 0 || num2 > 0) && denom < 0) return false; // coefficient would be negative
-            
-            return true; // not negative and not bigger than/equal to one --> segments intersect
-        }
-        
-    }
-
+    bool contains(const Vertex v) const;                                                  
+    bool intersects( const LineSegment &other) const;
+    double getIntersectionCoefficient( const LineSegment &other) const;
+    
     Vertex start, end;
+    int32_t tag1, tag2;
 };
 
 
 class PolygonSegment
 {
 public:
+    
     const Vertex& front() const { return m_vertices.front();}
     const Vertex& back()  const { return m_vertices.back();}
     const list<Vertex>& vertices() const { return m_vertices;}
@@ -106,13 +77,15 @@ public:
     void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end ) 
                 {m_vertices.insert(m_vertices.end(),begin, end);}
     void append(const PolygonSegment &other, bool shareEndpoint);
-    /*
-    void clipHorizontally( uint32_t height, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out)
-    {
-        #warning continue here
-    }*/
-    /** returns whether the resulting polygon is a proper one, or if it is smaller than the given threshold 
-        and should be discarded completely. In the latter case, the state of the polygon is undefined. */
+    
+    /** 
+        semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the
+        upper part, everything else to the lower part
+    */
+    void clipHorizontally( int32_t clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out) const;
+
+    /** @returns: 'true' if the resulting polygon is a proper one, 'false' it should be discarded completely. 
+        In the latter case, the state of the polygon is undefined. */
     bool simplifyArea(double allowedDeviation);
     void simplifyStroke(double allowedDeviation);
     
@@ -125,13 +98,15 @@ private:
     std::list<Vertex> m_vertices;
 };
 
+void createSimplePolygons(const list<Vertex> in, const list<LineSegment> intersections, list<PolygonSegment> &out);
+//void createSimplePolygons(list<Vertex> in, list<PolygonSegment> &out);
 /** each uint32_t is the start vertex of a line
     'start' vertex here means the vertex with the lower index of the two line end points (the other vertex of
     each line is always at 'start vertex'+1 */
-typedef pair<uint32_t, uint32_t> Intersection;
+//typedef pair<uint32_t, uint32_t> Intersection;
 
-void findIntersections(list<Vertex> path, list<Intersection> intersections_out);
-
+void findIntersections(const list<Vertex> &path, list<LineSegment> &intersections_out);
+/*
 class Polygon
 {
 protected:
@@ -141,7 +116,7 @@ private:
     uint32_t m_num_vertices;
     Vertex* m_vertices;
 };
-
+*/
 std::ostream& operator <<(std::ostream& os, const Vertex v);
 std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg);
 

@@ -3,7 +3,9 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 
+#include <iostream>
 static const char* getValue(const char* line, const char* key)
 {
     static char* buffer = NULL;

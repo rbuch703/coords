@@ -5,7 +5,7 @@ syntax: glob
 *~
 
 # ignore compiled executables
-filter_osm
+conv_osmxml
 dump_kv
 data_converter
 geo_unit_tests

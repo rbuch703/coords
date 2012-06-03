@@ -1,27 +1,25 @@
 
 #define _FILE_OFFSET_BITS 64
-
+/*
 #include <fstream>
-#include <iostream>
-#include <string>
-#include <list>
-#include <assert.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <fcntl.h>
+#include <fcntl.h>*/
+#include <assert.h>
+#include <stdint.h>
 
+#include <iostream>
+#include <string>
 #include <map>
+#include <list>
 #include <set>
+
 #include "mem_map.h"
-
 #include "osmxmlparser.h"
-
 #include "osm_types.h"
 #include "osm_tags.h"
-
 #include "symbolic_tags.h"
 
 using namespace std;
@@ -95,7 +93,7 @@ protected:
     
     void truncateFile(string filename) {
         FILE* f= fopen(filename.c_str() , "wb+"); 
-        if (f == NULL) {perror("[ERR] fopen:"); exit(0);} 
+        if (f == NULL) {perror("[ERR] fopen:"); assert(false);} 
         fclose(f);
     }
     virtual void beforeParsingNodes () {
