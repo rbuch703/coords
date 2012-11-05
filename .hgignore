@@ -10,6 +10,7 @@ dump_kv
 data_converter
 geo_unit_tests
 simplifier
+stats_xmlosm
 
 #ignore compiled objects
 *.o
@@ -28,6 +29,7 @@ massif.out.*
 timezones
 coastline
 borders
+intermediate
 
 *.data
 *.idx

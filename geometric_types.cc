@@ -105,11 +105,85 @@ void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<
     }
 }
 
+void connectClippedSegmentsX( int32_t clip_x, list<PolygonSegment*> lst, list<PolygonSegment> &out)
+{
+    assert (lst.size() > 0);
+    
+    if (lst.size() ==1) // no clipping took place
+    {
+        out.push_back(*lst.front());
+        delete lst.front();
+        lst.pop_front();
+        return;
+    }
+    
+    /** the clipping algorithm starts at the first vertex of the polygon, which is 
+      * not necessarily a polygon on the clipping line.
+      * Thus, the first and last polygon segment may not end at the clipping line, but at the start/end vertex
+        of the original (unclipped) PolygonSegment. These need to be joined together before the actual joining of
+        clipping segments begins, because that joining assumes that all segments start and end at the clipping line */
 
+    if ( lst.front()->vertices().front().x != clip_x && lst.back()->vertices().back().x != clip_x)
+    {
+        assert(lst.front()->vertices().front() == lst.back()->vertices().back() );
+        lst.back()->append( *lst.front(), true);
+        //cout << lst.front() << endl;
+        delete lst.front();
+        lst.pop_front();
+    }
+    
+    priority_queue< pair< int32_t, PolygonSegment*> > queue;
+    for ( list<PolygonSegment*>::const_iterator seg = lst.begin(); seg != lst.end(); seg++)
+    {
+        assert( ( (*seg)->vertices().front().x == clip_x) && ( (*seg)->vertices().back().x == clip_x));
+        pair<int32_t, PolygonSegment*> p( max( (*seg)->vertices().front().y, (*seg)->vertices().back().y), *seg);
+        queue.push( p);
+    }
+    
+    
+    while (queue.size())
+    {
+        PolygonSegment *seg1 = queue.top().second; 
+        queue.pop();
+        /** this is either the last remaining segment, or its endpoints are the two segment endpoints 
+          * with the highest y-coordinates. Either way, make this segment form a closed polygon by itself
+         **/
+        if ((queue.size() == 0) || (queue.top().first < min(seg1->front().y, seg1->back().y)))  
+        {
+            //cout << "creating closed polygon out of single segment" << endl << *seg1 << endl;
+            if (seg1->front() != seg1->back())
+                seg1->append(seg1->vertices().front());
+            out.push_back(*seg1);
+            delete seg1;
+            continue;
+        }
+
+        PolygonSegment *seg2 = queue.top().second; 
+        queue.pop();
+        assert( seg1 != seg2);
+        //cout << "connecting two segments" << endl << *seg1 << endl << *seg2 << endl;
+        if ( seg1->front().y > seg1->back().y) seg1->reverse();  //now seg1 ends with the vertex at which seg2 is to be appended
+        if ( seg2->front().y < seg2->back().y) seg2->reverse();  //now seg2 starts with the vertex with which it is to be appended to seg1
+        seg1->append(*seg2, false);
+        delete seg2;
+        
+        queue.push( pair<int32_t, PolygonSegment*>(max(seg1->front().y, seg1->back().y), seg1));
+    }
+
+}
 //bool less_p(const pair<int32_t, PolygonSegment*> &p1, const pair<int32_t, PolygonSegment*> &p2) { return p1.first < p2.first;}
 void connectClippedSegmentsY( int32_t clip_y, list<PolygonSegment*> lst, list<PolygonSegment> &out)
 {
     assert (lst.size() > 0);
+    
+    if (lst.size() ==1) // no clipping took place
+    {
+        out.push_back(*lst.front());
+        delete lst.front();
+        lst.pop_front();
+        return;
+    }
+    
     /** the clipping algorithm starts at the first vertex of the polygon, which is 
       * not necessarily a polygon on the clipping line.
       * Thus, the first and last polygon segment may not end at the clipping line, but at the start/end vertex
@@ -215,6 +289,55 @@ void PolygonSegment::clipHorizontally( int32_t clip_y, list<PolygonSegment> &out
         connectClippedSegmentsY(clip_y, below, out_below);
 }
 
+void PolygonSegment::clipVertically( int32_t clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
+{
+    assert( m_vertices.front() == m_vertices.back());
+    //TODO: handle the edge case that front() and back() both lie on the split line
+    assert( m_vertices.front().x != clip_x || m_vertices.back().x != clip_x);
+
+    // pairs of the highest x-coordinate of a segment end point, and the segment itself    
+    list<PolygonSegment*> above, below;
+    
+    bool isAbove = m_vertices.front().x <= clip_x;
+    PolygonSegment *current_seg = new PolygonSegment();
+    current_seg->append(m_vertices.front());
+    list<Vertex>::const_iterator v2 = m_vertices.begin(); v2++;
+
+    for (list<Vertex>::const_iterator v1 = m_vertices.begin(); v2 != m_vertices.end(); v1++, v2++)
+    {
+        if ( (isAbove && v2->x <= clip_x) || (!isAbove && v2->x > clip_x))
+            { current_seg->append(*v2); continue;} //still on the same side of the clipping line
+
+        // if this point is reached, v1 and v2 are on opposite sides of the clipping line
+                    
+        assert(v2->x != v1->x);
+        //line (v1, v2) must have intersected the clipping line
+        int64_t clip_y = v1->y + ((clip_x - v1->x)*(v2->y - v1->y))/(v2->x-v1->x);
+        current_seg->append(Vertex(clip_x, clip_y));
+        
+        if (isAbove)
+        {
+            above.push_back(current_seg);
+        }
+        else
+        {
+            below.push_back(current_seg);
+        }
+        isAbove = !isAbove;
+        current_seg = new PolygonSegment();
+        current_seg->append(Vertex(clip_x, clip_y));
+        current_seg->append( *v2);
+    }
+    if (isAbove) above.push_back(current_seg);
+    else below.push_back(current_seg);
+    //cout << "Above:" << endl;
+    if (above.size())
+        connectClippedSegmentsX(clip_x, above, out_left);
+    
+    //cout << "Below:" << endl;
+    if (below.size())
+        connectClippedSegmentsX(clip_x, below, out_right);
+}
 
 std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg)
 {

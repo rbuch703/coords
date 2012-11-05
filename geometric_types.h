@@ -83,6 +83,7 @@ public:
         upper part, everything else to the lower part
     */
     void clipHorizontally( int32_t clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out) const;
+    void clipVertically(   int32_t clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out) const;
 
     /** @returns: 'true' if the resulting polygon is a proper one, 'false' it should be discarded completely. 
         In the latter case, the state of the polygon is undefined. */

@@ -2,8 +2,9 @@
 //#include "symbolic_tags.h"
 
 #include <stdint.h>
-//#include <math.h>
 #include <assert.h>
+
+#include <boost/foreach.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -24,12 +25,12 @@ uint64_t* relation_index;
 uint8_t* osm_data;
 */
 
-//mmap_t mmap_node =          init_mmap("/mnt/data/nodes.idx",      true, false);  //read-only memory maps
-mmap_t mmap_way =           init_mmap("/mnt/data/ways.idx",       true, false);
-mmap_t mmap_relation =      init_mmap("/mnt/data/relations.idx",  true, false);
+//mmap_t mmap_node =          init_mmap("intermediate/nodes.idx",      true, false);  //read-only memory maps
+mmap_t mmap_way =           init_mmap("intermediate/ways.idx",       true, false);
+mmap_t mmap_relation =      init_mmap("intermediate/relations.idx",  true, false);
 //mmap_t mmap_node_data =     init_mmap("/mnt/data/nodes.data",     true, false);
-mmap_t mmap_way_data =      init_mmap("/mnt/data/ways_int.data",  true, false);
-mmap_t mmap_relation_data = init_mmap("/mnt/data/relations.data", true, false);
+mmap_t mmap_way_data =      init_mmap("intermediate/ways_int.data",  true, false);
+mmap_t mmap_relation_data = init_mmap("intermediate/relations.data", true, false);
 
 //uint64_t* node_index =     (uint64_t*) mmap_node.ptr;
 uint64_t* way_index =      (uint64_t*) mmap_way.ptr;
@@ -44,8 +45,26 @@ static const uint64_t num_relations = mmap_relation.size / sizeof(uint64_t);
 
 
 //OSMNode             getNode(uint64_t node_id)    { return OSMNode(&node_data[node_index[node_id]], node_id);}
-OSMIntegratedWay    getWay(uint64_t way_id)      { return OSMIntegratedWay(&way_data[way_index[way_id]], way_id);}
-OSMRelation         getRelation(uint64_t relation_id) { return OSMRelation(&relation_data[relation_index[relation_id]], relation_id);}
+OSMIntegratedWay    getWay(uint64_t way_id)      
+{
+    if (way_index[way_id]) 
+        return OSMIntegratedWay(&way_data[way_index[way_id]], way_id);
+
+    cerr << "[WARN] trying to access not-existing way " << way_id << ", skipping" << endl;
+        
+    return OSMIntegratedWay(way_id, list<Vertex>(), list<OSMKeyValuePair>() );
+        
+}
+
+OSMRelation         getRelation(uint64_t relation_id) 
+{ 
+    if (relation_index[relation_id])
+        return OSMRelation(&relation_data[relation_index[relation_id]], relation_id);
+        
+    cerr << "[WARN] trying to access not-existing relation " << relation_id << ", skipping" << endl;
+        
+    return OSMRelation(relation_id, list<OSMRelationMember>(), list<OSMKeyValuePair>() );
+}
 
 map<string, uint32_t> zone_entries;
 
@@ -103,7 +122,7 @@ list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
     return res;
 }*/
 
-void dumpPolygon(string file_base, const PolygonSegment& segment)
+/*void dumpPolygon(string file_base, const PolygonSegment& segment)
 {
     size_t pos = file_base.rfind('/');
     string directory = file_base.substr(0, pos);
@@ -125,7 +144,7 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
         out << vertex->x << ", " << vertex->y << endl;
     }
     out.close();
-}
+}*/
 
 void getSubRelations( uint64_t relation_id, set<uint64_t> &outSubRelations)
 {
@@ -180,18 +199,25 @@ void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
     for (uint64_t i = 0; i < num_relations; i++)
     {
         if (! relation_index[i]) continue;
+        //std::cout << i << endl;
         OSMRelation rel = getRelation(i);
+
+        //std::cout << rel << endl;
+                    
         //cout << rel << endl;
         for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
         {
+            if ((i) % 1000000 == 0) std::cout << i/1000000 << "M relations scanned, " << std::endl;
+            
             const list<OSMKeyValuePair> &tags = it->first;
             FILE* file = it->second;
             bool matches = true;
-            for (list<OSMKeyValuePair>::const_iterator tag = tags.begin(); tag != tags.end() && matches; tag++)
+            BOOST_FOREACH (OSMKeyValuePair tag, tags)
+            //for (list<OSMKeyValuePair>::const_iterator tag = tags.begin(); tag != tags.end() && matches; tag++)
             {
-                if (! rel.hasKey(tag->first)) matches = false;
+                if (! rel.hasKey(tag.first)) matches = false;
                 // value= "*" --> match any value
-                if ((tag->second != "*") && (rel[tag->first] != tag->second))
+                if ((tag.second != "*") && (rel[tag.first] != tag.second))
                     matches= false;
             }
             if (matches)
@@ -254,6 +280,8 @@ void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
 
 int main()
 {
+    std::cout <<mmap_way.size  <<", " <<  mmap_relation.size << ", " 
+              << mmap_way_data.size << ", " << mmap_relation_data.size << std::endl;
     assert( /*mmap_node.size && */mmap_way.size && mmap_relation.size && 
             /*mmap_node_data.size &&*/ mmap_way_data.size && mmap_relation_data.size &&
             "Empty data file(s)");
@@ -263,41 +291,43 @@ int main()
     
     list<pair<list<OSMKeyValuePair>, FILE*> > extract_config;
     
+    const char* base_dir = "data";
+    ensureDirectoryExists(base_dir);
     
     list<OSMKeyValuePair> country_border_tags;
     country_border_tags.push_back( OSMKeyValuePair("boundary", "administrative"));
     country_border_tags.push_back( OSMKeyValuePair("admin_level", "2"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( country_border_tags, fopen("countries.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( country_border_tags, fopen("intermediate/countries.dump", "wb")));
 
     list<OSMKeyValuePair> regions;
     regions.push_back( OSMKeyValuePair("boundary", "administrative"));
     regions.push_back( OSMKeyValuePair("admin_level", "4"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( regions, fopen("regions.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( regions, fopen("intermediate/regions.dump", "wb")));
 
     list<OSMKeyValuePair> cities;
     cities.push_back( OSMKeyValuePair("boundary", "administrative"));
     cities.push_back( OSMKeyValuePair("admin_level", "8"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( cities, fopen("cities.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( cities, fopen("intermediate/cities.dump", "wb")));
     
     list<OSMKeyValuePair> autobahn;
     autobahn.push_back( OSMKeyValuePair("highway", "motorway"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( autobahn, fopen("autobahn.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( autobahn, fopen("intermediate/highway_l0.dump", "wb")));
     
     list<OSMKeyValuePair> buildings;
     buildings.push_back( OSMKeyValuePair("building", "*"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("buildings.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("intermediate/buildings.dump", "wb")));
 
     list<OSMKeyValuePair> timezones;
     timezones.push_back( OSMKeyValuePair("timezone", "*"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(timezones, fopen("timezones.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(timezones, fopen("intermediate/timezones.dump", "wb")));
     
     list<OSMKeyValuePair> coastline;
     coastline.push_back( OSMKeyValuePair("natural", "coastline"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("coastline.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("intermediate/coastline.dump", "wb")));
 
     list<OSMKeyValuePair> water;
     water.push_back( OSMKeyValuePair("natural", "water"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("water.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("intermediate/water.dump", "wb")));
     
     dumpWays(extract_config);
     

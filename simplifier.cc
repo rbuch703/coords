@@ -44,9 +44,10 @@ void handlePolygon(string file_base, PolygonSegment& segment)
     
     list<PolygonSegment> above, below;
     
-    segment.clipHorizontally(40*10000000, above, below);
+    //segment.clipHorizontally(40*10000000, above, below);
+    segment.clipHorizontally(0, above, below);
     if (above.size() == 0 || below.size() == 0) return; // no clipping took place
-    
+
     for (list<PolygonSegment>::const_iterator it = above.begin(); it != above.end(); it++)
         dumpPolygon(file_base, *it);
 /*
@@ -153,7 +154,7 @@ void reconstructCoastline(FILE * src, string base_name)
     int idx = 0;
     while (! feof(src))
     {
-        if (++idx % 10000 == 0) std::cout << idx/1000 << "k ways read, " << std::endl;
+        if (++idx % 100000 == 0) std::cout << idx/1000 << "k ways read, " << std::endl;
         
         //if (! way_index[i]) continue;
         int i = fgetc(src);

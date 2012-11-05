@@ -9,6 +9,8 @@
 #include <fcntl.h>*/
 #include <assert.h>
 #include <stdint.h>
+#include <unistd.h> //for _SC_PAGESIZE
+
 
 #include <iostream>
 #include <string>
@@ -24,14 +26,14 @@
 
 using namespace std;
 
-const char* nodes_data_filename = "/mnt/data/nodes.data";
-const char* nodes_index_filename= "/mnt/data/nodes.idx";
-const char* vertices_data_filename =    "vertices.data"; //stored on ssd for fast random access
-const char* ways_data_filename =  "/mnt/data/ways.data";
-const char* ways_index_filename=  "/mnt/data/ways.idx";
-const char* ways_int_data_filename="/mnt/data/ways_int.data"; // does not need an index, can use the same as the ways
-const char* relations_data_filename="/mnt/data/relations.data";
-const char* relations_index_filename="/mnt/data/relations.idx";
+const char* nodes_data_filename = "intermediate/nodes.data";
+const char* nodes_index_filename= "intermediate/nodes.idx";
+const char* vertices_data_filename =    "vertices.data";    //put it onto the SSD for fast random access
+const char* ways_data_filename =  "intermediate/ways.data";
+const char* ways_index_filename=  "intermediate/ways.idx";
+const char* ways_int_data_filename="intermediate/ways_int.data"; // does not need an index, can use the same as 'ways'
+const char* relations_data_filename="intermediate/relations.data";
+const char* relations_index_filename="intermediate/relations.idx";
 
 class OsmXmlDumpingParser: public OsmXmlParser
 {
@@ -39,7 +41,7 @@ public:
     OsmXmlDumpingParser(FILE * f): OsmXmlParser(f) 
     {
         uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
-        assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistence check #keys<->#values
+        assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistency check: #keys==#values
         assert( nSymbolicTags <= (256));  // we assign 8bit numbers to these, so there must not be more than 2^8
         for (uint32_t i = 0; i < nSymbolicTags; i++)
         {
@@ -191,8 +193,10 @@ protected:
     virtual void completedWay ( OSMWay  &way) 
     {
         processTags(way.tags);
+        // write the way itself to file
         way.serialize(way_data, &way_index, &symbolic_tags);
         
+        //convert the way to an integrated way, by replacing the node indices with the actual node lat/lon
         list<Vertex> vertices;
         uint32_t* vertices_ptr = (uint32_t*) vertex_data.ptr;
         for (list<uint64_t>::const_iterator ref = way.refs.begin(); ref != way.refs.end(); ref++)
