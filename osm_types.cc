@@ -351,9 +351,12 @@ OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
     while (num_vertices--)
     {
         int32_t lat;
-        fread(&lat, sizeof(lat), 1, src);
+        size_t num_read = fread(&lat, sizeof(lat), 1, src);
+        assert (num_read == 1);
+        
         int32_t lon;
-        fread(&lon, sizeof(lon), 1, src);
+        num_read = fread(&lon, sizeof(lon), 1, src);
+        assert (num_read == 1);
         vertices.push_back( Vertex(lat, lon));
     }
     tags = deserializeTags(src);

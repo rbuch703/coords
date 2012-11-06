@@ -53,6 +53,8 @@ struct OSMWay
     list<OSMKeyValuePair> tags;
 };
 
+ostream& operator<<(ostream &out, const OSMWay &way);
+
 // a representation of an OSM way that includes the data of all of its nodes (as opposed to just references to them)
 struct OSMIntegratedWay
 {
@@ -71,7 +73,7 @@ public:
     list<OSMKeyValuePair> tags;
 };
 
-ostream& operator<<(ostream &out, const OSMWay &way);
+ostream& operator<<(ostream &out, const OSMIntegratedWay &way);
 struct OSMRelationMember
 {
     OSMRelationMember( ELEMENT member_type, uint64_t member_ref, string member_role):

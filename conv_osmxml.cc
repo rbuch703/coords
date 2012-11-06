@@ -38,7 +38,7 @@ const char* relations_index_filename="intermediate/relations.idx";
 class OsmXmlDumpingParser: public OsmXmlParser
 {
 public:
-    OsmXmlDumpingParser(FILE * f): OsmXmlParser(f) 
+    OsmXmlDumpingParser(FILE * f): OsmXmlParser(f), nNodes(0), nWays(0), nRelations(0)
     {
         uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
         assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistency check: #keys==#values
@@ -112,8 +112,11 @@ protected:
         padFile(node_data);
         fclose( node_data ); //don't need node data any more
         free_mmap(&node_index);
-        /** do not free the vertex map. We still it, because generating
-          * integrated ways (ways that include vertices) depends on it.*/
+        
+        free_mmap(&vertex_data);
+        //re-open the vertex mmap read-only. This should improve Linux' mapping behavior for the next phase,
+        //where ways are read and written sequentially, but vertices are read randomly
+        vertex_data = init_mmap(vertices_data_filename, true, false); 
       cout << "== Done parsing Nodes ==" << endl;
     };
     
@@ -161,6 +164,10 @@ protected:
         free_mmap(&relation_index);
         padFile(relation_data);
         fclose( relation_data);
+        
+        cout << "==================== done =======================" << endl;
+        cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
+        
     }; 
 
     void processTags(list<OSMKeyValuePair> &tags)
@@ -181,6 +188,7 @@ protected:
 
     virtual void completedNode( OSMNode &node) 
     {
+        nNodes++;
         processTags(node.tags);
         node.serialize(node_data, &node_index, &symbolic_tags);
         
@@ -192,6 +200,7 @@ protected:
     
     virtual void completedWay ( OSMWay  &way) 
     {
+        nWays++;
         processTags(way.tags);
         // write the way itself to file
         way.serialize(way_data, &way_index, &symbolic_tags);
@@ -218,8 +227,10 @@ protected:
     
     virtual void completedRelation( OSMRelation &relation) 
     {
+        nRelations++;
         processTags(relation.tags);
         relation.serialize( relation_data, &relation_index, &symbolic_tags);
+        
     }
     virtual void doneParsingNodes () {cout << "===============================================" << endl;}
 private:
@@ -228,6 +239,7 @@ private:
     map<OSMKeyValuePair, uint8_t> symbolic_tags;
     map<string, string> rename_key; 
     set<string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
+    uint64_t nNodes, nWays, nRelations;
     
 };
 
@@ -242,6 +254,7 @@ int main()
     OsmXmlDumpingParser parser( f );
     parser.parse();
     fclose(f);
+    
 /*
     std::cout << "statistics\n==========" << std::endl;
     std::cout << "#nodes: " << parser.nNodes << std::endl;

@@ -44,6 +44,8 @@ static const uint64_t num_relations = mmap_relation.size / sizeof(uint64_t);
 //static const uint64_t num_nodes = mmap_node.size / sizeof(uint64_t);
 
 
+typedef pair<list<OSMKeyValuePair>, FILE*> OSMFilterConfig;
+
 //OSMNode             getNode(uint64_t node_id)    { return OSMNode(&node_data[node_index[node_id]], node_id);}
 OSMIntegratedWay    getWay(uint64_t way_id)      
 {
@@ -174,7 +176,9 @@ void getOutlineWaysRecursive(const OSMRelation &relation, set<uint64_t> &ways_ou
     }
 }
 
-void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
+
+
+void dumpWays( list<OSMFilterConfig> config)
 {
 
     map<FILE*, set<uint64_t> > ways_from_relations;
@@ -186,8 +190,7 @@ void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
         or both! Thus, we have to make sure that each way matching the criteria is 
         read and dumped exactly once, independent of whether it is tagged, or belongs 
         to a tagged relation.
-        To ensure this, 
-        for each tag list corresponding to a certain set of data (e.g. all country
+        To ensure this, for each tag list corresponding to a certain set of data (e.g. all country
         borders), we first record the IDs of all ways that are part of relations 
         matching these tags. Later, we scan all ways for these tags as well, dump their 
         data to a file, and *remove* their IDs from the ID lists we create here.
@@ -205,20 +208,19 @@ void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
         //std::cout << rel << endl;
                     
         //cout << rel << endl;
-        for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
+        BOOST_FOREACH(OSMFilterConfig cfg, config)
+        //for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
         {
             if ((i) % 1000000 == 0) std::cout << i/1000000 << "M relations scanned, " << std::endl;
             
-            const list<OSMKeyValuePair> &tags = it->first;
-            FILE* file = it->second;
+            const list<OSMKeyValuePair> &tags = cfg.first;
+            FILE* file = cfg.second;
             bool matches = true;
             BOOST_FOREACH (OSMKeyValuePair tag, tags)
             //for (list<OSMKeyValuePair>::const_iterator tag = tags.begin(); tag != tags.end() && matches; tag++)
             {
-                if (! rel.hasKey(tag.first)) matches = false;
-                // value= "*" --> match any value
-                if ((tag.second != "*") && (rel[tag.first] != tag.second))
-                    matches= false;
+                matches &= rel.hasKey(tag.first);
+                matches &= (tag.second == "*" || rel[tag.first] != tag.second); // value= "*" --> match any value
             }
             if (matches)
                 getOutlineWaysRecursive(rel, ways_from_relations[file]);
@@ -280,8 +282,6 @@ void dumpWays( list<pair<list<OSMKeyValuePair>, FILE*> > config)
 
 int main()
 {
-    std::cout <<mmap_way.size  <<", " <<  mmap_relation.size << ", " 
-              << mmap_way_data.size << ", " << mmap_relation_data.size << std::endl;
     assert( /*mmap_node.size && */mmap_way.size && mmap_relation.size && 
             /*mmap_node_data.size &&*/ mmap_way_data.size && mmap_relation_data.size &&
             "Empty data file(s)");
@@ -293,7 +293,7 @@ int main()
     
     const char* base_dir = "data";
     ensureDirectoryExists(base_dir);
-    
+    /*
     list<OSMKeyValuePair> country_border_tags;
     country_border_tags.push_back( OSMKeyValuePair("boundary", "administrative"));
     country_border_tags.push_back( OSMKeyValuePair("admin_level", "2"));
@@ -320,55 +320,33 @@ int main()
     list<OSMKeyValuePair> timezones;
     timezones.push_back( OSMKeyValuePair("timezone", "*"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(timezones, fopen("intermediate/timezones.dump", "wb")));
-    
-    list<OSMKeyValuePair> coastline;
+    */
+    /*list<OSMKeyValuePair> coastline;
     coastline.push_back( OSMKeyValuePair("natural", "coastline"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("intermediate/coastline.dump", "wb")));
+    */
+    
+    FILE* file = fopen("intermediate/coastline.dump", "wb");
+    for (uint64_t i = 0; i < num_ways; i++)
+    {
+        if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
+        if (! way_index[i]) continue;
+        OSMIntegratedWay way = getWay(i);
+        if (way.hasKey("natural") && way["natural"] == "coastline")
+            way.serialize(file);
 
+    }    
+    fclose(file);
+    /*
     list<OSMKeyValuePair> water;
     water.push_back( OSMKeyValuePair("natural", "water"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("intermediate/water.dump", "wb")));
+    */
+    //dumpWays(extract_config);
     
-    dumpWays(extract_config);
-    
-    for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = extract_config.begin(); it != extract_config.end(); it++)
-    {
-        FILE* file = it->second;
-        fclose(file);
-    }
+    //BOOST_FOREACH( const OSMFilterConfig cfg, extract_config)
+    //    fclose(cfg.second);
     //extractCoastline();
-    
-    
-    //extractTimeZonesRelations();
-    //extractTimeZonesWays();
-    /*
-    for (uint64_t i = 0; i < num_relations; i++)
-    //for (uint64_t i = 153557; i == 153557; i++)
-    {
-        if (! relation_index[i]) continue;
-        OSMRelation rel = getRelation(i);
-        if (rel.hasKey("name") && rel.getValue("name").find("Jefferson County") !=string::npos &&
-            rel.hasKey("admin_level") && rel.getValue("admin_level") == "6")
-            //rel.hasKey("nist:state_fips") && rel.getValue("nist:state_fips") == "21")
-            
-            //std::cout << rel << std::endl << endl;
-    }*/
-    
-    //cout << getRelation(11980) << endl;
-    //return 0;
-
-
-    
-    //getTZWayListRecursive(79981);
-    
-    //cout << getRelation(16240) << endl;
-    //cout << getRelation(365331) << endl;
-    //cout << getRelation(179296) << endl;
-    //cout << getRelation(82675) << endl;   //part of 79981, why?
-    
- 
-    //std::cout << "Found " << coastline_ways.size() << " coastline ways" << endl;
-    
     
     //free_mmap(&mmap_node);
     free_mmap(&mmap_way);

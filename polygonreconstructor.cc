@@ -1,7 +1,16 @@
 
 #include "polygonreconstructor.h"
+
+#include <boost/foreach.hpp>
+
+
 #include <set>
+#include <queue>
+
+#include <iostream>
 #include <assert.h>
+
+typedef pair<Vertex, PolygonSegment*> Vertex2Segment;
 
 PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
 {
@@ -68,15 +77,19 @@ PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
     return NULL;
 }
 
+#if 0
 void PolygonReconstructor::forceClosePolygons()
 {
     /** at this point, all polygons that can be closed have been closed.
-      * or the remaining segments, we attempt to find segments that are as close together as possible*/
+      * of the remaining segments, we attempt to find segments that are as close together as possible*/
     uint32_t nEndPoints = openEndPoints.size();
     Vertex vEndPoints[nEndPoints];
     uint32_t i = 0;
-    for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
-        vEndPoints[i] = poly->first;
+    //for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
+    //    vEndPoints[i] = poly->first;
+    
+    BOOST_FOREACH( Vertex2Segment poly, openEndPoints)
+        vEndPoints[i++] = poly.first;
         
     while (nEndPoints)
     {
@@ -144,14 +157,126 @@ void PolygonReconstructor::forceClosePolygons()
     }
     assert(openEndPoints.size() == 0);
 }
+#endif
+struct EndPointDistance
+{
+    EndPointDistance(uint64_t i, uint64_t j, uint64_t dist): m_i(i), m_j(j), m_dist(dist) {}
+    uint64_t m_i,m_j;
+    uint64_t m_dist;
+    
+    bool operator<(const EndPointDistance &other) const { return m_dist > other.m_dist; }
+};
+
+
+static void closeSomePolygons( map<Vertex, PolygonSegment*> &openEndPoints, list<PolygonSegment> &res, const uint64_t max_dist_sq)
+{
+    uint64_t nEndPoints = openEndPoints.size();
+
+    //for each segment end point, stores whether the end point is still free to be connected (=true)
+    //(or whether it has already been connected to another end point (=false)
+    bool vEndPointAccessible[nEndPoints];
+    for (uint64_t i = 0; i < nEndPoints; i++) 
+        vEndPointAccessible[i] = true;
+
+    Vertex vEndPoints[nEndPoints];
+    uint64_t i = 0;
+    BOOST_FOREACH( Vertex2Segment v1, openEndPoints)
+        vEndPoints[i++] = v1.first;
+
+    priority_queue<EndPointDistance> queue;
+        
+    for (uint64_t i = 1; i < nEndPoints; i++)
+    {
+        if (!vEndPointAccessible[i]) continue;
+        //cout << "queue size: " << queue.size() << endl;
+        for (uint64_t j = 0; j < i; j++)
+        {
+            uint64_t dist_sq = (vEndPoints[i] - vEndPoints[j]).squaredLength( );
+            if (vEndPointAccessible[j] && dist_sq <= max_dist_sq)
+                queue.push( EndPointDistance(i, j, dist_sq ));
+        }
+    }
+    //cout << queue.size() << " candidates" << endl;
+
+
+    while (queue.size())
+    {
+        EndPointDistance nextPair = queue.top();
+        queue.pop();
+        //if one of the end points has already been connected, this pair is obsolete
+        if (! (vEndPointAccessible[nextPair.m_i] && vEndPointAccessible[nextPair.m_j])) continue;
+        
+        assert( openEndPoints.count(vEndPoints[nextPair.m_i]) && openEndPoints.count(vEndPoints[nextPair.m_j]));
+
+        Vertex v1 = vEndPoints[nextPair.m_i];
+        Vertex v2 = vEndPoints[nextPair.m_j];
+
+        PolygonSegment* seg1 = openEndPoints[v1];
+        PolygonSegment* seg2 = openEndPoints[v2];
+        
+        //we now proceed to connect the two end points, so they are no longer accessible
+        vEndPointAccessible[nextPair.m_i] = vEndPointAccessible[nextPair.m_j] = false;
+        
+        if (seg1 == seg2) // same polygon segment --> close the loop
+        {
+            //cout << "closing gap of  " 
+            //     << sqrt( (seg1->back() - seg1->front()).squaredLength())/100.0 << "m"<< endl;
+        
+            openEndPoints.erase( seg1->front());
+            openEndPoints.erase( seg1->back());
+            seg1->append(seg1->front()); // to really be closed, it has to start and end with the same vertex
+            res.push_back(*seg1);
+            delete seg1;
+            continue;
+        }
+
+        openEndPoints.erase( seg1->front());
+        openEndPoints.erase( seg1->back());
+        openEndPoints.erase( seg2->front());
+        openEndPoints.erase( seg2->back());
+            
+        if      (v1 == seg1->front() && v2 == seg2->front()) { seg1->reverse(); seg1->append(*seg2, false); }
+        else if (v1 == seg1->back()  && v2 == seg2->front()) {                  seg1->append(*seg2, false); }
+        else if (v1 == seg1->front() && v2 == seg2->back() ) { seg2->append(*seg1, false); *seg1 = *seg2;   }
+        else if (v1 == seg1->back()  && v2 == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, false); }
+        else assert(false);
+        
+        delete seg2;
+        assert ( openEndPoints.count(seg1->front()) == 0);
+        assert ( openEndPoints.count(seg1->back() ) == 0);
+        openEndPoints[seg1->front()] = seg1;
+        openEndPoints[seg1->back()]  = seg1;
+    }
+
+}
+
+void PolygonReconstructor::forceClosePolygons2()
+{
+
+    
+    /** at this point, all polygons that can be closed have been closed.
+      * of the remaining segments, we attempt to find segments that are as close together as possible*/
+        
+    for (uint64_t max_dist = 1; openEndPoints.size() > 0; max_dist*=10)
+    {
+        std::cout << "connecting polygon segments that are at most " << (max_dist/100) << "m apart" << endl;
+        closeSomePolygons( openEndPoints, res, max_dist * max_dist);
+        std::cout << (openEndPoints.size()/2) << " open segments left" << endl;
+        
+    }
+    assert(openEndPoints.size() == 0);
+}
 
 void PolygonReconstructor::clear() {
     set<PolygonSegment*> segs;
     /** we need to delete all remaining manually allocated polygon segments
       * These are all registered in openEndPoints, but each polygon segment appears twice in this list.
       * So, we first have to obtain a list of unique pointers to these segments*/
-    for (map<Vertex, PolygonSegment*>::iterator it = openEndPoints.begin(); it != openEndPoints.end(); it++)
-        if (!segs.count(it->second)) segs.insert(it->second);
+      
+    BOOST_FOREACH( Vertex2Segment v2s, openEndPoints)
+        if (!segs.count(v2s.second)) segs.insert(v2s.second);
+    //for (map<Vertex, PolygonSegment*>::iterator it = openEndPoints.begin(); it != openEndPoints.end(); it++)
+    //    if (!segs.count(it->second)) segs.insert(it->second);
      //delete remaining PolygonSegment
 
     for (set<PolygonSegment*>::iterator seg = segs.begin(); seg != segs.end(); seg++)

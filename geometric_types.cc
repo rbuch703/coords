@@ -46,8 +46,8 @@ void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
     } else
     {
         assert(back() != other.front()); //otherwise we would have two consecutive identical vertices
-        cout << "concatenating line segments that are " 
-             << sqrt( (back() -other.front()).squaredLength() )/100.0 << "m apart"<< endl;
+        //cout << "concatenating line segments that are " 
+        //     << sqrt( (back() -other.front()).squaredLength() )/100.0 << "m apart"<< endl;
         m_vertices.insert( m_vertices.end(),   other.m_vertices.begin(), other.m_vertices.end());
     }
     
@@ -109,11 +109,15 @@ void connectClippedSegmentsX( int32_t clip_x, list<PolygonSegment*> lst, list<Po
 {
     assert (lst.size() > 0);
     
-    if (lst.size() ==1) // no clipping took place
+    if (lst.size() ==1)
     {
-        out.push_back(*lst.front());
-        delete lst.front();
+        PolygonSegment *seg = lst.front();
         lst.pop_front();
+        
+        if (seg->front() != seg->back()) seg->append(seg->front());
+        
+        out.push_back(*seg);
+        delete seg;
         return;
     }
     
@@ -137,7 +141,7 @@ void connectClippedSegmentsX( int32_t clip_x, list<PolygonSegment*> lst, list<Po
     {
         assert( ( (*seg)->vertices().front().x == clip_x) && ( (*seg)->vertices().back().x == clip_x));
         pair<int32_t, PolygonSegment*> p( max( (*seg)->vertices().front().y, (*seg)->vertices().back().y), *seg);
-        queue.push( p);
+        queue.push( p );
     }
     
     
@@ -153,6 +157,9 @@ void connectClippedSegmentsX( int32_t clip_x, list<PolygonSegment*> lst, list<Po
             //cout << "creating closed polygon out of single segment" << endl << *seg1 << endl;
             if (seg1->front() != seg1->back())
                 seg1->append(seg1->vertices().front());
+
+            assert( seg1->front() == seg1->back() && "clipped Polygon is not closed");
+
             out.push_back(*seg1);
             delete seg1;
             continue;
@@ -176,11 +183,15 @@ void connectClippedSegmentsY( int32_t clip_y, list<PolygonSegment*> lst, list<Po
 {
     assert (lst.size() > 0);
     
-    if (lst.size() ==1) // no clipping took place
+    if (lst.size() ==1)
     {
-        out.push_back(*lst.front());
-        delete lst.front();
+        PolygonSegment *seg = lst.front();
         lst.pop_front();
+        
+        if (seg->front() != seg->back()) seg->append(seg->front());
+        
+        out.push_back(*seg);
+        delete seg;
         return;
     }
     
@@ -204,7 +215,7 @@ void connectClippedSegmentsY( int32_t clip_y, list<PolygonSegment*> lst, list<Po
     {
         assert( ( (*seg)->vertices().front().y == clip_y) && ( (*seg)->vertices().back().y == clip_y));
         pair<int32_t, PolygonSegment*> p( max( (*seg)->vertices().front().x, (*seg)->vertices().back().x), *seg);
-        queue.push( p);
+        queue.push( p );
     }
     
     
@@ -220,6 +231,9 @@ void connectClippedSegmentsY( int32_t clip_y, list<PolygonSegment*> lst, list<Po
             //cout << "creating closed polygon out of single segment" << endl << *seg1 << endl;
             if (seg1->front() != seg1->back())
                 seg1->append(seg1->vertices().front());
+
+            assert( seg1->front() == seg1->back() && "clipped Polygon is not closed");
+                
             out.push_back(*seg1);
             delete seg1;
             continue;
@@ -239,7 +253,7 @@ void connectClippedSegmentsY( int32_t clip_y, list<PolygonSegment*> lst, list<Po
 
 }
 
-void PolygonSegment::clipHorizontally( int32_t clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
+void PolygonSegment::clipSecondComponent( int32_t clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
 {
     assert( m_vertices.front() == m_vertices.back());
     //TODO: handle the edge case that front() and back() both lie on the split line
@@ -289,7 +303,7 @@ void PolygonSegment::clipHorizontally( int32_t clip_y, list<PolygonSegment> &out
         connectClippedSegmentsY(clip_y, below, out_below);
 }
 
-void PolygonSegment::clipVertically( int32_t clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
+void PolygonSegment::clipFirstComponent( int32_t clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
 {
     assert( m_vertices.front() == m_vertices.back());
     //TODO: handle the edge case that front() and back() both lie on the split line

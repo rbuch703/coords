@@ -142,7 +142,7 @@ int main()
     cout << ps.vertices().size() << " vertices" << endl;
     
     list<PolygonSegment> above, below;
-    ps.clipHorizontally(0, above, below);
+    ps.clipSecondComponent(0, above, below);
     cout << "Above: " << endl;
     for (list<PolygonSegment>::const_iterator ps = above.begin(); ps != above.end(); ps++)
         cout << *ps << endl;
