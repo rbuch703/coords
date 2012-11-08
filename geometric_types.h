@@ -30,6 +30,7 @@ struct Vertex
     Vertex operator-(const Vertex a) const { return Vertex(x-a.x, y-a.y);}
 };
 
+
 struct AABoundingBox
 {
     AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
@@ -64,6 +65,9 @@ struct LineSegment
 };
 
 
+
+typedef int64_t (*VertexCoordinate)(const Vertex &v);
+
 class PolygonSegment
 {
 public:
@@ -82,7 +86,12 @@ public:
         semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the
         upper part, everything else to the lower part
     */
+    //template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> void clipComponent(int32_t clip,
+    //    list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out) const;
+    
+    
     void clipSecondComponent( int32_t clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out) const;
+    //{ clipComponent<getYCoordinate, getXCoordinate>(clip_y, top_out, bottom_out); }
     void clipFirstComponent(  int32_t clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out) const;
 
     /** @returns: 'true' if the resulting polygon is a proper one, 'false' it should be discarded completely. 
