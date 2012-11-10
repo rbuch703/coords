@@ -218,87 +218,42 @@ void connectClippedSegmentsY( int32_t clip_y, list<PolygonSegment*> lst, list<Po
 void connectClippedSegmentsX( int32_t clip_x, list<PolygonSegment*> lst, list<PolygonSegment> &out)
 {    connectClippedSegments<getXCoordinate, getYCoordinate>(clip_x, lst, out); }
 
-
-void PolygonSegment::clipSecondComponent( int32_t clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
+template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
+void clip( const list<Vertex> & vertices, int32_t clip_pos, list<PolygonSegment*> &above, list<PolygonSegment*> &below)
 {
-    assert( m_vertices.front() == m_vertices.back());
+    assert( vertices.front() == vertices.back());
     //TODO: handle the edge case that front() and back() both lie on the split line
-    assert( m_vertices.front().y != clip_y || m_vertices.back().y != clip_y);
+    assert( significantCoordinate(vertices.front()) != clip_pos || 
+            significantCoordinate(vertices.back() ) != clip_pos);
 
-    // pairs of the highest x-coordinate of a segment end point, and the segment itself    
-    list<PolygonSegment*> above, below;
-    
-    bool isAbove = m_vertices.front().y <= clip_y;
     PolygonSegment *current_seg = new PolygonSegment();
-    current_seg->append(m_vertices.front());
-    list<Vertex>::const_iterator v2 = m_vertices.begin(); v2++;
+    list<Vertex>::const_iterator v2 = vertices.begin();
 
-    for (list<Vertex>::const_iterator v1 = m_vertices.begin(); v2 != m_vertices.end(); v1++, v2++)
-    {
-        if ( (isAbove && v2->y <= clip_y) || (!isAbove && v2->y > clip_y))
-            { current_seg->append(*v2); continue;} //still on the same side of the clipping line
+    do { current_seg->append( *v2 ); v2++;}
+    while (significantCoordinate (current_seg->back()) == clip_pos);
 
-        // if this point is reached, v1 and v2 are on opposite sides of the clipping line
-                    
-        assert(v2->y != v1->y);
-        //line (v1, v2) must have intersected the clipping line
-        int64_t clip_x = v1->x + ((clip_y - v1->y)*(v2->x - v1->x))/(v2->y-v1->y);
-        current_seg->append(Vertex(clip_x, clip_y));
-        
-        if (isAbove)
-        {
-            above.push_back(current_seg);
-        }
-        else
-        {
-            below.push_back(current_seg);
-        }
-        isAbove = !isAbove;
-        current_seg = new PolygonSegment();
-        current_seg->append(Vertex(clip_x, clip_y));
-        current_seg->append( *v2);
-    }
-    if (isAbove) above.push_back(current_seg);
-    else below.push_back(current_seg);
-    //cout << "Above:" << endl;
-    if (above.size())
-        connectClippedSegmentsY(clip_y, above, out_above);
-    
-    //cout << "Below:" << endl;
-    if (below.size())
-        connectClippedSegmentsY(clip_y, below, out_below);
-}
-
-
-
-void PolygonSegment::clipFirstComponent( int32_t clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
-{
-    assert( m_vertices.front() == m_vertices.back());
-    //TODO: handle the edge case that front() and back() both lie on the split line
-    assert( m_vertices.front().x != clip_x || m_vertices.back().x != clip_x);
-
-    // pairs of the highest x-coordinate of a segment end point, and the segment itself    
-    list<PolygonSegment*> above, below;
-    
-    PolygonSegment *current_seg = new PolygonSegment();
-    list<Vertex>::const_iterator v2 = m_vertices.begin();
-
-    do { current_seg->append( *v2 ); v2++;} 
-    while (current_seg->back().x == clip_x);
-
-    bool isAbove = current_seg->back().x <= clip_x;
+    bool isAbove = significantCoordinate( current_seg->back() ) <= clip_pos;
     list<Vertex>::const_iterator v1 = v2;
-    for ( v1--; v2 != m_vertices.end(); v1++, v2++)
+    for ( v1--; v2 != vertices.end(); v1++, v2++)
     {
-        if ( (isAbove && v2->x <= clip_x) || (!isAbove && v2->x > clip_x))
+        if (( isAbove && significantCoordinate(*v2) <= clip_pos) || 
+            (!isAbove && significantCoordinate(*v2)  > clip_pos))
             { current_seg->append(*v2); continue;} //still on the same side of the clipping line
 
         // if this point is reached, v1 and v2 are on opposite sides of the clipping line
-                    
-        assert(v2->x != v1->x);
+        assert(significantCoordinate(*v2) != significantCoordinate(*v1) );
         //line (v1, v2) must have intersected the clipping line
-        int64_t clip_y = v1->y + ((clip_x - v1->x)*(v2->y - v1->y))/(v2->x-v1->x);
-        current_seg->append(Vertex(clip_x, clip_y));
+        int64_t clip_other = otherCoordinate(*v1) + ((clip_pos - significantCoordinate(*v1)) *
+                        ( otherCoordinate(*v2) - otherCoordinate(*v1) ) )/
+                        ( significantCoordinate(*v2) - significantCoordinate(*v1) );
+        
+        Vertex vClip;
+        if      (significantCoordinate == getXCoordinate) vClip = Vertex(clip_pos, clip_other);
+        else if (significantCoordinate == getYCoordinate) vClip = Vertex(clip_other, clip_pos);
+        else  {assert(false && "unsupported coordinate accessor"); exit(0);}
+        
+        current_seg->append(vClip);
+        
         
         if (isAbove)
             above.push_back(current_seg);
@@ -307,7 +262,7 @@ void PolygonSegment::clipFirstComponent( int32_t clip_x, list<PolygonSegment> &o
 
         isAbove = !isAbove;
         current_seg = new PolygonSegment();
-        current_seg->append(Vertex(clip_x, clip_y));
+        current_seg->append( Vertex(vClip) );
         current_seg->append( *v2);
     }
     if (isAbove) above.push_back(current_seg);
@@ -318,13 +273,32 @@ void PolygonSegment::clipFirstComponent( int32_t clip_x, list<PolygonSegment> &o
     //FIXME: test whether all vertices of a segment lie completely on the clipping line; if so, discard the segment
     
     #warning may produce connected line segments that are co-linear and should be replaced by a single line
-    if (above.size())
-        connectClippedSegmentsX(clip_x, above, out_left);
-    
-    //cout << "Below:" << endl;
-    if (below.size())
-        connectClippedSegmentsX(clip_x, below, out_right);
 }
+
+
+void PolygonSegment::clipSecondComponent( int32_t clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
+{
+    list<PolygonSegment*> above, below;
+    
+    
+    clip<getYCoordinate, getXCoordinate>( m_vertices, clip_y, above, below);
+
+    if (above.size()) connectClippedSegmentsY(clip_y, above, out_above);
+    if (below.size()) connectClippedSegmentsY(clip_y, below, out_below);
+
+}
+
+void PolygonSegment::clipFirstComponent( int32_t clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
+{
+    list<PolygonSegment*> left, right;
+    
+    
+    clip<getXCoordinate, getYCoordinate>( m_vertices, clip_x, left, right);
+
+    if (left.size())  connectClippedSegmentsX(clip_x, left,  out_left );
+    if (right.size()) connectClippedSegmentsX(clip_x, right, out_right);
+}
+
 
 std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg)
 {

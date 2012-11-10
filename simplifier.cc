@@ -152,8 +152,8 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
 {
     if (segments.size() == 0) return;
 
-    
-    cout << "processing clipping rect (" << top << ", " << left << ")-(" << bottom << ", " << right << ") with "
+    for (uint32_t i = level; i; i--) cout << " ";
+    cout << "processing clipping rect '" << position << "' (" << top << ", " << left << ")-(" << bottom << ", " << right << ") with "
          << segments.size() << " segments" << endl;
 
     BOOST_FOREACH( const PolygonSegment seg, segments)
@@ -162,7 +162,7 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     if (level == 2)
     {
         BOOST_FOREACH( const PolygonSegment seg, segments)
-            dumpPolygon(file_base+"#"+position+"#",seg);
+            dumpPolygon(file_base+"#"+position+"/seg",seg);
         return;
     }
     
@@ -176,9 +176,9 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     BOOST_FOREACH( const PolygonSegment seg, segments)
         seg.clipSecondComponent( mid_h, vLeft, vRight);
 
-    BOOST_FOREACH( const PolygonSegment seg, vLeft)      assert( seg.vertices().front() == seg.vertices().back());
+    BOOST_FOREACH( const PolygonSegment seg, vLeft)    assert( seg.vertices().front() == seg.vertices().back());
     BOOST_FOREACH( const PolygonSegment seg, vRight)   assert( seg.vertices().front() == seg.vertices().back());
-        
+
     list<PolygonSegment> vTop, vBottom;
 
     //process left half (top-left and bottom-left quarters)    
