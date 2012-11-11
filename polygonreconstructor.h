@@ -21,7 +21,6 @@ public:
     /** uses heuristics to create polygons from the PolygonSegments in openEndPoints, even if
         the segments do not connect directly to each other */
     void forceClosePolygons();
-    void forceClosePolygons2();
         
     void clear();
     

@@ -60,14 +60,21 @@ void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
 bool PolygonSegment::simplifyArea(double allowedDeviation)
 {
     assert( m_vertices.front() == m_vertices.back() && "Not a Polygon");
+    /** simplifySection() requires the Polygon to consist of at least two vertices,
+        so we need to test the number of vertices here. Also, a segment cannot be a polygon
+        if its vertex count is less than four (since the polygon of smallest order is a triangle,
+        and first and last vertex are identical. Since simplification cannot add vertices,
+        We can safely terminate the simplification here, if we are short of four vertices. */
+    if ( m_vertices.size() < 4) { m_vertices.clear(); return false; }
 
     list<Vertex>::iterator last = m_vertices.end();
     last--;
     simplifySection( m_vertices.begin(), last, allowedDeviation);
     
     // Need three vertices to form an area; four since first and last are identical
-    if (m_vertices.size() < 4) return false;
+    if (m_vertices.size() < 4) { m_vertices.clear(); return false; }
 
+    assert( m_vertices.front() == m_vertices.back());
     return true;
 }
 
@@ -84,12 +91,13 @@ void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<
     uint64_t max_dist = 0;
     Vertex A = *segment_first;
     Vertex B = *segment_last;
-    
     list<Vertex>::iterator it  = segment_first;
     // make sure that 'it' starts from segment_first+1; segment_first must never be deleted
     for (it++; it != segment_last; it++)
     {
-        uint64_t dist = (A == B) ? sqrt( (*it-A).squaredLength()) : it->distanceToLine(A, B);
+        uint64_t dist = (A == B) ? 
+            sqrt( (*it-A).squaredLength()) : 
+            it->distanceToLine(A, B);
         if (dist > max_dist) { it_max = it; max_dist = dist;}
     }
     if (max_dist == 0) return;
@@ -100,6 +108,7 @@ void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<
         segment_first++;
         // erase range includes first iterator but excludes second one
         m_vertices.erase( segment_first, segment_last);
+        assert( m_vertices.front() == m_vertices.back());
     } else  //use point with maximum deviation as additional necessary point in the simplified polygon, recurse
     {
         simplifySection(segment_first, it_max, allowedDeviation);
@@ -203,7 +212,7 @@ void connectClippedSegments( int32_t clip_pos, list<PolygonSegment*> lst, list<P
         if ( otherCoordinate(seg2->front()) < otherCoordinate(seg2->back() ))
             seg2->reverse(); //now seg2 starts with the vertex with which it is to be appended to seg1
             
-        seg1->append(*seg2, false);
+        seg1->append(*seg2, (seg1->back() == seg2->front()) );
         delete seg2;
         
         queue.push( pair<int32_t, PolygonSegment*>(max( otherCoordinate( seg1->front()), 
@@ -222,9 +231,7 @@ template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinat
 void clip( const list<Vertex> & vertices, int32_t clip_pos, list<PolygonSegment*> &above, list<PolygonSegment*> &below)
 {
     assert( vertices.front() == vertices.back());
-    //TODO: handle the edge case that front() and back() both lie on the split line
-    assert( significantCoordinate(vertices.front()) != clip_pos || 
-            significantCoordinate(vertices.back() ) != clip_pos);
+    #warning TODO: handle the edge case that front() and back() both lie on the split line
 
     PolygonSegment *current_seg = new PolygonSegment();
     list<Vertex>::const_iterator v2 = vertices.begin();
@@ -267,7 +274,6 @@ void clip( const list<Vertex> & vertices, int32_t clip_pos, list<PolygonSegment*
     }
     if (isAbove) above.push_back(current_seg);
     else below.push_back(current_seg);
-    //cout << "Above:" << endl;
     
     #warning may produce degenerated polygons with zero area
     //FIXME: test whether all vertices of a segment lie completely on the clipping line; if so, discard the segment

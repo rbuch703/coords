@@ -21,13 +21,15 @@ struct Vertex
     /** returns the product of the signed distance to the line AB and the length of the line AB, |AB|.
       * the result is guaranteed to be exact, and is zero iff. The point lies on the line*/
     int64_t pseudoDistanceToLine(const Vertex A, const Vertex B) const;
-    int64_t x, y;
     bool operator==(const Vertex other) const { return x==other.x && y == other.y;}   //no need for references, "Vertex" is small
     bool operator!=(const Vertex other) const { return x!=other.x || y != other.y;}
     bool operator< (const Vertex other) const { return (x< other.x) || ((x == other.x) && (y < other.y));}
     
     Vertex operator+(const Vertex a) const { return Vertex(x+a.x, y+a.y);}
     Vertex operator-(const Vertex a) const { return Vertex(x-a.x, y-a.y);}
+public:    
+    int64_t x, y;
+    
 };
 
 
@@ -71,6 +73,9 @@ typedef int64_t (*VertexCoordinate)(const Vertex &v);
 class PolygonSegment
 {
 public:
+    PolygonSegment() {};
+    PolygonSegment(const PolygonSegment & other): m_vertices(other.m_vertices) { }
+    //PolygonSegment& operator=(const PolygonSegment & other);
     
     const Vertex& front() const { return m_vertices.front();}
     const Vertex& back()  const { return m_vertices.back();}
@@ -91,7 +96,6 @@ public:
     
     
     void clipSecondComponent( int32_t clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out) const;
-    //{ clipComponent<getYCoordinate, getXCoordinate>(clip_y, top_out, bottom_out); }
     void clipFirstComponent(  int32_t clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out) const;
 
     /** @returns: 'true' if the resulting polygon is a proper one, 'false' it should be discarded completely. 
@@ -102,7 +106,6 @@ public:
 private:
     void simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);
     
-//    list<Vertex> &getVerticesDEBUG() { return m_vertices;} // TODO: debug api, remove this  
 //    friend std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg);
 private:
     std::list<Vertex> m_vertices;

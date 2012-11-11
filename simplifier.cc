@@ -44,10 +44,15 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
 
 
 
+list<PolygonSegment> poly_storage;
+ 
 
-void handlePolygon(string file_base, PolygonSegment& segment)
+void handlePolygon(string, PolygonSegment& segment)
 {
-    dumpPolygon(file_base, segment);
+    #warning FIXME: filter out those "polygons" that have less than four vertices
+    poly_storage.push_back(segment);
+
+    //dumpPolygon(file_base, segment);
 
 }
 
@@ -150,21 +155,25 @@ void extractNetwork(FILE* src/*, double allowedDeviation*/, string base_name)
 void clipRecursive(string file_base, string position, list<PolygonSegment>& segments, 
                    int32_t top, int32_t left, int32_t bottom, int32_t right, uint32_t level = 0)
 {
-    if (segments.size() == 0) return;
 
-    for (uint32_t i = level; i; i--) cout << " ";
+    for (uint32_t i = level; i; i--) cout << "  ";
     cout << "processing clipping rect '" << position << "' (" << top << ", " << left << ")-(" << bottom << ", " << right << ") with "
          << segments.size() << " segments" << endl;
+    //if (position != "" && position[0] != '3') return;
+    if (segments.size() == 0) return;   //recursion termination
 
     BOOST_FOREACH( const PolygonSegment seg, segments)
         assert( seg.vertices().front() == seg.vertices().back());
-         
-    if (level == 2)
+
+    BOOST_FOREACH( const PolygonSegment seg, segments)
     {
-        BOOST_FOREACH( const PolygonSegment seg, segments)
-            dumpPolygon(file_base+"#"+position+"/seg",seg);
-        return;
+        PolygonSegment simp(seg);
+        if (simp.simplifyArea( (right-(uint64_t)left)/2048 ))
+            dumpPolygon(file_base+"#"+position+"/seg", simp);
     }
+         
+    if (level == 5)
+            return;
     
     int32_t mid_h = (left/2) + (right/2);
     int32_t mid_v = (top/2)  + (bottom/2);
@@ -184,8 +193,8 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     //process left half (top-left and bottom-left quarters)    
     BOOST_FOREACH( const PolygonSegment seg, vLeft)
         seg.clipFirstComponent( mid_v, vTop, vBottom);
-        
-    clipRecursive( file_base, position+ "0", vTop, top, left, mid_v, mid_h, level+1);
+    
+    clipRecursive( file_base, position+ "0", vTop,    top,   left, mid_v,  mid_h, level+1);
     clipRecursive( file_base, position+ "2", vBottom, mid_v, left, bottom, mid_h, level+1);
     vTop.clear();
     vBottom.clear();
@@ -194,8 +203,8 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     BOOST_FOREACH( const PolygonSegment seg, vRight)
         seg.clipFirstComponent( mid_v, vTop, vBottom);
 
-    clipRecursive( file_base, position+ "1", vTop, top, mid_h, mid_v, bottom, level+1);
-    clipRecursive( file_base, position+ "3", vBottom, mid_v, mid_h, bottom, right, level+1);
+    clipRecursive( file_base, position+ "1", vTop,    top,   mid_h, mid_v,  right, level+1);
+    clipRecursive( file_base, position+ "3", vBottom, mid_v, mid_h, bottom, right,  level+1);
     
     //list<PolygonSegment> above, below;
     
@@ -221,8 +230,6 @@ void reconstructCoastline(FILE * src, list<PolygonSegment> &poly_storage)
     while (! feof(src))
     {
         if (++idx % 100000 == 0) std::cout << idx/1000 << "k ways read, " << std::endl;
-        
-        //if (! way_index[i]) continue;
         int i = fgetc(src);
         if (i == EOF) break;
         ungetc(i, src);
@@ -234,24 +241,25 @@ void reconstructCoastline(FILE * src, list<PolygonSegment> &poly_storage)
         PolygonSegment s = way.toPolygonSegment();
         if (s.front() == s.back())
         {
-            poly_storage.push_back(s);
+            handlePolygon("output/coast/tmp", s);
             num_self_closed++;
             continue;
         }
         
         PolygonSegment* seg = recon.add(s);
         if (seg)
-            poly_storage.push_back(*seg);
+            handlePolygon("output/coast/tmp", *seg);
         recon.clearPolygonList();
     }
     cout << "closed " << poly_storage.size() << " polygons, " << num_self_closed << " were closed in themselves" << endl;
     cout << "closing polygons" << endl;
-    recon.forceClosePolygons2();
+    recon.forceClosePolygons();
     const list<PolygonSegment>& lst = recon.getClosedPolygons();
     cout << "done, found " << lst.size() << endl;
-    
+
     BOOST_FOREACH ( PolygonSegment s, lst)         
-        poly_storage.push_back(s);
+        handlePolygon("output/coast/tmp", s);
+    //    poly_storage.push_back(s);
 }
 
 
@@ -261,7 +269,6 @@ int main()
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    list<PolygonSegment> poly_storage;
     reconstructCoastline(fopen("intermediate/coastline.dump", "rb"), poly_storage);
     cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
     clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);

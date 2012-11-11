@@ -250,18 +250,17 @@ static void closeSomePolygons( map<Vertex, PolygonSegment*> &openEndPoints, list
 
 }
 
-void PolygonReconstructor::forceClosePolygons2()
+void PolygonReconstructor::forceClosePolygons()
 {
-
-    
+   
     /** at this point, all polygons that can be closed have been closed.
       * of the remaining segments, we attempt to find segments that are as close together as possible*/
         
     for (uint64_t max_dist = 1; openEndPoints.size() > 0; max_dist*=10)
     {
-        std::cout << "connecting polygon segments that are at most " << (max_dist/100) << "m apart" << endl;
+        //std::cout << "connecting polygon segments that are at most " << (max_dist/100) << "m apart" << endl;
         closeSomePolygons( openEndPoints, res, max_dist * max_dist);
-        std::cout << (openEndPoints.size()/2) << " open segments left" << endl;
+        //std::cout << (openEndPoints.size()/2) << " open segments left" << endl;
         
     }
     assert(openEndPoints.size() == 0);
