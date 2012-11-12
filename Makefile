@@ -3,6 +3,8 @@ CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc geometric_type
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc geometric_types.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc polygonreconstructor.cc mem_map.cc helpers.cc
 GEO_SRC = geo_unit_tests.cc geometric_types.cc 
+GL_TEST_SRC = gl_test.cc
+
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
 CONV_OBJ = $(CONV_SRC:.cc=.o)
@@ -17,9 +19,12 @@ CCFLAGS = $(CFLAGS)
 
 .PHONY: all clean
 
-
-all: make.dep conv_osmxml data_converter simplifier geo_unit_tests
+all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test
 #	 @echo [ALL] $<
+
+gl_test: $(GL_TEST_SRC)
+	@echo [C++] $@
+	@g++ $(CCFLAGS) $(GL_TEST_SRC) -lGL -lglfw -o $@
 
 conv_osmxml: $(CONV_XML_OBJ) 
 	@echo [LD ] $@
@@ -45,9 +50,9 @@ clean:
 	@echo [CLEAN]
 	@rm *.o
 	@rm *~
-	@rm conv_osmxml data_converter simplifier geo_unit_tests
+	@rm conv_osmxml data_converter simplifier geo_unit_tests gl_test
 
-make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC)
+make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(GL_TEST_SRC)
 	@echo [DEP]
 	@g++ -MM $^ > make.dep
 

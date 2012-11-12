@@ -24,7 +24,7 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     //zone = zone.substr(pos+1);
     ensureDirectoryExists(directory);
     
-    int file_num = 1;
+    /*int file_num = 1;
     if ( zone_entries.count(file_base) )
         file_num = ++zone_entries[file_base];
     else (zone_entries.insert( pair<string, uint32_t>(file_base, 1)));
@@ -33,13 +33,27 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     char tmp[200];
     snprintf(tmp, 200, "%s_%u.csv", file_base.c_str(), file_num);
     //string filename = zone+"_"+ file_num+".csv";
-    out.open(tmp);
+    out.open(tmp);*/
+    
+    FILE* f = fopen(file_base.c_str(), "ab");
+    uint64_t nVertices = segment.vertices().size();
+    fwrite( &nVertices, sizeof(nVertices), 1, f);
+    
     BOOST_FOREACH( const Vertex vertex, segment.vertices())
-    //for (list<Vertex>::const_iterator vertex = segment.vertices().begin(); vertex != segment.vertices().end(); vertex++)
-    //{
+    {
+        int32_t val = vertex.x;
+        fwrite(&val, sizeof(val), 1, f);
+        val = vertex.y;
+        fwrite(&val, sizeof(val), 1, f);
+        
+    }
+    
+    /*BOOST_FOREACH( const Vertex vertex, segment.vertices())
         out << vertex.x << ", " << vertex.y << endl;
-    //}
-    out.close();
+
+    out.close();*/
+    
+    fclose(f);
 }
 
 
@@ -155,25 +169,46 @@ void extractNetwork(FILE* src/*, double allowedDeviation*/, string base_name)
 void clipRecursive(string file_base, string position, list<PolygonSegment>& segments, 
                    int32_t top, int32_t left, int32_t bottom, int32_t right, uint32_t level = 0)
 {
+    uint64_t VERTEX_LIMIT = 20000;
+
+    uint64_t num_vertices = 0;
+    BOOST_FOREACH( const PolygonSegment seg, segments)
+        num_vertices+= seg.vertices().size();    
 
     for (uint32_t i = level; i; i--) cout << "  ";
     cout << "processing clipping rect '" << position << "' (" << top << ", " << left << ")-(" << bottom << ", " << right << ") with "
-         << segments.size() << " segments" << endl;
+         << num_vertices << " vertices" << endl;
     //if (position != "" && position[0] != '3') return;
     if (segments.size() == 0) return;   //recursion termination
 
     BOOST_FOREACH( const PolygonSegment seg, segments)
         assert( seg.vertices().front() == seg.vertices().back());
 
+    
+    if (num_vertices < VERTEX_LIMIT)    //few enough vertices to not further subdivide the area
+    {
+        BOOST_FOREACH( const PolygonSegment seg, segments)
+            dumpPolygon(file_base+"#"+position, seg);
+        return;
+    }
+    
     BOOST_FOREACH( const PolygonSegment seg, segments)
     {
+        //TODO: remove least significant bits of vertex coordinates after simplification:
+        /* the simplified vertices are only shown at a given resolution
+         * those least-significant bits that would change the rendered output positions 
+         * by less that one pixel may as well be set to zero.
+         * This should help better compressing the data (if done later for download), and
+         * may provide the basis for only storing 16 bits per coordinate ( from which the 
+         * actual positions are computed through global shift and scale values per patch )
+        */
         PolygonSegment simp(seg);
         if (simp.simplifyArea( (right-(uint64_t)left)/2048 ))
-            dumpPolygon(file_base+"#"+position+"/seg", simp);
+            dumpPolygon(file_base+"#"+position, simp);
     }
          
-    if (level == 5)
-            return;
+    //if (level == 5)
+    //        return;
     
     int32_t mid_h = (left/2) + (right/2);
     int32_t mid_v = (top/2)  + (bottom/2);

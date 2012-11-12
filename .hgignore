@@ -11,6 +11,7 @@ data_converter
 geo_unit_tests
 simplifier
 stats_xmlosm
+gl_test
 
 #ignore compiled objects
 *.o
@@ -30,6 +31,7 @@ timezones
 coastline
 borders
 intermediate
+output
 
 *.data
 *.idx
