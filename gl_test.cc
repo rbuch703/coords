@@ -2,6 +2,7 @@
 #include <GL/glfw.h>
 #include <string>
 #include <list>
+#include <map>
 #include <iostream>
 #include <boost/foreach.hpp>
 
@@ -9,16 +10,23 @@
 #include <stdint.h>
 #include <assert.h>
 #include <math.h>
+#include <errno.h>
+
+#include <sys/stat.h>
+
+#include "geometric_types.h"
 
 using namespace std;
 
 typedef pair<int64_t, int32_t*> CountVertexPair;
 
-class Patch {
+class Tile {
     public:
-        Patch(string filename) 
+        Tile() {}
+        Tile(string filename) 
         {
             FILE* f = fopen(filename.c_str(), "rb");
+            if (f == NULL) return;
             int64_t nVertices = 0;
             while (fread(&nVertices, sizeof(nVertices), 1, f))
             {
@@ -28,9 +36,10 @@ class Patch {
                 
                 polygons.push_back( CountVertexPair(nVertices, data));
             }
+            fclose(f);
         }
         
-        ~Patch()
+        ~Tile()
         {
             BOOST_FOREACH( CountVertexPair p, polygons)
                 delete [] p.second;
@@ -109,14 +118,84 @@ void mouseMoved(int x, int y)
     mouse_y = y;
 }
 
+map<string, Tile> tile_cache;
+
+void renderTile(string filename)
+{
+    if (!tile_cache.count(filename))
+    {
+        struct stat dummy;
+        if ( stat( filename.c_str(), &dummy ) == 0 )
+            tile_cache.insert( pair<string, Tile>(filename, Tile(filename)));
+        else
+            tile_cache.insert(pair<string, Tile>(filename, Tile())); //insert a dummy to prevent further stat's tothe no-existent file
+        cout << "reading file " << filename << endl;
+        
+        return;
+    }
+    tile_cache[filename].render();
+    
+    
+}
+
+
+static const string BASEPATH = "output/coast/seg#";
+void render(const AABoundingBox &view, AABoundingBox tile, string position)
+{
+    struct stat dummy;
+    if ( stat( (BASEPATH+position).c_str(), &dummy ) != 0) return;
+
+    assert (
+        (max( view.left, tile.left) <= min( view.right, tile.right)) && 
+        (max( view.bottom, tile.bottom) <= min( view.top, tile.top) ));
+    
+    /* if no child exists, then this tile is the highest resolution tile available 
+     * at least one child exists, then the the existing tiles provide higher resolution for the respective areas.
+     * Since in some areas, no data may to be drawn at all, some children may not exist */
+    bool hasChildren = 
+        stat( (BASEPATH+position+"0").c_str(), &dummy ) == 0 ||
+        stat( (BASEPATH+position+"1").c_str(), &dummy ) == 0 ||
+        stat( (BASEPATH+position+"2").c_str(), &dummy ) == 0 ||
+        stat( (BASEPATH+position+"3").c_str(), &dummy ) == 0;
+        
+        
+    bool sufficientResolution = tile.width() < view.width();
+    if (!hasChildren || sufficientResolution) 
+    { 
+        //cout << "rendering tile " << position << endl;
+        //renderTile(BASEPATH+position);
+        Tile(BASEPATH+position).render(); 
+        return;
+    }
+    
+    int64_t mid_x = (tile.right+tile.left)   / 2.0;
+    int64_t mid_y = (tile.top + tile.bottom) / 2.0;
+    
+    AABoundingBox tl2(tile.top, tile.left, mid_y,       mid_x);
+    AABoundingBox bl0(mid_y,    tile.left, tile.bottom, mid_x);
+    AABoundingBox tr3(tile.top, mid_x,     mid_y,       tile.right);
+    AABoundingBox br1(mid_y,    mid_x,     tile.bottom, tile.right);
+    
+    if ( mid_x > view.left) //has to render left half
+    {
+        if (mid_y > view.bottom) render(view, bl0, position+"0");
+        if (mid_y < view.top   ) render(view, tl2, position+"2");
+    }
+    
+    if ( mid_x < view.right) //has to render right half
+    {
+        if (mid_y > view.bottom) render(view, br1, position+"1");
+        if (mid_y < view.top   ) render(view, tr3, position+"3");
+    }
+
+}
+
 int main () {
     int running = 1;
 
-    //Patch *p = new Patch("../OSM/output/coast/seg#");
-    
-    Patch p("../OSM/output/coast/seg#");
-    Patch p0("../OSM/output/coast/seg#0");
-    Patch p2("../OSM/output/coast/seg#2");
+    Tile t("output/coast/seg#");
+    Tile t0("output/coast/seg#0");
+    Tile t2("output/coast/seg#2");
     // Initialize GLFW
     glfwInit ();
 
@@ -140,11 +219,14 @@ int main () {
         //glOrtho(-10, 10, -10, 10, 0, 10);
         glOrtho(g_left, g_right, g_bottom, g_top, 0, 10);
 
-        glColor3f(0,0,0);
-        p.render();
+        //glColor3f(0,0,0);
+        //t.render();
         glColor3f(1,1,1);
-        p0.render();
-        p2.render();
+        cout << "Cache has stored " << tile_cache.size() << " tiles" << endl;
+        render( AABoundingBox(g_top, g_left, g_bottom, g_right), 
+                AABoundingBox(900000000, -1800000000, -900000000, 1800000000), "");
+        //t0.render();
+        //t2.render();
         // Swap front and back rendering buffers
         glfwSwapBuffers ();
         // Check if ESC key was pressed or window was closed

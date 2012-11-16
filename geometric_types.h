@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#include <assert.h>
+
 #include <ostream>
 #include <list>
 
@@ -36,6 +38,7 @@ public:
 struct AABoundingBox
 {
     AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
+    AABoundingBox(int64_t t, int64_t l, int64_t b, int64_t r): top(t), left(l), bottom(b), right(r) { }
     AABoundingBox & operator+=(const Vertex v) {
         if (v.x < left) left = v.x;
         if (v.x > right) right = v.x;
@@ -43,8 +46,38 @@ struct AABoundingBox
         if (v.y > bottom) bottom = v.y;
         return *this;
     }
+       
+    AABoundingBox getOverlap(const AABoundingBox &other) const
+    {
+        assert ( isNormalized() && other.isNormalized());
+        int64_t new_left = max( left, other.left);
+        int64_t new_right= min( right, other.right);
+        assert(new_left <= new_right);
+        
+        int64_t new_top  = max( top, other.top);
+        int64_t new_bottom=min( bottom, other.bottom);
+        assert(new_top <= new_bottom);
+        
+        AABoundingBox box(Vertex(new_left, new_top));
+        box+= Vertex(new_right, new_bottom);
+        return box;
+    }
+    
+    bool overlapsWith(const AABoundingBox &other) const
+    {  
+        assert ( isNormalized() && other.isNormalized());
+        return (max( left, other.left) <= min( right, other.right)) && 
+               (max( top, other.top)   <= min( bottom, other.bottom));    
+    }
+    
+    
+    int64_t width() const { return right - left;}
+    int64_t height() const{ return bottom - top;}
 public:    
     int64_t top, left, bottom, right;
+    
+private:
+    bool isNormalized() const { return right >= left && bottom >= top;}
 };
 
 
