@@ -21,25 +21,19 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
 {
     size_t pos = file_base.rfind('/');
     string directory = file_base.substr(0, pos);
-    //zone = zone.substr(pos+1);
     ensureDirectoryExists(directory);
     
-    /*int file_num = 1;
-    if ( zone_entries.count(file_base) )
-        file_num = ++zone_entries[file_base];
-    else (zone_entries.insert( pair<string, uint32_t>(file_base, 1)));
-    
-    ofstream out;
-    char tmp[200];
-    snprintf(tmp, 200, "%s_%u.csv", file_base.c_str(), file_num);
-    //string filename = zone+"_"+ file_num+".csv";
-    out.open(tmp);*/
-    
+    PolygonSegment poly(segment);
+    //assert (poly.isSimple());
+    poly.canonicalize();
+    std::cout << poly.isClockwiseHeuristic() << endl;
+    if (poly.vertices().size() < 4) return;
+   
     FILE* f = fopen(file_base.c_str(), "ab");
-    uint64_t nVertices = segment.vertices().size();
+    uint64_t nVertices = poly.vertices().size();
     fwrite( &nVertices, sizeof(nVertices), 1, f);
     
-    BOOST_FOREACH( const Vertex vertex, segment.vertices())
+    BOOST_FOREACH( const Vertex vertex, poly.vertices())
     {
         int32_t val = vertex.x;
         fwrite(&val, sizeof(val), 1, f);
@@ -63,9 +57,9 @@ list<PolygonSegment> poly_storage;
 
 void handlePolygon(string, PolygonSegment& segment)
 {
-    #warning FIXME: filter out those "polygons" that have less than four vertices
     poly_storage.push_back(segment);
 
+    //#warning FIXME: filter out those "polygons" that have less than four vertices
     //dumpPolygon(file_base, segment);
 
 }

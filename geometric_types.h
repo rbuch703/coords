@@ -108,6 +108,7 @@ class PolygonSegment
 public:
     PolygonSegment() {};
     PolygonSegment(const PolygonSegment & other): m_vertices(other.m_vertices) { }
+    PolygonSegment(const int32_t *vertices, int64_t num_vertices);
     //PolygonSegment& operator=(const PolygonSegment & other);
     
     const Vertex& front() const { return m_vertices.front();}
@@ -119,6 +120,13 @@ public:
     void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end ) 
                 {m_vertices.insert(m_vertices.end(),begin, end);}
     void append(const PolygonSegment &other, bool shareEndpoint);
+    
+    bool isClockwise() const;
+    bool isClockwiseHeuristic() const;
+    
+    void canonicalize();
+    bool isSimple() const;
+    //bool makeSimple();
     
     /** 
         semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the

@@ -4,6 +4,7 @@
 #include <list>
 #include <map>
 #include <iostream>
+#include <vector>
 #include <boost/foreach.hpp>
 
 #include <stdio.h>
@@ -44,7 +45,7 @@ class Tile {
             BOOST_FOREACH( CountVertexPair p, polygons)
                 delete [] p.second;
         }
-        
+
         void render()
         {
         
@@ -52,6 +53,12 @@ class Tile {
             BOOST_FOREACH( CountVertexPair p, polygons)
             {
                 glBegin(GL_LINE_STRIP);
+                    PolygonSegment ps(p.second, p.first);
+                    if (ps.isClockwise())
+                        glColor3f(1,1,1);
+                    else
+                        glColor3f(0,0,0);
+                    
                     int32_t* v = p.second;
                     for (int64_t num_vertices = p.first; num_vertices; num_vertices--, v+=2)
                     {
