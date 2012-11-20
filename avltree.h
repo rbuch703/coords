@@ -33,6 +33,7 @@ public:
 	    uint32_t nChildren = 0;
 	    if (m_pLeft) nChildren+= 1 + m_pLeft->getNumChildren();
 	    if (m_pRight) nChildren+= 1 + m_pRight->getNumChildren();
+	    return nChildren;
 	}
 private:
 	void check(); //no return value, a failed check should always fail an assertion
@@ -53,36 +54,30 @@ public:
 	AVLTreeNode<t>* insert(const t &item);
 	bool contains( const t &item) const;
 	t& getItem( const t &item);
+	t& operator[](const t &item) { return getItem(item);}
+	void remove( const t &item);
 	
 	void print() const { print(m_pRoot);}
 	void check(); //check consistency
 	int size() const { return (m_pRoot) ? 1 + m_pRoot->getNumChildren() : 0; }
-	//void sort(DynamicArray<t> &res) const { sort(res, m_pRoot);};
 	void sort(t* dest) const { int dest_idx = 0; asSortedArray(dest, dest_idx, m_pRoot); }
 	
-	virtual void clear() { if (m_pRoot) m_pRoot->deleteRecursive(); m_pRoot = NULL;}
+	void clear() { if (m_pRoot) m_pRoot->deleteRecursive(); m_pRoot = NULL;}
 	
-	AVLTreeIterator<t> begin(){ 
-	    if (!m_pRoot) return AVLTreeIterator<t>(NULL, *this);
-	    
-	    AVLTreeNode<t>* node = m_pRoot;
-	    while (node->m_pLeft) node = node->m_pLeft;
-        return AVLTreeIterator<t>(node, *this);
-	}
-	
-	AVLTreeIterator<t> end() { return AVLTreeIterator<t>(NULL, *this); }
+	AVLTreeIterator<t> begin();
+	AVLTreeIterator<t> end();
 
     typedef AVLTreeIterator<t> iterator;	
     typedef AVLTreeConstIterator<t> const_iterator;	
 private:
-	void print(AVLTreeNode<t> *root) const;
-	void rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTreeNode<t>* pred2);
+	void print(AVLTreeNode<t> *root, int depth = 0) const;
+	AVLTreeNode<t>* rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTreeNode<t>* pred2);
+    AVLTreeNode<t>* rearrangeRotateLeft( AVLTreeNode<t>* pNode);
+    AVLTreeNode<t>* rearrangeRotateRight(AVLTreeNode<t>* pNode);
     void sort( t* dest, int &dest_idx, AVLTreeNode<t> *root) const;
-	//void sort( DynamicArray<t> &res, int idx) const;
-	int newTreeNode(); 
 
 protected:
-	void updateDepth( AVLTreeNode<t> *pNode, AVLTreeNode<t> *pred1, AVLTreeNode<t> *pred2 );
+	void updateDepth( AVLTreeNode<t> *pNode );
 	AVLTreeNode<t>* findPos(const t &item, AVLTreeNode<t> *&parent ) const;
 	AVLTreeNode<t>* findPos(const t &item) const;
 	AVLTreeNode<t>* insert(const t &item, AVLTreeNode<t> *parent);
@@ -243,12 +238,30 @@ private:
 // ================ start of AVLTree<t> definitions =================
 
 template <class t>
-void AVLTree<t>::print(AVLTreeNode<t> *root) const
+AVLTreeIterator<t> AVLTree<t>::begin()
+{ 
+	    if (!m_pRoot) return AVLTreeIterator<t>(NULL, *this);
+	    
+	    AVLTreeNode<t>* node = m_pRoot;
+	    while (node->m_pLeft) node = node->m_pLeft;
+        return AVLTreeIterator<t>(node, *this);
+}
+	
+template <class t>
+AVLTreeIterator<t> AVLTree<t>::end() 
+{ 
+    return AVLTreeIterator<t>(NULL, *this); 
+}
+
+
+template <class t>
+void AVLTree<t>::print(AVLTreeNode<t> *root, int depth) const
 {
 	if (! root)	return;
-	if (root->m_pLeft) print(root->m_pLeft);
+	if (root->m_pLeft) print(root->m_pLeft, depth+1);
+	for (int a = depth; a; a--) cout << " ";
 	cout << root->m_Data << endl;
-	if (root->m_pRight) print(root->m_pRight);
+	if (root->m_pRight) print(root->m_pRight, depth+1);
 }
 
 template <class t>
@@ -258,6 +271,86 @@ void AVLTree<t>::sort( t* dest, int &dest_idx, AVLTreeNode<t> *root) const
 	if (root->m_pLeft) asSortedArray(dest, dest_idx, root->m_pLeft);
 	dest[dest_idx++] = root->m_Data;
 	if (root->m_pRight) asSortedArray(dest, dest_idx, root->m_pRight);
+}
+
+template <class t>
+void AVLTree<t>::remove( const t &item)
+{
+    AVLTreeNode<t> *parent;
+    AVLTreeNode<t> *node = findPos(item, parent);
+    assert(node && "Item not found");
+    
+    
+    if (node->m_dwDepth == 0)
+    {
+        if (!node->m_pParent)
+        {
+            delete node;
+            m_pRoot = NULL;
+            return;
+        }
+    
+        if (parent->m_pLeft == node) parent->m_pLeft = NULL;
+        if (parent->m_pRight == node)parent->m_pRight= NULL;
+        
+        delete node;
+        updateDepth(parent);
+        
+        #warning extensive debug checks
+        m_pRoot->check();
+        return;        
+    } 
+    
+    /** BASIC idea: find the node closest in-order to the one to be removed,
+        (i.e. its in-order predecessor or successor). Then remove the actual 
+        node by overwriting it with the closest one. This does not violate 
+        the BST semantics. Finally, update the node depth values starting 
+        from the original parent of the removed closest node.        
+      */
+    
+    int leftDepth = node->m_pLeft ? 1 + node->m_pLeft->m_dwDepth : 0;
+    int rightDepth = node->m_pRight ? 1 + node->m_pRight->m_dwDepth : 0;
+    assert( leftDepth + rightDepth > 0);
+    
+    AVLTreeNode<t> *replacement;
+    if (leftDepth >= rightDepth)
+    {
+        replacement = node->m_pLeft; //in-order predecessor
+        assert(replacement);
+        while (replacement->m_pRight) 
+            replacement = replacement->m_pRight;
+        
+        if (replacement->m_pLeft)
+            replacement->m_pLeft->m_pParent = replacement->m_pParent;
+            
+        if (replacement == node->m_pLeft)
+            node->m_pLeft = NULL;
+        else
+            replacement->m_pParent->m_pRight = replacement->m_pLeft;
+    } else
+    {
+        replacement = node->m_pRight; //in-order successor
+        assert(replacement);
+        while (replacement->m_pLeft) 
+            replacement = replacement->m_pLeft;
+        
+        if (replacement->m_pRight)
+            replacement->m_pRight->m_pParent = replacement->m_pParent;
+            
+        if (replacement == node->m_pRight)
+            node->m_pRight = NULL;
+        else
+            replacement->m_pParent->m_pLeft = replacement->m_pRight;
+    }
+    
+    AVLTreeNode<t> *depthUpdateStartingPoint = replacement->m_pParent;
+    
+    node->m_Data = replacement->m_Data;
+    delete replacement;
+    updateDepth( depthUpdateStartingPoint );
+
+    #warning extensive debug checks
+    m_pRoot->check();    
 }
 /*
 template <class t>
@@ -292,7 +385,7 @@ AVLTreeNode<t>* AVLTree<t>::insert(const t &item, AVLTreeNode<t> *parent)
 	    parent->m_pRight = pPos;
 	}
 	
-	updateDepth( pPos, NULL, NULL);
+	updateDepth( pPos);//, NULL, NULL);
 	return pPos;
 }
 
@@ -370,34 +463,141 @@ t& AVLTree<t>::getItem( const t &item)
 	return p->m_Data;
 }
 
+
+
 //must not be static, because it calls the non-static rearrange, which needs the this->m_pRoot object
 template <class t>
-void AVLTree<t>::updateDepth( AVLTreeNode<t> *pNode, AVLTreeNode<t> *pred1, AVLTreeNode<t> *pred2)
+void AVLTree<t>::updateDepth( AVLTreeNode<t> *pNode)
 {
 	int leftDepth = pNode->m_pLeft ? 1 + pNode->m_pLeft->m_dwDepth : 0;
 	int rightDepth = pNode->m_pRight ? 1 + pNode->m_pRight->m_dwDepth : 0;
 	int newDepth = leftDepth > rightDepth ? leftDepth : rightDepth;
-	if (newDepth != pNode->m_dwDepth)
+	if ((newDepth != pNode->m_dwDepth) || (abs(leftDepth - rightDepth) > 1))
 	{
 		pNode->m_dwDepth = newDepth;
 		if (abs(leftDepth - rightDepth) > 1)
-			rearrange( pNode, pred1, pred2);
-		else if (pNode->m_pParent)	// if the nodes have been rearranged, rearrange() will do the recursive updateDepth() with the new node order
-			updateDepth( pNode->m_pParent, pNode, pred1);
+		{
+		    // This difference in sub-tree height violates the AVL criterion.
+		    // To re-establish it, the deeper subtree needs to be rebalanced.
+		    // Thus, we need to find the predecessors on that subtree.
+		
+		    AVLTreeNode<t>* pred1 = leftDepth >= rightDepth ? pNode->m_pLeft : pNode->m_pRight;
+		    assert(pred1);
+		    
+	        leftDepth = pred1->m_pLeft ? 1 + pred1->m_pLeft->m_dwDepth : 0;
+	        rightDepth = pred1->m_pRight ? 1 + pred1->m_pRight->m_dwDepth : 0;
+		    assert( leftDepth + rightDepth > 0);
+		    
+		    if ( abs(leftDepth-rightDepth) > 0)
+		    {
+		        AVLTreeNode<t>* pred2 = leftDepth >= rightDepth ? pred1->m_pLeft : pred1->m_pRight;
+		        pNode = rearrange( pNode, pred1, pred2);
+	        } else
+	            pNode = (pNode->m_pLeft == pred1) ? rearrangeRotateRight(pNode) : rearrangeRotateLeft(pNode);
+			
+			#warning extensive debug checks
+			pNode->check();
+		}
+		
+		if (pNode->m_pParent)
+			updateDepth( pNode->m_pParent);
 	}
 }
 
+template <class t>
+AVLTreeNode<t>* AVLTree<t>::rearrangeRotateLeft( AVLTreeNode<t>* pNode)
+{
+/**             pNode                           succ2
+ * before:     c0   succ2       after:       pNode  c2
+ *                 c1   c2                  c0   c1
+ *                                       
+*/
+    AVLTreeNode<t>* succ2 = pNode->m_pRight;
+    assert( succ2 );
+    if (m_pRoot == pNode)
+    {
+        assert( ! pNode->m_pParent);
+        m_pRoot = succ2;
+    } 
+    else
+    {
+        bool isLeftChild = pNode->m_pParent->m_pLeft == pNode;
+        if (isLeftChild) pNode->m_pParent->m_pLeft = succ2;
+        else             pNode->m_pParent->m_pRight= succ2;
+    }
+    succ2->m_pParent = pNode->m_pParent;
+
+    AVLTreeNode<t>* c1 = succ2->m_pLeft;
+    
+    succ2->m_pLeft = pNode;
+    pNode->m_pParent = succ2;
+    
+    pNode->m_pRight = c1;
+    if (c1) c1->m_pParent = pNode;
+
+    int nLeft = pNode->m_pLeft ? pNode->m_pLeft-> m_dwDepth + 1 : 0;
+    int nRight= pNode->m_pRight? pNode->m_pRight->m_dwDepth + 1 : 0;
+    pNode->m_dwDepth = nLeft > nRight ? nLeft : nRight;
+    
+    nLeft = succ2->m_pLeft ? succ2->m_pLeft-> m_dwDepth + 1 : 0;
+    nRight= succ2->m_pRight? succ2->m_pRight->m_dwDepth + 1 : 0;
+    succ2->m_dwDepth = nLeft > nRight ? nLeft : nRight;
+    
+    return succ2; 
+}
+
+template <class t>
+AVLTreeNode<t>* AVLTree<t>::rearrangeRotateRight( AVLTreeNode<t>* pNode)
+{
+/**             pNode                     succ1
+ * before:  succ1   c2       after:      c0   pNode  
+ *         c0   c1                           c1   c2
+*/
+    AVLTreeNode<t>* succ1 = pNode->m_pLeft;
+    assert( succ1);
+    
+    if (m_pRoot == pNode)
+    {
+        assert( ! pNode->m_pParent);
+        m_pRoot = succ1;
+    } 
+    else
+    {
+        bool isLeftChild = pNode->m_pParent->m_pLeft == pNode;
+        if (isLeftChild) pNode->m_pParent->m_pLeft = succ1;
+        else             pNode->m_pParent->m_pRight= succ1;
+    }
+    succ1->m_pParent = pNode->m_pParent;
+
+    AVLTreeNode<t>* c1 = succ1->m_pRight;
+    
+    succ1->m_pRight = pNode;
+    pNode->m_pParent = succ1;
+    
+    pNode->m_pLeft = c1;
+    if (c1) c1->m_pParent = pNode;
+    
+    int nLeft = pNode->m_pLeft ? pNode->m_pLeft-> m_dwDepth + 1 : 0;
+    int nRight= pNode->m_pRight? pNode->m_pRight->m_dwDepth + 1 : 0;
+    pNode->m_dwDepth = nLeft > nRight ? nLeft : nRight;
+    
+    nLeft = succ1->m_pLeft ? succ1->m_pLeft-> m_dwDepth + 1 : 0;
+    nRight= succ1->m_pRight? succ1->m_pRight->m_dwDepth + 1 : 0;
+    succ1->m_dwDepth = nLeft > nRight ? nLeft : nRight;
+    
+    return succ1;
+}
 
 // rearranges the tree section containing pNode, pred1, pred2 and their children by
 // - sorting the three nodes
 // - sorting the four child nodes
 // - using the sorted value to re-balance the sub-tree to the following layout:
-//                  pNodes[1]
+//              pNodes[1]
 //      pNodes[0]       pNodes[2]
 //   pCh[0]   pCh[1]  pCh[2]  pCh[3]
 
 template <class t>
-void AVLTree<t>::rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTreeNode<t>* pred2)
+AVLTreeNode<t>* AVLTree<t>::rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTreeNode<t>* pred2)
 {
     assert( pNode && pred1 && pred2);
 	AVLTreeNode<t>* pNodes[3];
@@ -500,7 +700,8 @@ void AVLTree<t>::rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTre
 	nRight = (pChildren[3]) ? pChildren[3]->m_dwDepth + 1 : 0;
 	pNodes[2]->m_dwDepth = nLeft > nRight ? nLeft : nRight;
 	
-	updateDepth( pNodes[1], pNodes[0], pChildren[0]);
+	pNodes[1]->m_dwDepth = 1 + (pNodes[0]->m_dwDepth > pNodes[2]->m_dwDepth ? pNodes[0]->m_dwDepth : pNodes[2]->m_dwDepth);
+	return pNodes[1];
 
 }
 
@@ -508,7 +709,7 @@ void AVLTree<t>::rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTre
 template <class t>
 bool AVLTree<t>::contains( const t &item) const
 {
-	return (*findPos(item)); // if the result of findPos points to an existing point, the tree contains the item
+	return findPos(item); // if the result of findPos points to an existing point, the tree contains the item
 }
 
 //=======================Start of code for ALVTreeNode =========================
