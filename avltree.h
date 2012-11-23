@@ -7,12 +7,12 @@
 
 #include <iostream> // for cout
 
-using namespace std;
+//using namespace std;
 
 //forward declarations
 template<class t> class AVLTree ; 
-template<class t> class AVLTreeIterator ; 
-template<class t> class AVLTreeConstIterator;
+//template<class t> class iterator ; 
+//template<class t> class const_iterator;
 
 template<class t> 
 class AVLTreeNode {
@@ -44,8 +44,8 @@ private:
 
 public:
 	friend class AVLTree<t>;
-	friend class AVLTreeIterator<t>;
-	friend class AVLTreeConstIterator<t>;
+	//friend class iterator<t>;
+	//friend class const_iterator<t>;
 };
 
 template<class t> class AVLTree {
@@ -66,11 +66,13 @@ public:
 	
 	void clear() { if (m_pRoot) m_pRoot->deleteRecursive(); m_pRoot = NULL;}
 	
-	AVLTreeIterator<t> begin();
-	AVLTreeIterator<t> end();
+	class iterator ; 
+	class const_iterator ; 
+	iterator begin();
+	iterator end();
 
-    typedef AVLTreeIterator<t> iterator;	
-    typedef AVLTreeConstIterator<t> const_iterator;	
+    //typedef iterator iterator;	
+    //typedef const_iterator const_iterator;	
 private:
 	AVLTreeNode<t>* rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTreeNode<t>* pred2);
     AVLTreeNode<t>* rearrangeRotateLeft( AVLTreeNode<t>* pNode);
@@ -84,149 +86,150 @@ private:
 	void print(AVLTreeNode<t> *root, int depth = 0) const;
 	
 	AVLTreeNode<t> *m_pRoot;
-	
-	friend class AVLTreeIterator<t>;
-	friend class AVLTreeConstIterator<t>;
-};
 
-template <class t>
-class AVLTreeIterator {
 public:
-	AVLTreeIterator<t>(AVLTreeNode<t> *node, AVLTree<t> &tree) : 
-        m_pCurrent (node), m_Tree(tree) {};
+    class iterator {
+    public:
+	    iterator(AVLTreeNode<t> *node, AVLTree<t> &tree) : 
+            m_pCurrent (node), m_Tree(tree) {};
 	
-	t& operator*() 	{ return m_pCurrent->m_Data; }
-	t* operator->() { return & (m_pCurrent->m_Data);}
-	// "int" is just the marker for postfix operators
-	AVLTreeIterator<t>& operator ++(int) 
-	{	
-	    if (m_pCurrent->m_pRight)
-	    {
-	        m_pCurrent = m_pCurrent->m_pRight;
-	        while (m_pCurrent->m_pLeft) 
-	            m_pCurrent = m_pCurrent->m_pLeft;
-            return *this;
-	    }
-
-        bool isLeftChild;
-        do 
-        {
-            isLeftChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pLeft == m_pCurrent);
-            m_pCurrent = m_pCurrent->m_pParent;
-        } while (m_pCurrent && !isLeftChild);
-        
-        return *this;	
-	}
-
-	AVLTreeIterator<t>& operator ++() { (*this)++;} 
-
-	AVLTreeIterator<t>& operator --(int) 
-	{	
-	    if (m_pCurrent == NULL)
-	    {
-	        m_pCurrent = m_Tree.m_pRoot;
-	        if (! m_pCurrent) return *this;
-	        while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
-	        return *this;
-	    }
-	    
-	    if (m_pCurrent->m_pLeft)
-	    {
-	        m_pCurrent = m_pCurrent->m_pLeft;
-	        while (m_pCurrent->m_pRight) 
+	    t& operator*() 	{ return m_pCurrent->m_Data; }
+	    t* operator->() { return & (m_pCurrent->m_Data);}
+	    // "int" is just the marker for postfix operators
+	    iterator& operator ++(int) 
+	    {	
+	        if (m_pCurrent->m_pRight)
+	        {
 	            m_pCurrent = m_pCurrent->m_pRight;
-            return *this;
+	            while (m_pCurrent->m_pLeft) 
+	                m_pCurrent = m_pCurrent->m_pLeft;
+                return *this;
+	        }
+
+            bool isLeftChild;
+            do 
+            {
+                isLeftChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pLeft == m_pCurrent);
+                m_pCurrent = m_pCurrent->m_pParent;
+            } while (m_pCurrent && !isLeftChild);
+            
+            return *this;	
 	    }
 
-        bool isRightChild;
-        do 
-        {
-            isRightChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pRight == m_pCurrent);
-            m_pCurrent = m_pCurrent->m_pParent;
-        } while (m_pCurrent && !isRightChild);
-        return *this;	
-	}
+	    iterator& operator ++() { return (*this)++;} 
 
-	AVLTreeIterator<t>& operator --() { (*this)--;} 
+	    iterator& operator --(int) 
+	    {	
+	        if (m_pCurrent == NULL)
+	        {
+	            m_pCurrent = m_Tree.m_pRoot;
+	            if (! m_pCurrent) return *this;
+	            while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
+	            return *this;
+	        }
+	        
+	        if (m_pCurrent->m_pLeft)
+	        {
+	            m_pCurrent = m_pCurrent->m_pLeft;
+	            while (m_pCurrent->m_pRight) 
+	                m_pCurrent = m_pCurrent->m_pRight;
+                return *this;
+	        }
+
+            bool isRightChild;
+            do 
+            {
+                isRightChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pRight == m_pCurrent);
+                m_pCurrent = m_pCurrent->m_pParent;
+            } while (m_pCurrent && !isRightChild);
+            return *this;	
+	    }
+
+	    iterator& operator --() { (*this)--;} 
 
 	
-	bool operator==(const AVLTreeIterator<t> &other) const { return m_pCurrent == other.m_pCurrent;}
-	bool operator!=(const AVLTreeIterator<t> &other) const { return m_pCurrent != other.m_pCurrent;}
-	friend class AVLTreeConstIterator<t>;
-private:
-	AVLTreeNode<t> *m_pCurrent;
-	AVLTree<t>     &m_Tree;
+	    bool operator==(const iterator &other) const { return m_pCurrent == other.m_pCurrent;}
+	    bool operator!=(const iterator &other) const { return m_pCurrent != other.m_pCurrent;}
+	    friend class const_iterator;
+    private:
+	    AVLTreeNode<t> *m_pCurrent;
+	    AVLTree<t>     &m_Tree;
+    };
+
+    class const_iterator {
+    public:
+	    const_iterator(AVLTreeNode<t> *node, AVLTree<t> &tree) : 
+            m_pCurrent (node), m_Tree(tree) {};
+
+	    const_iterator(const iterator &other) : m_pCurrent (other.m_pCurrent), m_Tree(other.m_Tree) {};
+	
+	    const t& operator*() 	{ return m_pCurrent->m_Data; }
+	    const t* operator->() { return & (m_pCurrent->m_Data);}
+	    // "int" is just the marker for postfix operators
+	    const_iterator& operator ++(int) 
+	    {	
+	        if (m_pCurrent->m_pRight)
+	        {
+	            m_pCurrent = m_pCurrent->m_pRight;
+	            while (m_pCurrent->m_pLeft) 
+	                m_pCurrent = m_pCurrent->m_pLeft;
+                return *this;
+	        }
+
+            bool isLeftChild;
+            do 
+            {
+                isLeftChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pLeft == m_pCurrent);
+                m_pCurrent = m_pCurrent->m_pParent;
+            } while (m_pCurrent && !isLeftChild);
+            
+            return *this;	
+	    }
+
+	    const_iterator& operator ++() { return (*this)++;} 
+
+	    const_iterator& operator --(int) 
+	    {	
+	        if (m_pCurrent == NULL)
+	        {
+	            m_pCurrent = m_Tree.m_pRoot;
+	            if (! m_pCurrent) return *this;
+	            while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
+	            return *this;
+	        }
+	        
+	        if (m_pCurrent->m_pLeft)
+	        {
+	            m_pCurrent = m_pCurrent->m_pLeft;
+	            while (m_pCurrent->m_pRight) 
+	                m_pCurrent = m_pCurrent->m_pRight;
+                return *this;
+	        }
+
+            bool isRightChild;
+            do 
+            {
+                isRightChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pRight == m_pCurrent);
+                m_pCurrent = m_pCurrent->m_pParent;
+            } while (m_pCurrent && !isRightChild);
+            return *this;	
+	    }
+
+	    const_iterator& operator --() { (*this)--;} 
+
+	
+	    bool operator==(const const_iterator &other) const { return m_pCurrent == other.m_pCurrent;}
+	    bool operator!=(const const_iterator &other) const { return m_pCurrent != other.m_pCurrent;}
+    private:
+	    const AVLTreeNode<t> *m_pCurrent;
+	    AVLTree<t>     &m_Tree;
+    };
+	
+	//friend class iterator<t>;
+	//friend class const_iterator<t>;
 };
 
-template <class t>
-class AVLTreeConstIterator {
-public:
-	AVLTreeConstIterator<t>(AVLTreeNode<t> *node, AVLTree<t> &tree) : 
-        m_pCurrent (node), m_Tree(tree) {};
 
-	AVLTreeConstIterator<t>(const AVLTreeIterator<t> &other) : m_pCurrent (other.m_pCurrent), m_Tree(other.m_Tree) {};
-	
-	const t& operator*() 	{ return m_pCurrent->m_Data; }
-	const t* operator->() { return & (m_pCurrent->m_Data);}
-	// "int" is just the marker for postfix operators
-	AVLTreeConstIterator<t>& operator ++(int) 
-	{	
-	    if (m_pCurrent->m_pRight)
-	    {
-	        m_pCurrent = m_pCurrent->m_pRight;
-	        while (m_pCurrent->m_pLeft) 
-	            m_pCurrent = m_pCurrent->m_pLeft;
-            return *this;
-	    }
-
-        bool isLeftChild;
-        do 
-        {
-            isLeftChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pLeft == m_pCurrent);
-            m_pCurrent = m_pCurrent->m_pParent;
-        } while (m_pCurrent && !isLeftChild);
-        
-        return *this;	
-	}
-
-	AVLTreeConstIterator<t>& operator ++() { return (*this)++;} 
-
-	AVLTreeConstIterator<t>& operator --(int) 
-	{	
-	    if (m_pCurrent == NULL)
-	    {
-	        m_pCurrent = m_Tree.m_pRoot;
-	        if (! m_pCurrent) return *this;
-	        while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
-	        return *this;
-	    }
-	    
-	    if (m_pCurrent->m_pLeft)
-	    {
-	        m_pCurrent = m_pCurrent->m_pLeft;
-	        while (m_pCurrent->m_pRight) 
-	            m_pCurrent = m_pCurrent->m_pRight;
-            return *this;
-	    }
-
-        bool isRightChild;
-        do 
-        {
-            isRightChild = m_pCurrent->m_pParent && (m_pCurrent->m_pParent->m_pRight == m_pCurrent);
-            m_pCurrent = m_pCurrent->m_pParent;
-        } while (m_pCurrent && !isRightChild);
-        return *this;	
-	}
-
-	AVLTreeConstIterator<t>& operator --() { (*this)--;} 
-
-	
-	bool operator==(const AVLTreeConstIterator<t> &other) const { return m_pCurrent == other.m_pCurrent;}
-	bool operator!=(const AVLTreeConstIterator<t> &other) const { return m_pCurrent != other.m_pCurrent;}
-private:
-	const AVLTreeNode<t> *m_pCurrent;
-	AVLTree<t>     &m_Tree;
-};
 
 
 // ================ end of declarations =============================
@@ -234,19 +237,19 @@ private:
 // ================ start of AVLTree<t> definitions =================
 
 template <class t>
-AVLTreeIterator<t> AVLTree<t>::begin()
+typename AVLTree<t>::iterator AVLTree<t>::begin()
 { 
-	    if (!m_pRoot) return AVLTreeIterator<t>(NULL, *this);
+	    if (!m_pRoot) return iterator(NULL, *this);
 	    
 	    AVLTreeNode<t>* node = m_pRoot;
 	    while (node->m_pLeft) node = node->m_pLeft;
-        return AVLTreeIterator<t>(node, *this);
+        return iterator(node, *this);
 }
 	
 template <class t>
-AVLTreeIterator<t> AVLTree<t>::end() 
+typename AVLTree<t>::iterator AVLTree<t>::end() 
 { 
-    return AVLTreeIterator<t>(NULL, *this); 
+    return iterator(NULL, *this); 
 }
 
 
@@ -255,8 +258,8 @@ void AVLTree<t>::print(AVLTreeNode<t> *root, int depth) const
 {
 	if (! root)	return;
 	if (root->m_pLeft) print(root->m_pLeft, depth+1);
-	for (int a = depth; a; a--) cout << " ";
-	cout << root->m_Data << endl;
+	for (int a = depth; a; a--) std::cout << " ";
+	std::cout << root->m_Data << std::endl;
 	if (root->m_pRight) print(root->m_pRight, depth+1);
 }
 
