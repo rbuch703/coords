@@ -2,7 +2,7 @@
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc geometric_types.cc osmxmlparser.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc geometric_types.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc polygonreconstructor.cc mem_map.cc helpers.cc
-GEO_SRC = geo_unit_tests.cc geometric_types.cc 
+GEO_SRC = geo_unit_tests.cc geometric_types.cc simplifypolygon.cc
 GL_TEST_SRC = gl_test.cc geometric_types.cc 
 
 

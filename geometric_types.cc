@@ -10,6 +10,9 @@
 #include <stdlib.h> //for llabs
 #include <math.h>
 
+Vertex::Vertex() :x(0), y(0) {}
+Vertex::Vertex(int64_t v_x, int64_t v_y): x(v_x), y(v_y) { /*assert( x <= 3600000000 && x >= -3600000000 && y <= 1800000000 && y>= -1800000000);*/}
+
 double Vertex::distanceToLine(const Vertex A, const Vertex B) const
 {
     assert( B!= A);
@@ -28,6 +31,14 @@ int64_t Vertex::pseudoDistanceToLine(const Vertex start, const Vertex end) const
      * product of both: 31+32 = 63 bits plus sign bit*/
     return (end.x-start.x)*(start.y-y) - (end.y-start.y)*(start.x-x);
 }
+
+uint64_t Vertex::squaredLength() const { return ((uint64_t)x*x)+((uint64_t)y*y);}
+bool Vertex::operator==(const Vertex other) const { return x==other.x && y == other.y;}   //no need for references, "Vertex" is small
+bool Vertex::operator!=(const Vertex other) const { return x!=other.x || y != other.y;}
+bool Vertex::operator< (const Vertex other) const { return (x< other.x) || ((x == other.x) && (y < other.y));}
+
+Vertex Vertex::operator+(const Vertex a) const { return Vertex(x+a.x, y+a.y);}
+Vertex Vertex::operator-(const Vertex a) const { return Vertex(x-a.x, y-a.y);}
 
 
 std::ostream& operator <<(std::ostream& os, const Vertex v)
@@ -168,6 +179,9 @@ int64_t getYCoordinate(const Vertex &v) { return v.y;}
                 put the connected segment by into the queue; its position will change, since its endpoint with
                     highest y coordinate has been connected and thus is no longer an endpoint
 */
+typedef int64_t (*VertexCoordinate)(const Vertex &v);
+
+
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
 static void connectClippedSegments( int32_t clip_pos, list<PolygonSegment*> lst, list<PolygonSegment> &out)
 {
@@ -358,6 +372,36 @@ void PolygonSegment::canonicalize()
         m_vertices.push_back(m_vertices.front());   
 }
 
+const Vertex& PolygonSegment::front() const 
+{ 
+    return m_vertices.front();
+}
+
+const Vertex& PolygonSegment::back()  const 
+{ 
+    return m_vertices.back();
+}
+
+const list<Vertex>& PolygonSegment::vertices() const 
+{ 
+    return m_vertices;
+}
+
+void PolygonSegment::reverse() 
+{ 
+    m_vertices.reverse();
+}
+
+void PolygonSegment::append(const Vertex& node) 
+{
+    m_vertices.push_back(node);
+}
+
+void PolygonSegment::append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end ) 
+{
+    m_vertices.insert(m_vertices.end(),begin, end);
+}
+
 
 
 bool PolygonSegment::isSimple() const
@@ -383,8 +427,8 @@ bool PolygonSegment::isSimple() const
             if (v4 == m_vertices.end()) 
                 break;
 
-            LineSegment ls1(*v1, *v2, 0, 0);
-            LineSegment ls2(*v3, *v4, 0, 0);
+            LineSegment ls1(*v1, *v2);
+            LineSegment ls2(*v3, *v4);
             if (ls1.intersects(ls2)) 
                 return false;
         }
@@ -489,7 +533,7 @@ bool PolygonSegment::isClockwise() const
     return v.pseudoDistanceToLine( vPred, vSucc) < 0;
 }
 
-
+/*
 static void getExtremeIntersections( const list<Vertex> vertices, const LineSegment line, 
                               list<Vertex>::const_iterator &min_it,
                               list<Vertex>::const_iterator &max_it)
@@ -524,8 +568,8 @@ static void getExtremeIntersections( const list<Vertex> vertices, const LineSegm
     }
     assert (min_intersect > 0 && max_intersect < 1);
 
-}
-
+}*/
+#if 0
 static bool isLeftTurnAt( const list<Vertex> &vertices, list<Vertex>::const_iterator it)
 {
     assert ( (*it).pseudoDistanceToLine(getPredecessor(it, vertices), getSuccessor(it, vertices)) != 0);
@@ -582,14 +626,22 @@ std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg)
         os << *it << endl;
     return os;
 }
-
+#endif
 
 /** ============================================================================= */
-LineSegment::LineSegment( const Vertex v_start, const Vertex v_end, int32_t v_tag1, int32_t v_tag2): 
-                        start(v_start), end(v_end), tag1(v_tag1), tag2(v_tag2) { assert(start != end);}
+LineSegment::LineSegment( const Vertex v_start, const Vertex v_end/*, int32_t v_tag1, int32_t v_tag2*/): 
+                        start(v_start), end(v_end)/*, tag1(v_tag1), tag2(v_tag2)*/ { assert(start != end);}
                         
-LineSegment::LineSegment( int32_t start_x, int32_t start_y, int32_t end_x, int32_t end_y, int32_t v_tag1, int32_t v_tag2): 
-    start(Vertex(start_x, start_y)), end(Vertex(end_x, end_y)), tag1(v_tag1), tag2(v_tag2) { assert(start != end);}
+LineSegment::LineSegment( int64_t start_x, int64_t start_y, int64_t end_x, int64_t end_y/*, int32_t v_tag1, int32_t v_tag2*/): 
+    start(Vertex(start_x, start_y)), end(Vertex(end_x, end_y))/*, tag1(v_tag1), tag2(v_tag2)*/ { assert(start != end);}
+
+
+bool LineSegment::parallelTo( const LineSegment &other) const 
+{ 
+    return (end.x- start.x)*(other.end.y - other.start.y) ==
+           (end.y- start.y)*(other.end.x - other.start.x);
+}
+
 
 bool LineSegment::contains(const Vertex v) const
 {
@@ -639,14 +691,23 @@ bool LineSegment::intersects( const LineSegment &other) const
 
 double LineSegment::getIntersectionCoefficient( const LineSegment &other) const
 {
+    int64_t num, denom;
+    
+    getIntersectionCoefficient(other, num, denom);
+    assert(denom != 0 && "Line segments are parallel or coincide" );
+    return num/(double)denom;
+}
+
+
+void LineSegment::getIntersectionCoefficient( const LineSegment &other, int64_t &out_num, int64_t &out_denom) const
+{
     assert( !parallelTo(other));
     //TODO: handle edge case that two line segments overlap
-    int64_t num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
-    int64_t denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
+    out_num  = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
+    out_denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
 
-    assert(denom != 0); //should only be zero if the lines are parallel
+    assert(out_denom != 0 && "Line segments are parallel or coincide" );
 
-    return num1/(double)denom;
 }
 
 /** ============================================================================= */
@@ -667,7 +728,7 @@ bool intersect (const Vertex l1_start, const Vertex l1_end, const Vertex l2_star
     }
 }*/
 
-
+#if 0
 void findIntersectionsBruteForce(const list<LineSegment> &segments, list<LineSegment> &intersections_out)
 {
     for (list<LineSegment>::const_iterator seg1 = segments.begin(); seg1!= segments.end(); seg1++)
@@ -853,7 +914,6 @@ void createSimplePolygons(const list<Vertex> in, const list<LineSegment> interse
     }
     second_poly.push_back(second_poly.front()); //close the second polygon (first one is already closed)
 
-#if 0
     list<LineSegment>::const_iterator seg1 = intersections.begin();
     list<LineSegment>::const_iterator seg2= seg1; 
     seg2++;
@@ -901,7 +961,6 @@ void createSimplePolygons(const list<Vertex> in, const list<LineSegment> interse
     
 
     //TODO: add intersections of new lines ( [out_idx, in_idx], [out_idx+1, in_idx-1]) to first_intersections and second_intersections
-#endif
     list<LineSegment> ints;
     findIntersections( first_poly, ints);
     createSimplePolygons(first_poly, ints, out);
@@ -926,19 +985,55 @@ void createSimplePolygons(const list<Vertex> in, const list<LineSegment> interse
     //getIntersectionCoefficient    
 }
 
-#if 0
-void Polygon::canonicalize()
-{
-    assert( m_vertices[0] == m_vertices[m_num_vertices-1]);
-    
-    /** TODO: ensure polygon is oriented counter-clockwise 
-              (i.e. the inside of the polygon is to the left of each line segment)
-      * TODO: ensure that there are no self-intersections */
-    // note that these goals cannot be solved independently:
-    // - while self-intersections exist, there is no consistent orientation of the polygon
-    // - while there is no consistent orientation, it is very hard to resolve self-intersections correctly
-    
-    
-}
+
 #endif
+
+// ====================================================================
+
+AABoundingBox::AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
+AABoundingBox::AABoundingBox(int64_t t, int64_t l, int64_t b, int64_t r): top(t), left(l), bottom(b), right(r) { }
+AABoundingBox & AABoundingBox::operator+=(const Vertex v) {
+    if (v.x < left) left = v.x;
+    if (v.x > right) right = v.x;
+    if (v.y < top) top = v.y;
+    if (v.y > bottom) bottom = v.y;
+    return *this;
+}
+
+static bool isNormalized( const AABoundingBox &box)
+{
+    return box.right >= box.left && box.bottom >= box.top;
+}
+
+AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
+{
+    assert ( isNormalized(*this) && isNormalized(other));
+    int64_t new_left = max( left, other.left);
+    int64_t new_right= min( right, other.right);
+    assert(new_left <= new_right);
+    
+    int64_t new_top  = max( top, other.top);
+    int64_t new_bottom=min( bottom, other.bottom);
+    assert(new_top <= new_bottom);
+    
+    AABoundingBox box(Vertex(new_left, new_top));
+    box+= Vertex(new_right, new_bottom);
+    return box;
+}
+
+bool AABoundingBox::overlapsWith(const AABoundingBox &other) const
+{  
+    assert ( isNormalized(*this) && isNormalized(other));
+    return (max( left, other.left) <= min( right, other.right)) && 
+           (max( top, other.top)   <= min( bottom, other.bottom));    
+}
+
+int64_t AABoundingBox::width()  const { return right - left;}
+int64_t AABoundingBox::height() const { return bottom - top;}
+
+//=======================================================================
+
+
+
+
 

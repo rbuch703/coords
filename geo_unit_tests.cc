@@ -1,6 +1,6 @@
 
 #include "geometric_types.h"
-
+#include "simplifypolygon.h"
 #include <stdlib.h>
 #include <assert.h>
 
@@ -10,6 +10,7 @@
 
 int main()
 {
+#if 0
     Vertex a(1,0);
     Vertex b(0,1);
     
@@ -66,91 +67,34 @@ int main()
     TEST( LineSegment(A, B, -1, -1).intersects(LineSegment(A, D, -1, -1)));
     TEST(!LineSegment(B, A, -1, -1).intersects(LineSegment(A, D, -1, -1)));
     TEST(!LineSegment(C, D, -1, -1).intersects(LineSegment(B, D, -1, -1))); //only share an endpoint, which is not part of the line
-    /*{
-        Vertex  f[] = {A, B, C, D};
-        list<Vertex> poly(&f[0], &f[4]);
-        list<LineSegment> intersections;
-        findIntersections( poly, intersections);
-        TEST( intersections.size() == 0);
-    }
+#endif    
+    PolygonSegment p;
+    p.append(Vertex(0,1));
+    p.append(Vertex(1,0));
+    p.append(Vertex(2,0));
+    p.append(Vertex(2,4));
+    p.append(Vertex(1,4));
+    p.append(Vertex(0,3));
+    p.append(Vertex(1,2));
+    p.append(Vertex(0,1));
+
+                
+
+    list<PolygonSegment> segs;
+    
+    ActiveEdge a( Vertex(0,0), Vertex(2,2), true, NULL);
+    ActiveEdge b( Vertex(0,2), Vertex(2,0), true, NULL);
+    
+    LineArrangement l;
+    int32_t yPos = 0;
+    l.addEdge(a, yPos);
+    l.addEdge(b, yPos);
+    l.addEdge(ActiveEdge( Vertex(0,1), Vertex(2,1), true, NULL) , yPos);
+    for (LineArrangement::const_iterator it = l.begin(); it != l.end(); it++)
     {
-        Vertex E(1, -1);
-        Vertex F(1, 3);
-        Vertex  f[] = {B, C, D, A, E, F};
-        
-        list<Vertex> poly(&f[0], &f[6]);
-        list<LineSegment> intersections;
-        findIntersections( poly, intersections);
-        TEST( intersections.size() == 6);
-        for (list<LineSegment>::const_iterator it = intersections.begin(); it != intersections.end(); it++)
-        {
-            cout << it->start << "->" << it->end << endl;
-        }
-    } */
-#if 0    
-    list<Vertex> poly;
-    for (int a = 0; a < 999; a++)
-        poly.push_back( Vertex((int64_t)(rand() / (double)RAND_MAX * 100), (int64_t)(rand() / (double)RAND_MAX * 100) ));
-    poly.push_back(poly.front());
-
-    for (list<Vertex>::const_iterator it = poly.begin(); it != poly.end(); it++)
-        cout << *it << endl;
-    
-    cout << endl;
-/*    for (list<Vertex>::const_iterator v = poly.begin(); v != poly.end(); v++)
-        cout << v->x << ", " << v->y << endl;
-    
-    cout << "========" << endl;*/
-    //list<LineSegment> ints;
-    //findIntersections(poly, ints);
-//    for (list<LineSegment>::const_iterator ls = ints.begin(); ls != ints.end(); ls++)
-//        cout << ls->start << ", start" << endl << ls->end << ", end" << endl;
-
-    list<PolygonSegment> poly_out;
-    list<LineSegment> intersections;
-    findIntersections(poly, intersections);
-    createSimplePolygons(poly, intersections, poly_out);
-    
-    for (list<PolygonSegment>::const_iterator poly = poly_out.begin(); poly != poly_out.end(); poly++)
-    {
-        cout << *poly << endl;
+        std::cout << *it << endl;
     }
-#endif
-
-    /*Vertex poly[] = {Vertex(0,300), 
-                     Vertex(0,200), 
-                     Vertex(200, 0), 
-                     Vertex(400, 200), 
-                     Vertex(600, 0), 
-                     Vertex(800, 200), 
-                     Vertex(800,300), 
-                     Vertex(0, 300)};
-    list<Vertex> l( &poly[0], &poly[8]);*/
-    PolygonSegment ps;
-    //ps.append(l.begin(), l.end());
-    
-    ifstream f("output/clipping/clip_20.csv");
-    assert(f.good());
-    while (!f.eof())
-    {
-        int32_t lat, lon;
-        char c;
-        f >> lat >> c >> lon;
-        //cout << lat << ", " << lon << endl;
-        ps.append(Vertex(lat, lon));
-    }
-    cout << ps.vertices().size() << " vertices" << endl;
-    
-    list<PolygonSegment> above, below;
-    ps.clipSecondComponent(0, above, below);
-    cout << "Above: " << endl;
-    for (list<PolygonSegment>::const_iterator ps = above.begin(); ps != above.end(); ps++)
-        cout << *ps << endl;
-
-    cout << "Below: " << endl;
-    for (list<PolygonSegment>::const_iterator ps = below.begin(); ps != below.end(); ps++)
-        cout << *ps << endl;
-    
+    //simplifyPolygon(p, segs);    
     //cout << ints.size()/2 << endl;
 
 }

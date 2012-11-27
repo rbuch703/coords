@@ -26,7 +26,7 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     PolygonSegment poly(segment);
     //assert (poly.isSimple());
     poly.canonicalize();
-    std::cout << poly.isClockwiseHeuristic() << endl;
+    //std::cout << poly.isClockwiseHeuristic() << endl;
     if (poly.vertices().size() < 4) return;
    
     FILE* f = fopen(file_base.c_str(), "ab");

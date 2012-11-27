@@ -1,3 +1,4 @@
+
 #ifndef AVLTREE_H
 #define AVLTREE_H
 
@@ -44,13 +45,14 @@ private:
 
 public:
 	friend class AVLTree<t>;
+	friend class LineArrangement;
 	//friend class iterator<t>;
 	//friend class const_iterator<t>;
 };
 
 template<class t> class AVLTree {
 public:
-	AVLTree<t>(): m_pRoot(NULL) { }
+	AVLTree<t>(): m_pRoot(NULL), num_items(0) { }
 	virtual ~AVLTree<t>() { if (m_pRoot) m_pRoot->deleteRecursive(); }
 	
 	AVLTreeNode<t>* insert(const t &item);
@@ -59,9 +61,21 @@ public:
 	t& operator[]( const t &item) { return getItem(item);}
 	void  remove ( const t &item);
 	
+	t     pop() 
+	{ 
+	    t item = *begin();
+	    remove (item); 
+	    return item;
+    }
+	
 	void print() const { print(m_pRoot);}
 	void check(); //check consistency
-	int size() const { return (m_pRoot) ? 1 + m_pRoot->getNumChildren() : 0; }
+	int size() const { 
+	    #warning extensive debug checks
+	    uint32_t num = (m_pRoot) ? 1 + m_pRoot->getNumChildren() : 0; 
+	    assert (num == num_items);
+	    return num_items;
+    }
 	void sort(t* dest) const { int dest_idx = 0; asSortedArray(dest, dest_idx, m_pRoot); }
 	
 	void clear() { if (m_pRoot) m_pRoot->deleteRecursive(); m_pRoot = NULL;}
@@ -73,7 +87,7 @@ public:
 
     //typedef iterator iterator;	
     //typedef const_iterator const_iterator;	
-private:
+protected:
 	AVLTreeNode<t>* rearrange( AVLTreeNode<t>* pNode, AVLTreeNode<t>* pred1, AVLTreeNode<t>* pred2);
     AVLTreeNode<t>* rearrangeRotateLeft( AVLTreeNode<t>* pNode);
     AVLTreeNode<t>* rearrangeRotateRight(AVLTreeNode<t>* pNode);
@@ -84,8 +98,10 @@ private:
 	void updateDepth( AVLTreeNode<t> *pNode );
     void sort( t* dest, int &dest_idx, AVLTreeNode<t> *root) const;
 	void print(AVLTreeNode<t> *root, int depth = 0) const;
+protected:    
+    AVLTreeNode<t> *m_pRoot;
+    uint64_t num_items;	
 	
-	AVLTreeNode<t> *m_pRoot;
 
 public:
     class iterator {
@@ -275,6 +291,7 @@ void AVLTree<t>::sort( t* dest, int &dest_idx, AVLTreeNode<t> *root) const
 template <class t>
 void AVLTree<t>::remove( const t &item)
 {
+    num_items--;
     AVLTreeNode<t> *parent;
     AVLTreeNode<t> *node = findPos(item, parent);
     assert(node && "Item not found");
@@ -392,7 +409,7 @@ AVLTreeNode<t>* AVLTree<t>::insert(const t &item)
 			m_pNodes[pPos].m_Data = item;
 		return replaceDuplicate;	// success if old version has been overwritten, failure if not
 	}*/
-
+    num_items++;
     return insert (item, pParent);
 }
 
@@ -706,7 +723,7 @@ void AVLTreeNode<t>::check() //check consistency
 	if (m_pLeft)
 	{
 		assert( m_pLeft->m_pParent = this);
-		assert( m_Data > m_pLeft->m_Data);
+		assert( m_pLeft->m_Data < m_Data );
 		m_pLeft->check();
 	}
 	if (m_pRight)
