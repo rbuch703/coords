@@ -6,12 +6,17 @@
 #include "avltree.h"
 #include <list>
 
+#include <gmpxx.h>
+
 void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res);
 
 typedef list<Vertex> OpenPolygon;
 
 struct ActiveEdge
 {
+    ActiveEdge() {} 
+
+
     ActiveEdge(const Vertex pLeft, const Vertex pRight, const bool pIsTopEdge, OpenPolygon *pPoly):
         left(pLeft), right(pRight), isTopEdge(pIsTopEdge), poly(pPoly) 
         {
@@ -21,8 +26,9 @@ struct ActiveEdge
     bool isTopEdge; // we do a plane sweep in x-direction, so every active edge limits a polygon either as a top or a bottom edge
     OpenPolygon *poly;
     
-
-    bool lessThan(const ActiveEdge & other, int64_t xPosition) const
+    // @returns whether 'this' intersects with the vertical line at xPosition numerically earlier than 'other'
+    // robustness: predicate is exact no matter what the input parameters are
+    bool lessThan(const ActiveEdge & other, mpq_class xPosition) const
     {
         assert(left.x <= right.x && other.left.x <= other.right.x);
         assert(left.x != right.x || other.left.x != other.right.x);
@@ -30,10 +36,22 @@ struct ActiveEdge
         if (left.x == right.x || other.left.x == other.right.x)
             assert(false && "Not implemented");
 
-        double this_y = (right.y - left.y)/ (double)(right.x - left.x) * (xPosition - left.x) + left.y;
-        double other_y =(other.right.y - other.left.y)/ (double)(other.right.x - other.left.x) * 
-                        (xPosition - other.left.x) + other.left.y;
-        return this_y < other_y;
+        mpz_class num1 = (mpz_class(right.y) - left.y)* (mpz_class(xPosition) - left.x);
+        mpz_class denom1= mpz_class(right.x) - left.x;
+        mpz_class offset1 = left.y;
+        
+        
+        mpz_class num2=  (mpz_class(other.right.y) - other.left.y) * (mpz_class(xPosition) - other.left.x);
+        mpz_class denom2= mpz_class(other.right.x) - other.left.x;
+        mpz_class offset2= other.left.y;
+        //double this_y = this_num / (double) this_denom + this_offset;
+        //double this_y = this_num/ (double)this_denom + this_offset;
+        //return this_y < other_y;
+        
+        bool pred = (num1 + offset1 * denom1) * denom2 < 
+                    (num2 + offset2 * denom2) * denom1;
+        return (denom1*denom2>= 0) ? pred : !pred;
+        
     }
     
     //the operator needs to be defined for the AVLTree to work at all; but it must never be used,
@@ -51,7 +69,7 @@ class LineArrangement: public AVLTree<ActiveEdge>
 {
 public:
 
-    AVLTreeNode<ActiveEdge>* addEdge(const ActiveEdge &a, const int64_t xPosition)
+    AVLTreeNode<ActiveEdge>* addEdge(const ActiveEdge &a, const mpq_class xPosition)
     {
         if (!m_pRoot)
 	    {
@@ -75,6 +93,11 @@ public:
         
         updateDepth(*pos);
         return *pos;
+    }
+    
+    void swapEdges(const ActiveEdge &e1, const ActiveEdge &e2, const int64_t xPosition)
+    {
+        
     }
 private:
 };

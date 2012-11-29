@@ -15,7 +15,7 @@ GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o)
 #COAST_SRC = filter_coastline.cc
 #OSM_OBJS = filter_osm.o
 
-CFLAGS = -g -Wall -Wextra #-O2
+CFLAGS = -g -lgmpxx -lgmp#-Wall -Wextra #-O2
 CCFLAGS = $(CFLAGS)
 
 .PHONY: all clean
@@ -25,23 +25,23 @@ all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test
 
 gl_test: $(GL_TEST_OBJ)
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(GL_TEST_OBJ) -lGL -lglfw -o $@
+	@g++ $(GL_TEST_OBJ) $(CCFLAGS) -lGL -lglfw -o $@
 
 conv_osmxml: $(CONV_XML_OBJ) 
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(CONV_XML_OBJ) -o $@
+	@g++ $(CONV_XML_OBJ) $(CCFLAGS) -o $@
 
 data_converter: $(CONV_OBJ) 
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(CONV_OBJ) -o $@
+	@g++ $(CONV_OBJ) $(CCFLAGS) -o $@
 
 simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(SIMP_OBJ) -o $@
+	@g++ $(SIMP_OBJ) $(CCFLAGS) -o $@
 
 geo_unit_tests: $(GEO_OBJ)
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(GEO_OBJ) -o $@
+	@g++ $(GEO_OBJ) $(CCFLAGS) -o $@
 
 %.o: %.cc
 	@echo [C++] $<

@@ -35,7 +35,7 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     
     BOOST_FOREACH( const Vertex vertex, poly.vertices())
     {
-        int32_t val = vertex.x;
+        mpq_class val = vertex.x;
         fwrite(&val, sizeof(val), 1, f);
         val = vertex.y;
         fwrite(&val, sizeof(val), 1, f);

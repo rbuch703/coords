@@ -54,7 +54,7 @@ OSMIntegratedWay    getWay(uint64_t way_id)
 
     cerr << "[WARN] trying to access not-existing way " << way_id << ", skipping" << endl;
         
-    return OSMIntegratedWay(way_id, list<Vertex>(), list<OSMKeyValuePair>() );
+    return OSMIntegratedWay(way_id, list<OSMVertex>(), list<OSMKeyValuePair>() );
         
 }
 

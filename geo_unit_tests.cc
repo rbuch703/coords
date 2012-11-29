@@ -8,8 +8,53 @@
 #include <iostream>
 #define TEST(X) { cout << ((X)?"\033[22;32mpassed":"\033[22;31mfailed") << "\033[22;37m \"" << #X <<"\" ("<< "line " << __LINE__ << ")" << endl;}
 
+
+bool intersects (const ActiveEdge &edge, mpq_class xPos)
+{
+    assert (edge.left < edge.right);
+    
+    return edge.left.x <= xPos && edge.right.x > xPos;
+}
+
 int main()
 {
+
+    static const int32_t NUM_EDGES = 10000;
+    ActiveEdge edges[NUM_EDGES];
+    LineArrangement l;
+    for (int i = 0; i < NUM_EDGES; i++)
+    {
+        Vertex v1(rand() % 65536, rand() % 65536);
+        Vertex v2(rand() % 65536, rand() % 65536);
+
+        edges[i] = ActiveEdge(v1 < v2 ? v1:v2 , v1<v2? v2:v1, true, NULL);
+        //std::cout << edges[i] << endl;
+    }
+
+    mpq_class xPos = rand() % 65536;
+
+    std::cout << "=======================" << xPos << "======================="<< std::endl;
+    for (int i = 0; i < NUM_EDGES; i++)
+    {
+        if (intersects(edges[i], xPos)) 
+            l.addEdge(edges[i], xPos);
+    }        
+
+    mpq_class prev_pos = 0;
+    LineSegment s(xPos, 0, xPos, 65536);
+    for (LineArrangement::const_iterator it = l.begin(); it != l.end(); it++)
+    {
+        LineSegment e( it->left, it->right);
+        assert( e.intersects(s));
+        
+        mpq_class alpha = e.getIntersectionCoefficient(s);
+        Vertex intersect = it->left + alpha* (it->right - it->left);
+        
+        assert( intersect.y >= prev_pos);
+        prev_pos = intersect.y;
+        //std::cout << (*it)  << " [" << intersect << "] "<< endl;
+    }
+
 #if 0
     Vertex a(1,0);
     Vertex b(0,1);
@@ -67,7 +112,6 @@ int main()
     TEST( LineSegment(A, B, -1, -1).intersects(LineSegment(A, D, -1, -1)));
     TEST(!LineSegment(B, A, -1, -1).intersects(LineSegment(A, D, -1, -1)));
     TEST(!LineSegment(C, D, -1, -1).intersects(LineSegment(B, D, -1, -1))); //only share an endpoint, which is not part of the line
-#endif    
     PolygonSegment p;
     p.append(Vertex(0,1));
     p.append(Vertex(1,0));
@@ -77,25 +121,7 @@ int main()
     p.append(Vertex(0,3));
     p.append(Vertex(1,2));
     p.append(Vertex(0,1));
-
-                
-
-    list<PolygonSegment> segs;
-    
-    ActiveEdge a( Vertex(0,0), Vertex(2,2), true, NULL);
-    ActiveEdge b( Vertex(0,2), Vertex(2,0), true, NULL);
-    
-    LineArrangement l;
-    int32_t yPos = 0;
-    l.addEdge(a, yPos);
-    l.addEdge(b, yPos);
-    l.addEdge(ActiveEdge( Vertex(0,1), Vertex(2,1), true, NULL) , yPos);
-    for (LineArrangement::const_iterator it = l.begin(); it != l.end(); it++)
-    {
-        std::cout << *it << endl;
-    }
-    //simplifyPolygon(p, segs);    
-    //cout << ints.size()/2 << endl;
-
+#endif    
+   
 }
 

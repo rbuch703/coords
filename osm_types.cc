@@ -10,8 +10,17 @@
 #include <stdlib.h> //for exit()
 #include <stdint.h>
 
+#include <boost/foreach.hpp>
+
 #include "osm_types.h"
 #include "symbolic_tags.h"
+
+
+std::ostream& operator <<(std::ostream& os, const OSMVertex v)
+{
+    os << "( " << v.x << ", " << v.y << ")";
+    return os;
+}
 
 
 /** on-file layout for tags :
@@ -326,7 +335,7 @@ ostream& operator<<(ostream &out, const OSMWay &way)
 
 //===================================
 
-OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<Vertex> way_vertices, list<OSMKeyValuePair> way_tags):
+OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags):
         id(way_id), vertices(way_vertices), tags(way_tags) {}
 
 OSMIntegratedWay::OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
@@ -339,7 +348,7 @@ OSMIntegratedWay::OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id): i
         data_ptr+=4;
         int32_t lon = *(int32_t*)data_ptr;
         data_ptr+=4;
-        vertices.push_back( Vertex(lat, lon));
+        vertices.push_back( OSMVertex(lat, lon));
     }
     tags = deserializeTags(data_ptr);
 }
@@ -357,7 +366,7 @@ OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
         int32_t lon;
         num_read = fread(&lon, sizeof(lon), 1, src);
         assert (num_read == 1);
-        vertices.push_back( Vertex(lat, lon));
+        vertices.push_back( OSMVertex(lat, lon));
     }
     tags = deserializeTags(src);
 }
@@ -372,7 +381,7 @@ void OSMIntegratedWay::serialize( FILE* data_file, mmap_t *index_map, const map<
     uint32_t num_vertices = vertices.size();
     fwrite(&num_vertices, sizeof(num_vertices), 1, data_file);
     
-    for (list<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
+    for (list<OSMVertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
     {
         int32_t lat = it->x;
         fwrite(&lat, sizeof(lat), 1, data_file);
@@ -409,16 +418,17 @@ const string& OSMIntegratedWay::getValue(string key) const
 PolygonSegment OSMIntegratedWay::toPolygonSegment() const
 {
     PolygonSegment seg;
-    seg.append( vertices.begin(), vertices.end() );
+    BOOST_FOREACH( OSMVertex v, vertices)
+        seg.append( Vertex( v.x, v.y));
     return seg;
 }
 
 ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
 {
     out << "Way " << way.id << " (";
-    for (list<Vertex>::const_iterator it = way.vertices.begin(); it!= way.vertices.end(); it++)
+    for (list<OSMVertex>::const_iterator it = way.vertices.begin(); it!= way.vertices.end(); it++)
     {
-        Vertex v = *it;
+        OSMVertex v = *it;
         out << v;
         if (++it != way.vertices.end()) out << ", ";
         it--;

@@ -3,6 +3,7 @@
 
 #include <boost/foreach.hpp>
 
+#include "osm_types.h"
 
 #include <set>
 #include <queue>
@@ -160,9 +161,9 @@ void PolygonReconstructor::forceClosePolygons()
 #endif
 struct EndPointDistance
 {
-    EndPointDistance(uint64_t i, uint64_t j, uint64_t dist): m_i(i), m_j(j), m_dist(dist) {}
+    EndPointDistance(uint64_t i, uint64_t j, mpq_class dist): m_i(i), m_j(j), m_dist(dist) {}
     uint64_t m_i,m_j;
-    uint64_t m_dist;
+    mpq_class m_dist;
     
     bool operator<(const EndPointDistance &other) const { return m_dist > other.m_dist; }
 };
@@ -191,7 +192,8 @@ static void closeSomePolygons( map<Vertex, PolygonSegment*> &openEndPoints, list
         //cout << "queue size: " << queue.size() << endl;
         for (uint64_t j = 0; j < i; j++)
         {
-            uint64_t dist_sq = (vEndPoints[i] - vEndPoints[j]).squaredLength( );
+            //Vertex vDist(.x, vEndPoints[i].y - vEndPoints[j].y);
+            mpq_class dist_sq = (vEndPoints[i] - vEndPoints[j]).squaredLength();
             if (vEndPointAccessible[j] && dist_sq <= max_dist_sq)
                 queue.push( EndPointDistance(i, j, dist_sq ));
         }

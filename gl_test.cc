@@ -17,6 +17,9 @@
 
 #include "geometric_types.h"
 
+/** FIXME: do not use the AABoundingBox class: this is a geometric computing class whose numerical members 
+  *        are all of type mpq_class. This allows for exact computation, but slows down the computation
+  *        dramatically  */
 using namespace std;
 
 typedef pair<int64_t, int32_t*> CountVertexPair;
@@ -175,8 +178,8 @@ void render(const AABoundingBox &view, AABoundingBox tile, string position)
         return;
     }
     
-    int64_t mid_x = (tile.right+tile.left)   / 2.0;
-    int64_t mid_y = (tile.top + tile.bottom) / 2.0;
+    mpq_class mid_x = (tile.right+tile.left)   / 2.0;
+    mpq_class mid_y = (tile.top + tile.bottom) / 2.0;
     
     AABoundingBox tl2(tile.top, tile.left, mid_y,       mid_x);
     AABoundingBox bl0(mid_y,    tile.left, tile.bottom, mid_x);

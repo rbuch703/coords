@@ -206,15 +206,15 @@ protected:
         way.serialize(way_data, &way_index, &symbolic_tags);
         
         //convert the way to an integrated way, by replacing the node indices with the actual node lat/lon
-        list<Vertex> vertices;
+        list<OSMVertex> vertices;
         uint32_t* vertices_ptr = (uint32_t*) vertex_data.ptr;
         for (list<uint64_t>::const_iterator ref = way.refs.begin(); ref != way.refs.end(); ref++)
         {
             if (*ref == 0) //there is no node with id = 0, this is likely a dummy
                 //create a dummy node so that the sizes of the way and the integrated way match
-                vertices.push_back( Vertex( 0, 0) );
+                vertices.push_back( OSMVertex( 0, 0) );
             else
-                vertices.push_back( Vertex( vertices_ptr[*ref * 2], vertices_ptr[*ref * 2+1]) );
+                vertices.push_back( OSMVertex( vertices_ptr[*ref * 2], vertices_ptr[*ref * 2+1]) );
         }
         
         OSMIntegratedWay int_way(way.id, vertices, way.tags);

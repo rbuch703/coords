@@ -17,6 +17,16 @@ typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
 
 typedef pair<string, string> OSMKeyValuePair;
 
+struct OSMVertex
+{
+    OSMVertex() {}
+    OSMVertex( const int32_t pX, const int32_t pY): x(pX), y(pY) {}
+public:
+    int32_t x,y;
+};
+
+std::ostream& operator <<(std::ostream& os, const OSMVertex v);
+
 
 struct OSMNode
 {
@@ -29,7 +39,7 @@ struct OSMNode
     bool operator!=(const OSMNode &other) const;
     bool operator< (const OSMNode &other) const;
     
-    Vertex toVertex() const {return Vertex(lat, lon);}
+    OSMVertex toVertex() const {return OSMVertex(lat, lon);}
     int32_t lat;    //needs to be signed! -180° < lat < 180°
     int32_t lon;    //                     -90° < lon <  90°
     uint64_t id;
@@ -58,7 +68,7 @@ ostream& operator<<(ostream &out, const OSMWay &way);
 // a representation of an OSM way that includes the data of all of its nodes (as opposed to just references to them)
 struct OSMIntegratedWay
 {
-    OSMIntegratedWay( uint64_t way_id, list<Vertex> way_vertices, list<OSMKeyValuePair> way_tags);
+    OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags);
     OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id);
     OSMIntegratedWay( FILE* src, uint64_t way_id = -1);
 
@@ -69,7 +79,7 @@ struct OSMIntegratedWay
     PolygonSegment toPolygonSegment() const;
 public:
     uint64_t id;
-    list<Vertex> vertices;
+    list<OSMVertex> vertices;
     list<OSMKeyValuePair> tags;
 };
 
