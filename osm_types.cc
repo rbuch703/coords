@@ -415,13 +415,6 @@ const string& OSMIntegratedWay::getValue(string key) const
     return empty;
 }
 
-PolygonSegment OSMIntegratedWay::toPolygonSegment() const
-{
-    PolygonSegment seg;
-    BOOST_FOREACH( OSMVertex v, vertices)
-        seg.append( Vertex( v.x, v.y));
-    return seg;
-}
 
 ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
 {

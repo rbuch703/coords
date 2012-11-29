@@ -267,7 +267,7 @@ void reconstructCoastline(FILE * src, list<PolygonSegment> &poly_storage)
             cout << way << endl;
         assert (way.hasKey("natural") && way["natural"] == "coastline");
         
-        PolygonSegment s = way.toPolygonSegment();
+        PolygonSegment s( way.vertices );
         if (s.front() == s.back())
         {
             handlePolygon("output/coast/tmp", s);

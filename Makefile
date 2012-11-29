@@ -1,6 +1,6 @@
 
-CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc geometric_types.cc osmxmlparser.cc
-CONV_SRC = data_converter.cc osm_types.cc mem_map.cc geometric_types.cc helpers.cc
+CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
+CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc polygonreconstructor.cc mem_map.cc helpers.cc
 GEO_SRC = geo_unit_tests.cc geometric_types.cc simplifypolygon.cc
 GL_TEST_SRC = gl_test.cc geometric_types.cc 
@@ -12,10 +12,7 @@ SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o)
 
-#COAST_SRC = filter_coastline.cc
-#OSM_OBJS = filter_osm.o
-
-CFLAGS = -g -lgmpxx -lgmp#-Wall -Wextra #-O2
+CFLAGS = -g -lgmpxx -lgmp -Wall -Wextra #-O2
 CCFLAGS = $(CFLAGS)
 
 .PHONY: all clean

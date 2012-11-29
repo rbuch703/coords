@@ -3,7 +3,6 @@
 #define GEOMETRIC_TYPES_H
 
 #include <stdint.h>
-
 #include <assert.h>
 
 #include <ostream>
@@ -11,8 +10,10 @@
 
 #include <gmpxx.h>
 
+#include "osm_types.h"
 using namespace std;
 
+typedef OSMVertex akldjlk;
 
 struct Vertex
 {
@@ -79,6 +80,8 @@ class PolygonSegment
 public:
     PolygonSegment() {};
     PolygonSegment(const PolygonSegment & other): m_vertices(other.m_vertices) { }
+    PolygonSegment( const list<OSMVertex> &vertices);
+
     PolygonSegment(const int32_t *vertices, int64_t num_vertices);
     
     const Vertex& front() const;

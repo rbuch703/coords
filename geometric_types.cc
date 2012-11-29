@@ -88,6 +88,14 @@ void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
     //return res;
 }
 
+
+PolygonSegment::PolygonSegment( const list<OSMVertex> &vertices)
+{
+    BOOST_FOREACH( OSMVertex v, vertices)
+        append( Vertex( v.x, v.y));
+}
+
+
 bool PolygonSegment::simplifyArea(double allowedDeviation)
 {
     assert( m_vertices.front() == m_vertices.back() && "Not a Polygon");

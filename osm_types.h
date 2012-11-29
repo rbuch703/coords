@@ -8,13 +8,10 @@
 
 #include <stdint.h> 
 #include "mem_map.h"
-#include "geometric_types.h"
 
 using namespace std;
 
 typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
-
-
 typedef pair<string, string> OSMKeyValuePair;
 
 struct OSMVertex
@@ -76,7 +73,7 @@ struct OSMIntegratedWay
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
-    PolygonSegment toPolygonSegment() const;
+//    PolygonSegment toPolygonSegment() const;
 public:
     uint64_t id;
     list<OSMVertex> vertices;
