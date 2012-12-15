@@ -161,9 +161,9 @@ void PolygonReconstructor::forceClosePolygons()
 #endif
 struct EndPointDistance
 {
-    EndPointDistance(uint64_t i, uint64_t j, mpq_class dist): m_i(i), m_j(j), m_dist(dist) {}
+    EndPointDistance(uint64_t i, uint64_t j, BigInt dist): m_i(i), m_j(j), m_dist(dist) {}
     uint64_t m_i,m_j;
-    mpq_class m_dist;
+    BigInt m_dist;
     
     bool operator<(const EndPointDistance &other) const { return m_dist > other.m_dist; }
 };
@@ -193,7 +193,7 @@ static void closeSomePolygons( map<Vertex, PolygonSegment*> &openEndPoints, list
         for (uint64_t j = 0; j < i; j++)
         {
             //Vertex vDist(.x, vEndPoints[i].y - vEndPoints[j].y);
-            mpq_class dist_sq = (vEndPoints[i] - vEndPoints[j]).squaredLength();
+            uint64_t dist_sq = (uint64_t)(vEndPoints[i] - vEndPoints[j]).squaredLength();
             if (vEndPointAccessible[j] && dist_sq <= max_dist_sq)
                 queue.push( EndPointDistance(i, j, dist_sq ));
         }

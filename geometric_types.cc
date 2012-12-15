@@ -13,16 +13,16 @@
 
 
 Vertex::Vertex() :x(0), y(0) {}
-Vertex::Vertex(mpq_class v_x, mpq_class v_y): x(v_x), y(v_y) {}
+Vertex::Vertex(BigInt v_x, BigInt v_y): x(v_x), y(v_y) {}
 
-mpq_class Vertex::squaredDistanceToLine(const Vertex &A, const Vertex &B) const
+double Vertex::squaredDistanceToLine(const Vertex &A, const Vertex &B) const
 {
     assert( B!= A);
-    mpz_class num = (B.x-A.x)*(A.y-y) - (B.y-A.y)*(A.x-x);
+    BigInt num = (B.x-A.x)*(A.y-y) - (B.y-A.y)*(A.x-x);
     if (num < 0) num = -num; //distance is an absolute value
-    mpz_class denom_sq = (B-A).squaredLength();//(B.x-A.x)*(B.x-A.x) + (B.y-A.y)*(B.y-A.y);
+    BigInt denom_sq = (B-A).squaredLength();//(B.x-A.x)*(B.x-A.x) + (B.y-A.y)*(B.y-A.y);
     assert(denom_sq != 0);
-    return num*num / denom_sq;
+    return (num*num).toDouble() / denom_sq.toDouble();
 }
 
 
@@ -36,12 +36,12 @@ double Vertex::distanceToLine(const Vertex &A, const Vertex &B) const
     return num / denom;
 }*/
 
-mpq_class Vertex::pseudoDistanceToLine(const Vertex &start, const Vertex &end) const
+BigInt Vertex::pseudoDistanceToLine(const Vertex &start, const Vertex &end) const
 {
     return (end.x-start.x)*(start.y-y) - (end.y-start.y)*(start.x-x);
 }
 
-mpq_class Vertex::squaredLength() const { return (x*x)+(y*y);}
+BigInt Vertex::squaredLength() const { return (x*x)+(y*y);}
 bool Vertex::operator==(const Vertex &other) const { return x==other.x && y == other.y;}
 bool Vertex::operator!=(const Vertex &other) const { return x!=other.x || y != other.y;}
 bool Vertex::operator< (const Vertex &other) const { return (x< other.x) || ((x == other.x) && (y < other.y));}
@@ -50,7 +50,7 @@ Vertex Vertex::operator+(const Vertex &a) const { return Vertex(x+a.x, y+a.y);}
 Vertex Vertex::operator-(const Vertex &a) const { return Vertex(x-a.x, y-a.y);}
 
 //Vertex operator*(const int64_t a, const Vertex b) { return Vertex(a*b.x, a*b.y);}
-Vertex operator*(const mpq_class &a, const Vertex &b) { return Vertex(a*b.x, a*b.y);}
+//Vertex operator*(const BigInt &a, const Vertex &b) { return Vertex(a*b.x, a*b.y);}
 
 
 std::ostream& operator <<(std::ostream& os, const Vertex v)
@@ -131,15 +131,15 @@ void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<
 {
     list<Vertex>::iterator it_max;
     
-    mpq_class max_dist_sq = 0;
+    double max_dist_sq = 0;
     Vertex A = *segment_first;
     Vertex B = *segment_last;
     list<Vertex>::iterator it  = segment_first;
     // make sure that 'it' starts from segment_first+1; segment_first must never be deleted
     for (it++; it != segment_last; it++)
     {
-        mpq_class dist_sq = (A == B) ? 
-            (*it-A).squaredLength() : 
+        double dist_sq = (A == B) ? 
+            (*it-A).squaredLength().toDouble() : 
             it->squaredDistanceToLine(A, B);
         if (dist_sq > max_dist_sq) { it_max = it; max_dist_sq = dist_sq;}
     }
@@ -183,8 +183,8 @@ static Vertex getPredecessor(list<Vertex>::const_iterator it, const list<Vertex>
 }
 
 
-mpq_class getXCoordinate(const Vertex &v) { return v.x;}
-mpq_class getYCoordinate(const Vertex &v) { return v.y;}
+BigInt getXCoordinate(const Vertex &v) { return v.x;}
+BigInt getYCoordinate(const Vertex &v) { return v.y;}
 
 /** 
     @brief: BASIC ALGORITHM (for clipping along the x-axis):
@@ -200,11 +200,11 @@ mpq_class getYCoordinate(const Vertex &v) { return v.y;}
                 put the connected segment by into the queue; its position will change, since its endpoint with
                     highest y coordinate has been connected and thus is no longer an endpoint
 */
-typedef mpq_class (*VertexCoordinate)(const Vertex &v);
+typedef BigInt (*VertexCoordinate)(const Vertex &v);
 
 
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void connectClippedSegments( mpq_class clip_pos, list<PolygonSegment*> lst, list<PolygonSegment> &out)
+static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, list<PolygonSegment> &out)
 {
 
 
@@ -239,14 +239,14 @@ static void connectClippedSegments( mpq_class clip_pos, list<PolygonSegment*> ls
         lst.pop_front();
     }
     
-    priority_queue< pair< mpq_class, PolygonSegment*> > queue;
+    priority_queue< pair< BigInt, PolygonSegment*> > queue;
     BOOST_FOREACH( PolygonSegment* seg, lst)
     {
         assert( ( significantCoordinate( seg->vertices().front()) == clip_pos) && 
                 ( significantCoordinate( seg->vertices().back() ) == clip_pos));
                 
-        queue.push( pair<mpq_class, PolygonSegment*>( max( otherCoordinate(seg->vertices().front()),
-                                                         otherCoordinate(seg->vertices().back() ) ), seg));
+        queue.push( pair<BigInt, PolygonSegment*>( max( otherCoordinate(seg->vertices().front()),
+                                                        otherCoordinate(seg->vertices().back() ) ), seg));
     }
     
     
@@ -291,8 +291,8 @@ static void connectClippedSegments( mpq_class clip_pos, list<PolygonSegment*> ls
             delete seg2;
         } else assert(false && "invalid segment orientation");
         
-        queue.push( pair<mpq_class, PolygonSegment*>(max( otherCoordinate( seg1->front()), 
-                                                        otherCoordinate( seg1->back() )), seg1));
+        queue.push( pair<BigInt, PolygonSegment*>(max( otherCoordinate( seg1->front()), 
+                                                       otherCoordinate( seg1->back() )), seg1));
     }
 
 }
@@ -460,7 +460,7 @@ bool PolygonSegment::isSimple() const
 
 
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void clip( const list<Vertex> & polygon, mpq_class clip_pos, list<PolygonSegment*> &above, list<PolygonSegment*> &below)
+static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSegment*> &above, list<PolygonSegment*> &below)
 {
     assert( polygon.front() == polygon.back());
     #warning TODO: handle the edge case that front() and back() both lie on the split line
@@ -482,9 +482,14 @@ static void clip( const list<Vertex> & polygon, mpq_class clip_pos, list<Polygon
         // if this point is reached, v1 and v2 are on opposite sides of the clipping line
         assert(significantCoordinate(*v2) != significantCoordinate(*v1) );
         //line (v1, v2) must have intersected the clipping line
-        mpq_class clip_other = otherCoordinate(*v1) + ((clip_pos - significantCoordinate(*v1)) *
+        
+        /*BigInt clip_other = otherCoordinate(*v1) + ((clip_pos - significantCoordinate(*v1)) *
                         ( otherCoordinate(*v2) - otherCoordinate(*v1) ) )/
-                        ( significantCoordinate(*v2) - significantCoordinate(*v1) );
+                        ( significantCoordinate(*v2) - significantCoordinate(*v1) )*/;
+        int64_t num = (int64_t)((clip_pos - significantCoordinate(*v1)) * ( otherCoordinate(*v2) - otherCoordinate(*v1) ) );
+        int64_t denom=(int64_t)( significantCoordinate(*v2) - significantCoordinate(*v1) );
+        
+        BigInt clip_other = (int64_t)( (int64_t)otherCoordinate(*v1) + (num+ 0.5)/denom);
         
         Vertex vClip;
         if      (significantCoordinate == getXCoordinate) vClip = Vertex(clip_pos, clip_other);
@@ -514,7 +519,7 @@ static void clip( const list<Vertex> & polygon, mpq_class clip_pos, list<Polygon
 }
 
 
-void PolygonSegment::clipSecondComponent( mpq_class clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
+void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
 {
     list<PolygonSegment*> above, below;
     
@@ -525,7 +530,7 @@ void PolygonSegment::clipSecondComponent( mpq_class clip_y, list<PolygonSegment>
 
 }
 
-void PolygonSegment::clipFirstComponent( mpq_class clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
+void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
 {
     list<PolygonSegment*> left, right;
     
@@ -653,7 +658,7 @@ std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg)
 LineSegment::LineSegment( const Vertex v_start, const Vertex v_end): 
                         start(v_start), end(v_end) { assert(start != end);}
                         
-LineSegment::LineSegment( mpq_class start_x, mpq_class start_y, mpq_class end_x, mpq_class end_y): 
+LineSegment::LineSegment( BigInt start_x, BigInt start_y, BigInt end_x, BigInt end_y): 
     start(Vertex(start_x, start_y)), end(Vertex(end_x, end_y)) { assert(start != end);}
 
 
@@ -670,9 +675,9 @@ bool LineSegment::isColinearWith(const Vertex v) const
     if (( v.x-start.x)*(end.y - start.y) != 
         ( v.y-start.y)*(end.x - start.x)) return false;
     
-    mpq_class squared_seg_len = (end - start).squaredLength();
-    mpq_class dist_start =      (v - start).squaredLength();
-    mpq_class dist_end =        (v - end).squaredLength();
+    BigInt squared_seg_len = (end - start).squaredLength();
+    BigInt dist_start =      (v - start).squaredLength();
+    BigInt dist_end =        (v - end).squaredLength();
     return  dist_start <squared_seg_len && dist_end <= squared_seg_len;
 }
                        
@@ -690,15 +695,15 @@ bool LineSegment::intersects( const LineSegment &other) const
             || ((start == other.end) && (end == other.start));
     } else
     {
-        mpq_class num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
-        mpq_class num2 = (      end.x-      start.x)*(start.y-other.start.y) - (      end.y-      start.y)*(start.x-other.start.x);
-        mpq_class denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
+        BigInt num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
+        BigInt num2 = (      end.x-      start.x)*(start.y-other.start.y) - (      end.y-      start.y)*(start.x-other.start.x);
+        BigInt denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
 
         assert(denom != 0); //should only be zero if the lines are parallel, but this case has already been handled above
 
         //for the line segments to intersect, num1/denom and num2/denom both have to be inside the range [0, 1);
         
-        //the absolute of at least one coefficient would be bigger than or equal to one 
+        //if the absolute of at least one coefficient would be bigger than or equal to one 
         if (abs(num1) >=abs(denom) || abs(num2) >= abs(denom)) return false; 
         
         // at least one coefficient would be negative
@@ -710,16 +715,36 @@ bool LineSegment::intersects( const LineSegment &other) const
     
 }
 
-mpq_class LineSegment::getIntersectionCoefficient( const LineSegment &other) const
+void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &out_num, BigInt &out_denom) const
 {
-
     assert( !parallelTo(other));
     //TODO: handle edge case that two line segments overlap
-    mpq_class num = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
-    mpq_class denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
+    out_num = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
+    out_denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
     
-    assert(denom != 0 && "Line segments are parallel or coincide" );
-    return num/denom;
+    assert(out_denom != 0 && "Line segments are parallel or coincide" );
+
+}
+
+Vertex LineSegment::getRoundedIntersection(const LineSegment &other) const
+{
+    /*
+    BigInt num, denom;
+    getIntersectionCoeffcicient(other, num, denom);
+    assert ( ((num >= 0 && denom > 0 && num > denom) || (num <= 0 && denom < 0 && num < denom)) && "Do not intersect");
+    int64_t iNum = (int64_t)num;
+    int64_t iDenom = (int64_t)denom;
+    assert (iNum == num && iDenom == denom);
+    */
+    return Vertex();
+}
+
+
+double LineSegment::getIntersectionCoefficient( const LineSegment &other) const
+{
+    BigInt num, denom;
+    getIntersectionCoefficient(other, num, denom);
+    return num.toDouble()/denom.toDouble();
 }
 
 /** ============================================================================= */
@@ -1003,7 +1028,7 @@ void createSimplePolygons(const list<Vertex> in, const list<LineSegment> interse
 // ====================================================================
 
 AABoundingBox::AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
-AABoundingBox::AABoundingBox(mpq_class t, mpq_class l, mpq_class b, mpq_class r): top(t), left(l), bottom(b), right(r) { }
+AABoundingBox::AABoundingBox(BigInt t, BigInt l, BigInt b, BigInt r): top(t), left(l), bottom(b), right(r) { }
 AABoundingBox & AABoundingBox::operator+=(const Vertex v) {
     if (v.x < left) left = v.x;
     if (v.x > right) right = v.x;
@@ -1020,12 +1045,12 @@ static bool isNormalized( const AABoundingBox &box)
 AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
 {
     assert ( isNormalized(*this) && isNormalized(other));
-    mpq_class new_left = max( left, other.left);
-    mpq_class new_right= min( right, other.right);
+    BigInt new_left = max( left, other.left);
+    BigInt new_right= min( right, other.right);
     assert(new_left <= new_right);
     
-    mpq_class new_top  = max( top, other.top);
-    mpq_class new_bottom=min( bottom, other.bottom);
+    BigInt new_top  = max( top, other.top);
+    BigInt new_bottom=min( bottom, other.bottom);
     assert(new_top <= new_bottom);
     
     AABoundingBox box(Vertex(new_left, new_top));
@@ -1037,11 +1062,11 @@ bool AABoundingBox::overlapsWith(const AABoundingBox &other) const
 {  
     assert ( isNormalized(*this) && isNormalized(other));
     return (max( left, other.left) <= min( right, other.right)) && 
-           (max( top, other.top)   <= min( bottom, other.bottom));    
+           (max( top, other.top)   <= min( bottom, other.bottom));
 }
 
-mpq_class AABoundingBox::width()  const { return right - left;}
-mpq_class AABoundingBox::height() const { return bottom - top;}
+BigInt AABoundingBox::width()  const { return right - left;}
+BigInt AABoundingBox::height() const { return bottom - top;}
 
 //=======================================================================
 

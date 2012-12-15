@@ -6,7 +6,7 @@
 #include "avltree.h"
 #include <list>
 
-#include <gmpxx.h>
+#include "config.h"
 
 void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res);
 
@@ -28,7 +28,7 @@ struct ActiveEdge
     
     // @returns whether 'this' intersects with the vertical line at xPosition numerically earlier than 'other'
     // robustness: predicate is exact no matter what the input parameters are
-    bool lessThan(const ActiveEdge & other, mpq_class xPosition) const
+    bool lessThan(const ActiveEdge & other, const BigInt &xPosition) const
     {
         assert(left.x <= right.x && other.left.x <= other.right.x);
         assert(left.x != right.x || other.left.x != other.right.x);
@@ -36,14 +36,14 @@ struct ActiveEdge
         if (left.x == right.x || other.left.x == other.right.x)
             assert(false && "Not implemented");
 
-        mpz_class num1 = (mpz_class(right.y) - left.y)* (mpz_class(xPosition) - left.x);
-        mpz_class denom1= mpz_class(right.x) - left.x;
-        mpz_class offset1 = left.y;
+        BigInt num1 = (BigInt(right.y) - left.y)* (BigInt(xPosition) - left.x);
+        BigInt denom1= BigInt(right.x) - left.x;
+        BigInt offset1 = left.y;
         
         
-        mpz_class num2=  (mpz_class(other.right.y) - other.left.y) * (mpz_class(xPosition) - other.left.x);
-        mpz_class denom2= mpz_class(other.right.x) - other.left.x;
-        mpz_class offset2= other.left.y;
+        BigInt num2=  (BigInt(other.right.y) - other.left.y) * (BigInt(xPosition) - other.left.x);
+        BigInt denom2= BigInt(other.right.x) - other.left.x;
+        BigInt offset2= other.left.y;
         //double this_y = this_num / (double) this_denom + this_offset;
         //double this_y = this_num/ (double)this_denom + this_offset;
         //return this_y < other_y;
@@ -69,13 +69,13 @@ class LineArrangement: public AVLTree<ActiveEdge>
 {
 public:
 
-    AVLTreeNode<ActiveEdge>* addEdge(const ActiveEdge &a, const mpq_class xPosition)
+    AVLTreeNode<ActiveEdge>* addEdge(const ActiveEdge &a, const BigInt xPosition)
     {
+        num_items++;
         if (!m_pRoot)
 	    {
 	        m_pRoot = new AVLTreeNode<ActiveEdge>(NULL,NULL, NULL, a);;
 	        m_pRoot->m_dwDepth = 0;    //no children --> depth=0
-	        num_items++;
 	        return m_pRoot;
 	    }
         

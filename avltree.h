@@ -8,6 +8,9 @@
 
 #include <iostream> // for cout
 
+
+// #define AVL_DEBUG
+
 //using namespace std;
 
 //forward declarations
@@ -71,9 +74,11 @@ public:
 	void print() const { print(m_pRoot);}
 	void check(); //check consistency
 	int size() const { 
+#ifdef AVL_DEBUG	
 	    #warning extensive debug checks
 	    uint32_t num = (m_pRoot) ? 1 + m_pRoot->getNumChildren() : 0; 
 	    assert (num == num_items);
+#endif
 	    return num_items;
     }
 	void sort(t* dest) const { int dest_idx = 0; asSortedArray(dest, dest_idx, m_pRoot); }
@@ -351,9 +356,11 @@ void AVLTree<t>::remove( const t &item)
     if (parent)
         updateDepth(parent);
         
+#ifdef AVL_DEBUG
     #warning extensive debug checks
     if (m_pRoot)
         m_pRoot->check();
+#endif
 }
 
 /*
@@ -499,8 +506,10 @@ void AVLTree<t>::updateDepth( AVLTreeNode<t> *pNode)
 	        } else
 	            pNode = (pNode->m_pLeft == pred1) ? rearrangeRotateRight(pNode) : rearrangeRotateLeft(pNode);
 			
+#ifdef AVL_DEBUG
 			#warning extensive debug checks
 			pNode->check();
+#endif
 		}
 		
 		if (pNode->m_pParent)

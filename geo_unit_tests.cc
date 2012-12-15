@@ -6,54 +6,85 @@
 
 #include <fstream>
 #include <iostream>
+
+#include <boost/foreach.hpp>
 #define TEST(X) { cout << ((X)?"\033[22;32mpassed":"\033[22;31mfailed") << "\033[22;37m \"" << #X <<"\" ("<< "line " << __LINE__ << ")" << endl;}
 
 
-bool intersects (const ActiveEdge &edge, mpq_class xPos)
+bool intersects (const ActiveEdge &edge, BigInt xPos)
 {
     assert (edge.left < edge.right);
     
     return edge.left.x <= xPos && edge.right.x > xPos;
 }
 
+BigInt getRandom()
+{
+    BigInt a = 0;
+    int i = 8;
+    do
+    {
+        a = (a << 16)  | (rand() % 0xFFFF);
+    } while (--i);
+    
+    return rand() % 2 ? a : -a;
+    
+}
+
 int main()
 {
 
-    static const int32_t NUM_EDGES = 10000;
-    ActiveEdge edges[NUM_EDGES];
+    for (int i = 0; i < 100000; i++)
+    {
+        BigInt a( getRandom());
+        
+        uint32_t b = rand() % 0xFFFFFFFF;
+
+        BigInt res = a/b;
+    }
+    
+/*
+    static const int32_t NUM_EDGES = 100000;
+    list<ActiveEdge> edges;
     LineArrangement l;
     for (int i = 0; i < NUM_EDGES; i++)
     {
         Vertex v1(rand() % 65536, rand() % 65536);
         Vertex v2(rand() % 65536, rand() % 65536);
 
-        edges[i] = ActiveEdge(v1 < v2 ? v1:v2 , v1<v2? v2:v1, true, NULL);
+        edges.push_back( ActiveEdge(v1 < v2 ? v1:v2 , v1<v2? v2:v1, true, NULL) );
         //std::cout << edges[i] << endl;
     }
 
-    mpq_class xPos = rand() % 65536;
+    BigInt xPos = rand() % 65536;
 
     std::cout << "=======================" << xPos << "======================="<< std::endl;
-    for (int i = 0; i < NUM_EDGES; i++)
+    BOOST_FOREACH( const ActiveEdge &edge, edges)
     {
-        if (intersects(edges[i], xPos)) 
-            l.addEdge(edges[i], xPos);
+        if (intersects(edge, xPos)) 
+            l.addEdge(edge, xPos);
     }        
+    std::cout << "=======================" << xPos << "======================="<< std::endl;
 
-    mpq_class prev_pos = 0;
+    std::cout << l.size() << std::endl;
+
+    BigInt prev_pos = 0;
     LineSegment s(xPos, 0, xPos, 65536);
     for (LineArrangement::const_iterator it = l.begin(); it != l.end(); it++)
     {
         LineSegment e( it->left, it->right);
         assert( e.intersects(s));
-        
-        mpq_class alpha = e.getIntersectionCoefficient(s);
-        Vertex intersect = it->left + alpha* (it->right - it->left);
-        
+        double alpha = e.getIntersectionCoefficient(s);
+        //std::cout << alpha.get_d() << endl;
+        Vertex intersect( (int32_t)(it->left.x.toDouble() + alpha* (it->right.x - it->left.x).toDouble() ),
+                          (int32_t)(it->left.y.toDouble() + alpha* (it->right.y - it->left.y).toDouble() ) );
+        //std::cout << intersect << "<=" << prev_pos << std::endl;
+
         assert( intersect.y >= prev_pos);
         prev_pos = intersect.y;
         //std::cout << (*it)  << " [" << intersect << "] "<< endl;
     }
+    */
 
 #if 0
     Vertex a(1,0);

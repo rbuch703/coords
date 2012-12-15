@@ -18,7 +18,7 @@
 #include "geometric_types.h"
 
 /** FIXME: do not use the AABoundingBox class: this is a geometric computing class whose numerical members 
-  *        are all of type mpq_class. This allows for exact computation, but slows down the computation
+  *        are all of type BigInt. This allows for exact computation, but slows down the computation
   *        dramatically  */
 using namespace std;
 
@@ -178,8 +178,8 @@ void render(const AABoundingBox &view, AABoundingBox tile, string position)
         return;
     }
     
-    mpq_class mid_x = (tile.right+tile.left)   / 2.0;
-    mpq_class mid_y = (tile.top + tile.bottom) / 2.0;
+    BigInt mid_x = (int64_t)((tile.right+tile.left).toDouble()   / 2.0);
+    BigInt mid_y = (int64_t)((tile.top + tile.bottom).toDouble() / 2.0);
     
     AABoundingBox tl2(tile.top, tile.left, mid_y,       mid_x);
     AABoundingBox bl0(mid_y,    tile.left, tile.bottom, mid_x);
@@ -233,7 +233,7 @@ int main () {
         //t.render();
         glColor3f(1,1,1);
         cout << "Cache has stored " << tile_cache.size() << " tiles" << endl;
-        render( AABoundingBox(g_top, g_left, g_bottom, g_right), 
+        render( AABoundingBox((int32_t)g_top, (int32_t)g_left, (int32_t)g_bottom, (int32_t)g_right), 
                 AABoundingBox(900000000, -1800000000, -900000000, 1800000000), "");
         //t0.render();
         //t2.render();
