@@ -95,7 +95,7 @@ public:
         return *pos;
     }
     
-    void swapEdges(const ActiveEdge &e1, const ActiveEdge &e2, const int64_t xPosition)
+    void swapEdges(const ActiveEdge /*&e1*/, const ActiveEdge /*&e2*/, const int64_t /*xPosition*/)
     {
         
     }

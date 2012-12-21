@@ -90,6 +90,9 @@ private:
     friend int128_t operator* (int128_t a, uint32_t b);
     
     friend int128_t operator/ (int128_t a, uint32_t b);
+    friend int128_t operator% (int128_t a, uint32_t b);
+    friend int128_t operator/ (int128_t a, int128_t b);
+    friend int128_t operator% (int128_t a, int128_t b);
 
     friend int128_t operator<<(int128_t a, uint32_t i);
 
@@ -103,7 +106,7 @@ private:
     friend bool operator> (const int128_t a, const int128_t b);
     friend bool operator>=(const int128_t a, const int128_t b);
 
-    friend int128_t divmod (const int128_t a, const uint32_t b, uint32_t &mod);
+    friend int128_t divmod (const int128_t a, const uint32_t b, int64_t &mod);
     friend int128_t divmod (int128_t a, int128_t b, int128_t &mod);
 
     friend int128_t abs(int128_t a);

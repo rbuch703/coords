@@ -34,13 +34,20 @@ BigInt getRandom()
 int main()
 {
 
-    for (int i = 0; i < 100000; i++)
+// 279812503692478431914098262441088516071/ -2132603740430525549884309158766163
+
+    BigInt("279812503692478431914098262441088516071") /
+    BigInt("-2132603740430525549884309158766163");
+    for (int i = 0; i < 1000000; i++)
     {
         BigInt a( getRandom());
+        BigInt b( getRandom());
         
-        uint32_t b = rand() % 0xFFFFFFFF;
-
+        //uint32_t b = rand() % 0xFFFFFFFF;
+            
+        std::cout << a << "; " << b << endl;
         BigInt res = a/b;
+        res = a%b;
     }
     
 /*

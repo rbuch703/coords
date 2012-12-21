@@ -14,6 +14,28 @@ public:
     ValidatingBigint(uint32_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); }
     ValidatingBigint( int64_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); } 
     ValidatingBigint(uint64_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); } 
+    ValidatingBigint(const char* c): i(0), mpz(0)
+    { 
+        bool neg = (c[0] == '-');
+        if (neg) c++;
+        while (*c)
+        {
+            assert ( *c >= '0' && *c <= '9');
+            i = i*10 + (*c - '0');
+            mpz=mpz*10 + (*c - '0');
+            c++;
+        }
+        
+        if (neg)
+        {
+            i = -i;
+            mpz = -mpz;
+        }
+        assert( i.toMpz() == mpz);
+        
+        
+    } 
+
     
     ValidatingBigint(int128_t pI, mpz_class pMpz): i(pI), mpz(pMpz)
     {
@@ -53,6 +75,9 @@ private:
     friend ValidatingBigint operator- (ValidatingBigint a, ValidatingBigint b);
     friend ValidatingBigint operator* (ValidatingBigint a, ValidatingBigint b);
     friend ValidatingBigint operator/ (ValidatingBigint a, uint32_t b);
+    friend ValidatingBigint operator% (ValidatingBigint a, uint32_t b);
+    friend ValidatingBigint operator/ (ValidatingBigint a, ValidatingBigint b);
+    friend ValidatingBigint operator% (ValidatingBigint a, ValidatingBigint b);
 
     friend ValidatingBigint operator<<(ValidatingBigint a, uint32_t i);
 

@@ -166,7 +166,9 @@ int128_t operator*(int128_t a, int128_t b)
     return res; */
 }
 
-int128_t divmod (const int128_t a, const uint32_t b, uint32_t &mod)
+/* since b is in range [0, 2^32-1], mod can be in range [-2^32-1, 2^32-1] (the former only if a is negative),
+   and thus we need something bigger than an int32_t to hold 'b' */
+int128_t divmod (const int128_t a, const uint32_t b, int64_t &mod)
 {
     int128_t res;
     res.isPositive = a.isPositive;
@@ -190,10 +192,10 @@ int128_t divmod (const int128_t a, const uint32_t b, uint32_t &mod)
     res.data[0] = tmp / b;
     tmp = tmp - (res.data[0] * (int64_t)b);
     assert( tmp < b);
-    assert( res*b + tmp == a);
-    //FIXME: round towards zero or up?
-    
-    mod = tmp;
+
+    mod = a.isPositive ? tmp : - (int64_t)tmp;
+
+    assert( res*b + mod == a );
     
     return res;
 
@@ -201,31 +203,72 @@ int128_t divmod (const int128_t a, const uint32_t b, uint32_t &mod)
 
 int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
 {
-    int128_t res;
+    if ( abs(b) > abs(a) )
+    {
+        res_mod = a;
+        return 0;
+    }
+
     int128_t remainder;
     assert( b != 0);
+
+    bool aPositive = a.isPositive;
+    bool resPositive = (a.isPositive == b.isPositive);
     
-    bool resNegative = (a.isPositive != b.isPositive);
     a.isPositive = b.isPositive = true;
-        
-    for (int idx = 3; idx >= 0; idx--)
+
+    int b_idx = b.data[3] ? 3 :
+                b.data[2] ? 2 :
+                b.data[1] ? 1 : 0;
+    
+    
+    /*    
+    if (b.data[3] == 0 && b.data[2] == 0 && b.data[1] == 0)
     {
-        uint32_t div = a.data[idx] / b.data[idx];
-        if ( b*div > a ) div--;
-        assert( b*div <= a);
+        int64_t remainder;
+        res = divmod(a, b.data[0], remainder);
+        if (resNegative) 
+            res = -res;
+
+        res_mod = resNegative ? -remainder : remainder;
+        return res;
         
-        res = a /div;
-        a = a - res*div;
-        assert(a.data[idx] == 0);
+    }*/
+
+    int128_t res(0);
+
+    
+    uint64_t hi = 0;
+    for (int a_idx = 3; (a_idx >= b_idx) || hi; a_idx--)
+    {
+        assert ( (hi & 0xFFFFFFFFull) == 0);
+        uint32_t div = (hi | a.data[a_idx]) / b.data[b_idx];
+        int128_t prod = (b*div) << ((a_idx - b_idx)*32);
+        
+        if (prod > a )
+        {
+            assert( b.data[b_idx] < 0xFFFFFFFFul);  //otherwise it would overflow in the next step
+            div = (hi | a.data[a_idx]) / (b.data[b_idx]+1); // <-- this estimate is (potentially) wrong
+            prod = (b*div) << ((a_idx - b_idx)*32);
+        }
+        
+        res.data[a_idx - b_idx] = div;
+        assert (prod < a);
+                
+        a = a - prod;
+        if (a_idx < 3) assert( a.data[a_idx+1] == 0) ;
+
+        hi = ((uint64_t)a.data[a_idx]) << 32;
     }
 
     assert ( a < b);
     
-    res.isPositive = !resNegative;
+    //res.isPositive = resPositive;
     
-    res_mod = (resNegative) ? -a : a;
+    //res_mod = a;
+    res_mod = (aPositive) ? a : -a;
     
-    return res;
+    return resPositive ? res : -res;
     /*
     if (remainder < 0) 
     {   
@@ -236,11 +279,31 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     
 }
 
-
-int128_t operator/ (const int128_t a, const uint32_t b)
+int128_t operator/ (int128_t a, int128_t b)
 {
-    uint32_t dummy;
+    int128_t dummy;
     return divmod(a, b, dummy);
+}
+
+int128_t operator% (int128_t a, int128_t b)
+{
+    int128_t remainder;
+    divmod(a,b,remainder);
+    return remainder;
+}
+
+
+int128_t operator/ (int128_t a, const uint32_t b)
+{
+    int64_t dummy;
+    return divmod(a, b, dummy);
+}
+
+int128_t operator% (int128_t a, uint32_t b)
+{
+    int64_t remainder;
+    divmod(a,b,remainder);
+    return remainder;
 }
 
 

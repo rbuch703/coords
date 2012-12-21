@@ -6,6 +6,9 @@ ValidatingBigint operator+ (ValidatingBigint a, ValidatingBigint b) { return Val
 ValidatingBigint operator- (ValidatingBigint a, ValidatingBigint b) { return ValidatingBigint(a.i-b.i, a.mpz-b.mpz);}
 ValidatingBigint operator* (ValidatingBigint a, ValidatingBigint b) { return ValidatingBigint(a.i*b.i, a.mpz*b.mpz);}
 ValidatingBigint operator/ (ValidatingBigint a, uint32_t b)         { return ValidatingBigint(a.i/b,   a.mpz/b);}
+ValidatingBigint operator% (ValidatingBigint a, uint32_t b)         { return ValidatingBigint(a.i%b,   a.mpz%b);}
+ValidatingBigint operator/ (ValidatingBigint a, ValidatingBigint b) { return ValidatingBigint(a.i/b.i, a.mpz/b.mpz);}
+ValidatingBigint operator% (ValidatingBigint a, ValidatingBigint b) { return ValidatingBigint(a.i%b.i, a.mpz%b.mpz);}
 
 
 ValidatingBigint operator<<(ValidatingBigint a, uint32_t i)         { return ValidatingBigint(a.i<<i, a.mpz<<i);}
