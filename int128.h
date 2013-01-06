@@ -33,7 +33,7 @@ public:
         data[1] = (a & 0xFFFFFFFF00000000ll) >> 32;
     }
 
-    int128_t(uint64_t a) 
+    int128_t(uint64_t a): isPositive(true)
     { 
         data[3] = data[2] = 0; 
         data[0] =  a & 0x00000000FFFFFFFF;

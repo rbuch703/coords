@@ -48,7 +48,7 @@ public:
     bool operator==(const SimpEvent & other) const 
     {
         return (principalVertex == other.principalVertex) && 
-               (type != other.type) &&
+               (type == other.type) &&
                (startVertex == other.startVertex) &&
                (endVertex == other.endVertex) &&
                (otherStartVertex == other.otherStartVertex) &&

@@ -241,19 +241,38 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     uint64_t hi = 0;
     for (int a_idx = 3; (a_idx >= b_idx) || hi; a_idx--)
     {
+        if (a < b)
+            break;
+            
         assert ( (hi & 0xFFFFFFFFull) == 0);
-        uint32_t div = (hi | a.data[a_idx]) / b.data[b_idx];
-        int128_t prod = (b*div) << ((a_idx - b_idx)*32);
+        uint64_t num = hi | a.data[a_idx];  //numerator
+        uint64_t div_hi = num / (uint64_t)b.data[b_idx];        //we can't determine the exact quotient, all we can do is
+        uint64_t div_lo = num / (((uint64_t)b.data[b_idx])+1);  //determien the lower and upper bounds and then refine them
         
-        if (prod > a )
+        while (div_hi != div_lo)
         {
-            assert( b.data[b_idx] < 0xFFFFFFFFul);  //otherwise it would overflow in the next step
-            div = (hi | a.data[a_idx]) / (b.data[b_idx]+1); // <-- this estimate is (potentially) wrong
-            prod = (b*div) << ((a_idx - b_idx)*32);
+            assert( div_hi > div_lo);
+            uint32_t mid = (((uint64_t)div_hi) + div_lo)/2;
+            
+            int128_t prod( (b*mid) << ((a_idx - b_idx)*32) );
+            if (prod <= a)
+            {
+                if (prod + b > a)
+                    { div_hi = div_lo =mid; break; } //found the right divisor 
+                else  //have to go on looking, but 'mid' is too low
+                    div_lo = mid + 1;
+            }
+            else
+            {
+                assert( prod > a);
+                div_hi = mid-1;
+            }
         }
         
-        res.data[a_idx - b_idx] = div;
-        assert (prod < a);
+        int128_t prod = (b*div_hi) << ((a_idx - b_idx)*32);
+        
+        res.data[a_idx - b_idx] = div_hi;
+        assert (prod <= a);
                 
         a = a - prod;
         if (a_idx < 3) assert( a.data[a_idx+1] == 0) ;
@@ -269,13 +288,7 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     res_mod = (aPositive) ? a : -a;
     
     return resPositive ? res : -res;
-    /*
-    if (remainder < 0) 
-    {   
-        remainder+= b;
-        assert (remainder > 0)
-        res -=1;
-    }*/
+
     
 }
 

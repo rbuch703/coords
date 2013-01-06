@@ -728,15 +728,32 @@ void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &
 
 Vertex LineSegment::getRoundedIntersection(const LineSegment &other) const
 {
-    /*
+
     BigInt num, denom;
-    getIntersectionCoeffcicient(other, num, denom);
-    assert ( ((num >= 0 && denom > 0 && num > denom) || (num <= 0 && denom < 0 && num < denom)) && "Do not intersect");
-    int64_t iNum = (int64_t)num;
+    assert (start.x <= end.x && other.start.x <= other.end.x);
+
+    this->getIntersectionCoefficient(other, num, denom);
+    assert ( ((num >= 0 && denom > 0 && num <= denom) || (num <= 0 && denom < 0 && num >= denom)) && "Do not intersect");
+    /*int64_t iNum = (int64_t)num;
     int64_t iDenom = (int64_t)denom;
-    assert (iNum == num && iDenom == denom);
-    */
-    return Vertex();
+    assert (iNum == num && iDenom == denom);*/
+    
+    
+    Vertex v( (start.x + num * (end.x - start.x) / denom), (start.y + num * (end.y - start.y) / denom) );
+    /** make sure that the intersection position is rounded *up* to the next integer
+      * first, this is only necessary if the division num/denom has a remainder - otherwise the result is already exact
+      * second, it is only necessary if the slope in the respective direction is positive
+      *     - if it was zero, x/y would be constant over the lenght of the whole line and does not need to be adjusted
+      *     - if it was negative, the formula above already computed a value that is rounded up
+      *
+      **/
+    if (num % denom != 0)    
+    {
+        if (end.x > start.x) v.x = v.x + 1;
+        if (end.y > start.y) v.y = v.y + 1;
+    }
+    
+    return v;
 }
 
 

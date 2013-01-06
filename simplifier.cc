@@ -298,7 +298,7 @@ int main()
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    reconstructCoastline(fopen("intermediate/coastline.dump", "rb"), poly_storage);
+    reconstructCoastline(fopen("coastline.dump", "rb"), poly_storage);
     cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
     clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);
 }

@@ -8,6 +8,16 @@
 
 #include "config.h"
 
+
+/** necessary properties:
+    ActiveEdge:
+        - left vertex, right vertex
+        - left collision event, right collision event
+        - left adjacent edge
+        - right adjacent edge
+ 
+**/
+
 void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res);
 
 typedef list<Vertex> OpenPolygon;
@@ -95,7 +105,7 @@ public:
         return *pos;
     }
     
-    void swapEdges(const ActiveEdge /*&e1*/, const ActiveEdge /*&e2*/, const int64_t /*xPosition*/)
+    void swapEdges(ActiveEdge &e1, ActiveEdge &e2, const int64_t /*xPosition*/)
     {
         
     }

@@ -33,25 +33,7 @@ BigInt getRandom()
 
 int main()
 {
-
-// 279812503692478431914098262441088516071/ -2132603740430525549884309158766163
-
-    BigInt("279812503692478431914098262441088516071") /
-    BigInt("-2132603740430525549884309158766163");
-    for (int i = 0; i < 1000000; i++)
-    {
-        BigInt a( getRandom());
-        BigInt b( getRandom());
-        
-        //uint32_t b = rand() % 0xFFFFFFFF;
-            
-        std::cout << a << "; " << b << endl;
-        BigInt res = a/b;
-        res = a%b;
-    }
-    
-/*
-    static const int32_t NUM_EDGES = 100000;
+    static const int32_t NUM_EDGES = 250;
     list<ActiveEdge> edges;
     LineArrangement l;
     for (int i = 0; i < NUM_EDGES; i++)
@@ -71,29 +53,51 @@ int main()
         if (intersects(edge, xPos)) 
             l.addEdge(edge, xPos);
     }        
-    std::cout << "=======================" << xPos << "======================="<< std::endl;
+    std::cout << "=======================" << xPos << " intersected by " << l.size() << " edges ======================="<< std::endl;
 
-    std::cout << l.size() << std::endl;
+    //std::cout << l.size() << std::endl;
 
     BigInt prev_pos = 0;
     LineSegment s(xPos, 0, xPos, 65536);
+    
     for (LineArrangement::const_iterator it = l.begin(); it != l.end(); it++)
     {
         LineSegment e( it->left, it->right);
         assert( e.intersects(s));
-        double alpha = e.getIntersectionCoefficient(s);
-        //std::cout << alpha.get_d() << endl;
-        Vertex intersect( (int32_t)(it->left.x.toDouble() + alpha* (it->right.x - it->left.x).toDouble() ),
-                          (int32_t)(it->left.y.toDouble() + alpha* (it->right.y - it->left.y).toDouble() ) );
-        //std::cout << intersect << "<=" << prev_pos << std::endl;
 
+        Vertex intersect = e.getRoundedIntersection(s);
+       
         assert( intersect.y >= prev_pos);
         prev_pos = intersect.y;
         //std::cout << (*it)  << " [" << intersect << "] "<< endl;
     }
+
+    LineArrangement::const_iterator second = l.begin(); second++;
+    
+    BigInt xNew = (uint64_t)0xFFFFFFFFFFFFFFFFull;
+    
+    for (LineArrangement::const_iterator first = l.begin(); second != l.end(); first++, second++)
+    {
+        LineSegment A( first->left, first->right);
+        LineSegment B( second->left, second->right);
+        
+        if (! A.intersects(B)) continue;
+        Vertex v = A.getRoundedIntersection(B);
+        if (v.x > xPos && v.x < xNew) xNew = v.x;
+        if (v.x > xPos) std::cout << v.x << std::endl;
+    }
+    
+    std::cout << "new intersection is at x=" << xNew << std::endl;
+    
+    /* TODOs:
+        determine the next intersection point of two line segments (i.e. that line section intersection point with the smallest
+        x-coordinate 'xNew' that is bigger than 'xPos'); this can only be an intersection between adjacent line segments in 'l'
+        
+        obtain random x-values in the interval (xPos, xNew) and ensure that the order of line segments in 'l' is still value for
+        all of these x-values (i.e. that no intersection took place in the interval (xPos, xNew)
     */
 
-#if 0
+/*
     Vertex a(1,0);
     Vertex b(0,1);
     
@@ -103,9 +107,8 @@ int main()
     Vertex min(-1800000000, -900000000);
     Vertex max( 1800000000,  900000000);
     TEST( (max-min).squaredLength() == 16200000000000000000ull);
-    /*
-    a= Vertex(0,0);
-    b= Vertex(1000,1000);*/
+    //a= Vertex(0,0);
+    //b= Vertex(1000,1000);
     
     LineSegment seg(min, max, -1, -1);
     TEST( seg.contains(Vertex(0,0) ));
@@ -159,7 +162,5 @@ int main()
     p.append(Vertex(0,3));
     p.append(Vertex(1,2));
     p.append(Vertex(0,1));
-#endif    
-   
+*/  
 }
-
