@@ -46,9 +46,9 @@ geo_unit_tests: $(GEO_OBJ)
 
 clean:
 	@echo [CLEAN]
-	@rm *.o
-	@rm *~
-	@rm conv_osmxml data_converter simplifier geo_unit_tests gl_test
+	@rm -rf *.o
+	@rm -rf *~
+	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests gl_test
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(GL_TEST_SRC)
 	@echo [DEP]

@@ -41,7 +41,7 @@ int main()
         Vertex v1(rand() % 65536, rand() % 65536);
         Vertex v2(rand() % 65536, rand() % 65536);
 
-        edges.push_back( ActiveEdge(v1 < v2 ? v1:v2 , v1<v2? v2:v1, true, NULL) );
+        edges.push_back( ActiveEdge(v1 < v2 ? v1:v2 , v1<v2? v2:v1) );
         //std::cout << edges[i] << endl;
     }
 

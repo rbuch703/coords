@@ -27,14 +27,12 @@ struct ActiveEdge
     ActiveEdge() {} 
 
 
-    ActiveEdge(const Vertex pLeft, const Vertex pRight, const bool pIsTopEdge, OpenPolygon *pPoly):
-        left(pLeft), right(pRight), isTopEdge(pIsTopEdge), poly(pPoly) 
-        {
-            assert (left < right);
-        }
+    ActiveEdge(const Vertex pLeft, const Vertex pRight): left(pLeft), right(pRight)
+        { assert (left < right); }
+
     Vertex left, right;
-    bool isTopEdge; // we do a plane sweep in x-direction, so every active edge limits a polygon either as a top or a bottom edge
-    OpenPolygon *poly;
+    
+    std::list<ActiveEdge*> intersections;
     
     // @returns whether 'this' intersects with the vertical line at xPosition numerically earlier than 'other'
     // robustness: predicate is exact no matter what the input parameters are
