@@ -50,19 +50,11 @@ public:
         return *this;
     }
     
-    bool operator <(const Fraction &other) const
-    {
-        assert (denom >0 && other.denom > 0);
-        // num/denom < num2/denom2 <=> num*denom2 < num2*denom
-        
-        return num * other.denom < other.num * denom;
-    }
+    bool operator < (const Fraction &other) const { return num * other.denom <  other.num * denom; }
+    bool operator <=(const Fraction &other) const { return num * other.denom <= other.num * denom; }
 
-    bool operator ==(const Fraction &other) const
-    {
-        return num * other.denom == other.num * denom;
-    }
-
+    bool operator ==(const Fraction &other) const { return num * other.denom == other.num * denom; }
+    bool operator !=(const Fraction &other) const { return num * other.denom != other.denom * num; }
 
     Fraction operator+(const Fraction &other) const { Fraction res = *this; return res+=other; }
     Fraction operator-(const Fraction &other) const { Fraction res = *this; return res-=other; }

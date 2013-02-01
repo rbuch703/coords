@@ -19,36 +19,33 @@
 
 ActiveEdge::ActiveEdge(const Vertex pLeft, const Vertex pRight): 
     left(pLeft), right(pRight)
-    { assert (left < right); }
+{ 
+    assert (left < right || (left == Vertex(0,0) && (right ==Vertex(0,0) ) ) ); 
 
-
-bool ActiveEdge::lessThan(const ActiveEdge & other, const BigFraction &xPosition) const
-{
-    assert(left.x <= right.x && other.left.x <= other.right.x);
-    assert(left.x != right.x || other.left.x != other.right.x);
-    
-    if (left.x == right.x || other.left.x == other.right.x)
-        assert(false && "Not implemented");
-
-    BigFraction coeff1= (xPosition - left.x) * (BigInt(right.y) - left.y);
-    coeff1/= BigInt(right.x) - left.x;
-    
-    BigFraction y1 = coeff1 + left.y;
-    //BigInt offset1 = ;
-
-    BigFraction coeff2= (xPosition - other.left.x) * (BigInt(other.right.y) - other.left.y);
-    coeff2 /= BigInt(other.right.x) - other.left.x;
-    
-    BigFraction y2 = coeff2 + other.left.y;
-    
-    
-    /*bool pred = (num1 + offset1 * denom1) * denom2 < 
-                (num2 + offset2 * denom2) * denom1;
-    return (denom1*denom2>= 0) ? pred : !pred;*/
-    
-    return y1 < y2;
-    
 }
+
+BigFraction ActiveEdge::getYValueAt(const BigFraction &xPosition) const
+{
+    
+    assert(left.x <= right.x); 
+
+    //otherwise we'll get a divide by zero later on
+    if (left.x == right.x) assert(false && "Not implemented");
+    
+    BigFraction dy= BigFraction(BigInt(right.y) - left.y, BigInt(right.x) - left.x)
+                    * (xPosition - left.x);
+    
+    return dy + left.y;
+}
+
+bool ActiveEdge::isLessThan(const ActiveEdge & other, const BigFraction &xPosition) const
+{ return getYValueAt(xPosition) < other.getYValueAt(xPosition); }
+
+bool ActiveEdge::isEqual(const ActiveEdge & other, const BigFraction &xPosition) const
+{ return getYValueAt(xPosition) == other.getYValueAt(xPosition); }
+    
+bool ActiveEdge::isLessThanOrEqual(const ActiveEdge & other, const BigFraction &xPosition) const
+{ return getYValueAt(xPosition) <= other.getYValueAt(xPosition); }
     
     //HACK: the operator needs to be defined for the AVLTree to work at all; but it must never be used,
     //because the comparision of two ActiveEdges has no meaning unless the y position at which
@@ -66,7 +63,7 @@ std::ostream& operator <<(std::ostream& os, const ActiveEdge &edge)
 
 
 SimpEvent::SimpEvent() { type = (SimpEventType)-1;}
-SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge* pThisEdge, ActiveEdge* pOtherEdge): 
+SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge pThisEdge, ActiveEdge pOtherEdge):
     type(pType), m_thisEdge(pThisEdge), m_otherEdge(pOtherEdge)
 {
     
@@ -74,20 +71,20 @@ SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge* pThisEdge, ActiveEdge* pO
     {
         case SEG_START:
             assert(m_thisEdge && !m_otherEdge);
-            x = BigFraction(m_thisEdge->left.x, 1);
-            y = BigFraction(m_thisEdge->left.y, 1);
+            x = BigFraction(m_thisEdge.left.x, 1);
+            y = BigFraction(m_thisEdge.left.y, 1);
             break;
         case SEG_END:
             assert(m_thisEdge && !m_otherEdge);
-            x = BigFraction(m_thisEdge->right.x, 1);
-            y = BigFraction(m_thisEdge->right.y, 1);
+            x = BigFraction(m_thisEdge.right.x, 1);
+            y = BigFraction(m_thisEdge.right.y, 1);
             break;
         case INTERSECTION:
         
             assert(m_thisEdge && m_otherEdge);
             {
-                LineSegment l1(m_thisEdge->left, m_thisEdge->right);
-                LineSegment l2(m_otherEdge->left,m_otherEdge->right);
+                LineSegment l1(m_thisEdge.left, m_thisEdge.right);
+                LineSegment l2(m_otherEdge.left,m_otherEdge.right);
                 assert( l1.intersects(l2) );
                 BigInt num, denom;
                 l1.getIntersectionCoefficient(l2, num, denom);
@@ -109,7 +106,13 @@ SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge* pThisEdge, ActiveEdge* pO
 
 bool SimpEvent::operator==(const SimpEvent &other) const 
 {
-    return (x == other.x) && (y == other.y);
+    return  (x == other.x) && 
+            (y == other.y) && 
+            (type == other.type) &&
+            (m_thisEdge.left == other.m_thisEdge.left) && 
+            (m_thisEdge.right == other.m_thisEdge.right) &&
+            (m_otherEdge.left == other.m_otherEdge.left) &&
+            (m_otherEdge.right == other.m_otherEdge.right);
 }
            
            
@@ -120,7 +123,13 @@ bool SimpEvent::operator!=(const SimpEvent &other) const
 
 bool SimpEvent::operator <(const SimpEvent &other) const
 {
-    return ( x < other.x ) || (( x == other.x ) && ( y < other.y ) );
+    if ( x != other.x ) return x < other.x;
+    if ( y != other.y ) return y < other.y;
+    if (type != other.type) return type < other.type;
+    if (m_thisEdge.left != other.m_thisEdge.left ) return m_thisEdge.left <  other.m_thisEdge.left;
+    if (m_thisEdge.right!= other.m_thisEdge.right) return m_thisEdge.right < other.m_thisEdge.right;
+    if (m_otherEdge.left != other.m_otherEdge.left ) return m_otherEdge.left <  other.m_otherEdge.left;
+    return m_otherEdge.right < other.m_otherEdge.right;
 }
 
 AVLTreeNode<ActiveEdge>* LineArrangement::addEdge(const ActiveEdge &a, const BigFraction xPosition)
@@ -138,7 +147,7 @@ AVLTreeNode<ActiveEdge>* LineArrangement::addEdge(const ActiveEdge &a, const Big
     do
     {
         parent = *pos;
-        pos = a.lessThan(parent->m_Data, xPosition) ? &parent->m_pLeft : &parent->m_pRight;
+        pos = a.isLessThan(parent->m_Data, xPosition) ? &parent->m_pLeft : &parent->m_pRight;
     } while (*pos);
     
     assert (! *pos);

@@ -9,9 +9,8 @@
 #include <iostream> // for cout
 
 
-#define AVL_DEBUG
+// #define AVL_DEBUG
 
-//using namespace std;
 
 //forward declarations
 template<class t> class AVLTree ; 
@@ -64,23 +63,6 @@ public:
 	
 	t& operator[]( const t &item) { return getItem(item);}
 	void  remove ( const t &item);
-	
-	t     pop() 
-	{
-#ifdef AVL_DEBUG
-	    #warning extensive debug checks
-	    check();
-#endif
-	    assert (size() >0); 
-	    t item = *begin();
-	    remove (item); 
-
-#ifdef AVL_DEBUG
-	    #warning extensive debug checks
-	    check();
-#endif
-	    return item;
-    }
 	
 	void print() const { print(m_pRoot);}
 	void check(); //check consistency

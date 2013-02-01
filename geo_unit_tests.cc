@@ -49,27 +49,49 @@ int main()
         //std::cout << edges[i] << endl;
     }
 
-    AVLTree<SimpEvent> events;
+    SimpEventQueue events;
 
     BOOST_FOREACH( ActiveEdge &edge, edges)
     {
-        events.insert( SimpEvent( SEG_START, &edge, NULL));
-        events.insert( SimpEvent( SEG_END, &edge, NULL));
-    }        
+        events.add( SEG_START, edge);
+        events.add( SEG_END, edge);
+    }
 
-    LineArrangement line_arrangement;
+    LineArrangement lines;
 
     
-    while ( events.size() )
+    while ( events.containsEvents() )
     {
         SimpEvent event = events.pop();
         switch (event.type)
         {
         case SEG_START:
             {
-                int128_t x_pos = event.m_thisEdge->left.x;
-                line_arrangement.addEdge( *event.m_thisEdge, x_pos);
+                /* algorithm: 
+                    1. insert the segment at the correct position in the line arrangement
+                       (so that the lines 'physically' directly to its left and right are also 
+                       its neighbors in the line arrangement data structure
+                            
+                 */
+            
+                int128_t x_pos = event.m_thisEdge.left.x;
+                ActiveEdge &edge = event.m_thisEdge;
+                AVLTreeNode<ActiveEdge>* node = lines.addEdge( edge, x_pos);
+                if (lines.hasPredecessor(node) && lines.hasSuccessor(node))
+                {
+                    ActiveEdge pred = lines.getPredecessor(node);
+                    ActiveEdge succ = lines.getSuccessor(node);
+                    
+                    assert (pred.isLessThanOrEqual(edge, x_pos));
+                    assert (edge.isLessThanOrEqual(succ, x_pos));
+                    assert (pred.isLessThanOrEqual(succ, x_pos));
+                    
+                    #error continue here: instead of "contains", direct compute whether an intersection exists
+                    if (events.contains( INTERSECTION, pred, succ))
+                        events.remove(   INTERSECTION, pred, succ);
+                }
                 
+                //FIXME: edge case than two lines lie on each other
             }
             break;
         case SEG_END:
