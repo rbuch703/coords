@@ -16,104 +16,47 @@
             - ability to remove edges in O(log(n)) (when they no longer intersec the sweep line)
 */
 
-enum SimpEventType { SEG_START, SEG_END, INTERSECTION };
 
-class SimpEvent
+ActiveEdge::ActiveEdge(const Vertex pLeft, const Vertex pRight): 
+    left(pLeft), right(pRight)
+    { assert (left < right); }
+
+
+bool ActiveEdge::lessThan(const ActiveEdge & other, const BigFraction &xPosition) const
 {
-public:
-    SimpEvent() { type = (SimpEventType)-1;}
-    SimpEvent( SimpEventType pType, ActiveEdge* pThisEdge, ActiveEdge* pOtherEdge = NULL): 
-        type(pType), m_thisEdge(pThisEdge), m_otherEdge(pOtherEdge)
-        {
-            
-            switch (type)
-            {
-                case SEG_START:
-                    assert(m_thisEdge && !m_otherEdge);
-                    xNum = m_thisEdge->left.x;
-                    yNum = m_thisEdge->left.y;
-                    xDenom = yDenom = 1;
-                    break;
-                case SEG_END:
-                    assert(m_thisEdge && !m_otherEdge);
-                    xNum = m_thisEdge->right.x;
-                    yNum = m_thisEdge->right.y;
-                    xDenom = yDenom = 1;
-                    break;
-                case INTERSECTION:
-                
-                    assert(m_thisEdge && m_otherEdge);
-                    {
-                        LineSegment l1(m_thisEdge->left, m_thisEdge->right);
-                        LineSegment l2(m_otherEdge->left,m_otherEdge->right);
-                        assert( l1.intersects(l2) );
-                        BigInt num, denom;
-                        l1.getIntersectionCoefficient(l2, num, denom);
-                        // x = (start.x + num * (end.x - start.x) / denom) = (start.x*denom + num*(end.x-start.x))/denom
-                        xNum = (l1.start.x*denom + num*(l1.end.x-l1.start.x));
-                        xDenom = denom;
-                        // y = (start.y + num * (end.y - start.y) / denom) = (start.y*denom + num*(end.y-start.y))/denom
-                        yNum = (l1.start.y*denom + num*(l1.end.y - l1.start.y))/denom;
-                        yDenom = denom;
-                        
-                        /* canonical form: denominator is non-negative; this ensures that 
-                           the "<"-predicate computation does not require sign flips
-                         */
-                        if (denom < 0)  
-                        {
-                            xNum = -xNum;
-                            xDenom = -xDenom;
-                            yNum = -yNum;
-                            yDenom = -yDenom;
-                        }
-                    }
-                    break;
-                default: 
-                    xNum = yNum = xDenom = yDenom = 0;
-                    assert(false && "Invalid event type"); 
-                    break;
-            }
-        }
+    assert(left.x <= right.x && other.left.x <= other.right.x);
+    assert(left.x != right.x || other.left.x != other.right.x);
+    
+    if (left.x == right.x || other.left.x == other.right.x)
+        assert(false && "Not implemented");
 
-    bool operator==(const SimpEvent & other) const 
-    {
-         assert ( xDenom != 0 && yDenom != 0 && other.xDenom != 0 && other.yDenom != 0);
-        /* x = other.x && y = other.y 
-         *
-         * xNum/xDenom = other.xNum/other.xDenom && yNum/yDenom = other.yNum/other.yDenom
-         *           <=>
-         */
-        return xNum*other.xDenom == other.xNum*xDenom && 
-               yNum*other.yDenom == other.yNum*yDenom;
-    }
-               
-               
-    bool operator!=(const SimpEvent & other) const
-    { 
-        return ! (*this == other);
-    }
+    BigFraction coeff1= (xPosition - left.x) * (BigInt(right.y) - left.y);
+    coeff1/= BigInt(right.x) - left.x;
     
-    bool operator <(const SimpEvent &other) const
-    {
-        /* canonical denominators should be positive; otherwise, we would have to consider 
-           sign flips of the result (since we use rearraged inequality derived by multiplying
-           the original formula by a potentially negative number)
-           */
-        assert ( xDenom > 0 && yDenom > 0 && other.xDenom > 0 && other.yDenom > 0);
-        if (xNum*other.xDenom != other.xNum*xDenom) // differ in x coordinate;
-            return xNum*other.xDenom < other.xNum*xDenom;     
-        
-        return yNum*other.yDenom < other.yNum*yDenom;
-    }
+    BigFraction y1 = coeff1 + left.y;
+    //BigInt offset1 = ;
+
+    BigFraction coeff2= (xPosition - other.left.x) * (BigInt(other.right.y) - other.left.y);
+    coeff2 /= BigInt(other.right.x) - other.left.x;
     
-    SimpEventType type;
-    ActiveEdge *m_thisEdge, *m_otherEdge;
-    // x and y coordinates for the position at which the event takes place
-    // separate numerators and denominators are necessary, because an intersection
-    // may happen at a non-integer position
-    BigInt      xNum, xDenom, yNum, yDenom; 
+    BigFraction y2 = coeff2 + other.left.y;
     
-};
+    
+    /*bool pred = (num1 + offset1 * denom1) * denom2 < 
+                (num2 + offset2 * denom2) * denom1;
+    return (denom1*denom2>= 0) ? pred : !pred;*/
+    
+    return y1 < y2;
+    
+}
+    
+    //HACK: the operator needs to be defined for the AVLTree to work at all; but it must never be used,
+    //because the comparision of two ActiveEdges has no meaning unless the y position at which
+    //the comparison is to be evaluated is provided as well.
+bool ActiveEdge::operator<(const ActiveEdge &) { 
+    assert(false && "ActiveEdges cannot be compared");
+}
+
 
 std::ostream& operator <<(std::ostream& os, const ActiveEdge &edge)
 {
@@ -122,66 +65,86 @@ std::ostream& operator <<(std::ostream& os, const ActiveEdge &edge)
 }
 
 
-
-
-list<OpenPolygon*> openPolygons;
-/*
-GeometryTree activeEdges;
-
-void handleMinimalVertex( const ConnectedVertex &v)
+SimpEvent::SimpEvent() { type = (SimpEventType)-1;}
+SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge* pThisEdge, ActiveEdge* pOtherEdge): 
+    type(pType), m_thisEdge(pThisEdge), m_otherEdge(pOtherEdge)
 {
     
-}
-
-void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res)
-{
-    PolygonSegment s = seg;
-    s.canonicalize();
-
-    uint32_t nVertices = s.vertices().size() - 1; //first == last
-    list<Vertex>::const_iterator it = s.vertices().begin();
-    ConnectedVertex vertices[nVertices];
- 
-    for (uint32_t i = 0; i < nVertices; i++, it++)
+    switch (type)
     {
-        vertices[i].x = it->x;
-        vertices[i].y = it->y;
-        vertices[i].pred = &vertices[ (i+1) % nVertices];
-        vertices[i].succ = &vertices[ (i-1+nVertices) % nVertices];
-    }
-
-    AVLTree<SimpEvent> events;
-    
-    for (uint32_t i = 0; i < nVertices; i++)
-    {
-        std::cout << "#" << vertices[i] << endl;
-        if ( vertices[i] < (*vertices[i].pred) && vertices[i] < (*vertices[i].succ))
-            events.insert( SimpEvent(MIN_VERTEX, &vertices[i]));
-    }
-
-    while (events.size())
-    {
-        SimpEvent e = events.pop();
+        case SEG_START:
+            assert(m_thisEdge && !m_otherEdge);
+            x = BigFraction(m_thisEdge->left.x, 1);
+            y = BigFraction(m_thisEdge->left.y, 1);
+            break;
+        case SEG_END:
+            assert(m_thisEdge && !m_otherEdge);
+            x = BigFraction(m_thisEdge->right.x, 1);
+            y = BigFraction(m_thisEdge->right.y, 1);
+            break;
+        case INTERSECTION:
         
-        switch (e.type)
-        {
-            case MIN_VERTEX:
-                break;
-            case END_OF_SEGMENT:
-                break;
-            case INTERSECTION:
-                break;
-            default:
-                assert(false && "Invalid event type");
-                break;
-        }
+            assert(m_thisEdge && m_otherEdge);
+            {
+                LineSegment l1(m_thisEdge->left, m_thisEdge->right);
+                LineSegment l2(m_otherEdge->left,m_otherEdge->right);
+                assert( l1.intersects(l2) );
+                BigInt num, denom;
+                l1.getIntersectionCoefficient(l2, num, denom);
+                // x = (start.x + num * (end.x - start.x) / denom) = (start.x*denom + num*(end.x-start.x))/denom
+                x = BigFraction( l1.start.x*denom + num*(l1.end.x-l1.start.x), denom);
+                // y = (start.y + num * (end.y - start.y) / denom) = (start.y*denom + num*(end.y-start.y))/denom
+                y = BigFraction( l1.start.y*denom + num*(l1.end.y - l1.start.y), denom);
+                
+                /* canonical form: denominator is non-negative; this ensures that 
+                   the "<"-predicate computation does not require sign flips */
+            }
+            break;
+        default: 
+            x = y = BigFraction(0);
+            assert(false && "Invalid event type"); 
+            break;
     }
-    std::cout << events.size() << " events" << endl;
-    
-    for (AVLTree<SimpEvent>::const_iterator it = events.begin(); it != events.end(); it++)
-        std::cout << it->principalVertex << endl;
-
-
 }
-*/
 
+bool SimpEvent::operator==(const SimpEvent &other) const 
+{
+    return (x == other.x) && (y == other.y);
+}
+           
+           
+bool SimpEvent::operator!=(const SimpEvent &other) const
+{ 
+    return ! (*this == other);
+}
+
+bool SimpEvent::operator <(const SimpEvent &other) const
+{
+    return ( x < other.x ) || (( x == other.x ) && ( y < other.y ) );
+}
+
+AVLTreeNode<ActiveEdge>* LineArrangement::addEdge(const ActiveEdge &a, const BigFraction xPosition)
+{
+    num_items++;
+    if (!m_pRoot)
+    {
+        m_pRoot = new AVLTreeNode<ActiveEdge>(NULL,NULL, NULL, a);;
+        m_pRoot->m_dwDepth = 0;    //no children --> depth=0
+        return m_pRoot;
+    }
+    
+    AVLTreeNode<ActiveEdge> *parent;//= m_pRoot;
+    AVLTreeNode<ActiveEdge> **pos = &m_pRoot;
+    do
+    {
+        parent = *pos;
+        pos = a.lessThan(parent->m_Data, xPosition) ? &parent->m_pLeft : &parent->m_pRight;
+    } while (*pos);
+    
+    assert (! *pos);
+    *pos = new AVLTreeNode<ActiveEdge>(NULL, NULL, parent, a);
+    (*pos)->m_dwDepth = 0;
+    
+    updateDepth(*pos);
+    return *pos;
+}

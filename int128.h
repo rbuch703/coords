@@ -19,7 +19,7 @@ public:
         data[3] = data[2] = data[1] = 0; 
         isPositive = ! (a & 0x80000000); // sign bit is set
 
-        data[0] = isPositive ? a : (~a) +1; //two's complement; +1 cannot overflow since we have an additional bit (the former sign bit) available
+        data[0] = isPositive ? a : ((~a) +1); //two's complement; +1 cannot overflow since we have an additional bit (the former sign bit) available
     }
 
     int128_t(int64_t a) 
@@ -78,6 +78,12 @@ public:
         assert(data[3] == 0 && data[2] == 0 && "Overflow");
         return ((uint64_t)data[1]) << 32 | data[0];
     }
+    
+    int128_t& operator*=(int128_t other)
+    {
+        *this = *this * other;
+        return *this;
+    }
 
 
 private:
@@ -88,6 +94,7 @@ private:
     friend int128_t operator- (int128_t a, int128_t b);
     friend int128_t operator* (int128_t a, int128_t b);
     friend int128_t operator* (int128_t a, uint32_t b);
+
     
     friend int128_t operator/ (int128_t a, uint32_t b);
     friend int128_t operator% (int128_t a, uint32_t b);

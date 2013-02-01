@@ -9,7 +9,7 @@
 #include <iostream> // for cout
 
 
-// #define AVL_DEBUG
+#define AVL_DEBUG
 
 //using namespace std;
 
@@ -61,13 +61,24 @@ public:
 	AVLTreeNode<t>* insert(const t &item);
 	bool contains( const t &item) const;
 	t&    getItem( const t &item);
+	
 	t& operator[]( const t &item) { return getItem(item);}
 	void  remove ( const t &item);
 	
 	t     pop() 
-	{ 
+	{
+#ifdef AVL_DEBUG
+	    #warning extensive debug checks
+	    check();
+#endif
+	    assert (size() >0); 
 	    t item = *begin();
 	    remove (item); 
+
+#ifdef AVL_DEBUG
+	    #warning extensive debug checks
+	    check();
+#endif
 	    return item;
     }
 	
@@ -112,7 +123,7 @@ public:
     class iterator {
     public:
 	    iterator(AVLTreeNode<t> *node, AVLTree<t> &tree) : 
-            m_pCurrent (node), m_Tree(tree) {};
+            m_pCurrent (node), m_tree(tree) {};
 	
 	    t& operator*() 	{ return m_pCurrent->m_Data; }
 	    t* operator->() { return & (m_pCurrent->m_Data);}
@@ -143,7 +154,7 @@ public:
 	    {	
 	        if (m_pCurrent == NULL)
 	        {
-	            m_pCurrent = m_Tree.m_pRoot;
+	            m_pCurrent = m_tree->m_pRoot;
 	            if (! m_pCurrent) return *this;
 	            while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
 	            return *this;
@@ -174,15 +185,15 @@ public:
 	    friend class const_iterator;
     private:
 	    AVLTreeNode<t> *m_pCurrent;
-	    AVLTree<t>     &m_Tree;
+	    AVLTree<t>     &m_tree;
     };
 
     class const_iterator {
     public:
 	    const_iterator(AVLTreeNode<t> *node, AVLTree<t> &tree) : 
-            m_pCurrent (node), m_Tree(tree) {};
+            m_pCurrent (node), m_tree(tree) {};
 
-	    const_iterator(const iterator &other) : m_pCurrent (other.m_pCurrent), m_Tree(other.m_Tree) {};
+	    const_iterator(const iterator &other) : m_pCurrent (other.m_pCurrent), m_tree(other.m_tree) {};
 	
 	    const t& operator*() 	{ return m_pCurrent->m_Data; }
 	    const t* operator->() { return & (m_pCurrent->m_Data);}
@@ -213,7 +224,7 @@ public:
 	    {	
 	        if (m_pCurrent == NULL)
 	        {
-	            m_pCurrent = m_Tree.m_pRoot;
+	            m_pCurrent = m_tree.m_pRoot;
 	            if (! m_pCurrent) return *this;
 	            while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
 	            return *this;
@@ -243,7 +254,7 @@ public:
 	    bool operator!=(const const_iterator &other) const { return m_pCurrent != other.m_pCurrent;}
     private:
 	    const AVLTreeNode<t> *m_pCurrent;
-	    AVLTree<t>     &m_Tree;
+	    AVLTree<t>     *m_tree;
     };
 	
 	//friend class iterator<t>;

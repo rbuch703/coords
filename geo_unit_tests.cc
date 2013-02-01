@@ -8,8 +8,12 @@
 #include <iostream>
 
 #include <boost/foreach.hpp>
+#include "fraction.h"
+
+typedef Fraction<int128_t> BigFrac;
 #define TEST(X) { cout << ((X)?"\033[22;32mpassed":"\033[22;31mfailed") << "\033[22;37m \"" << #X <<"\" ("<< "line " << __LINE__ << ")" << endl;}
 
+typedef AVLTree<SimpEvent> SweepEventQueue;
 
 bool intersects (const ActiveEdge &edge, BigInt xPos)
 {
@@ -33,9 +37,9 @@ BigInt getRandom()
 
 int main()
 {
+
     static const int32_t NUM_EDGES = 250;
     list<ActiveEdge> edges;
-    LineArrangement l;
     for (int i = 0; i < NUM_EDGES; i++)
     {
         Vertex v1(rand() % 65536, rand() % 65536);
@@ -45,58 +49,39 @@ int main()
         //std::cout << edges[i] << endl;
     }
 
-    BigInt xPos = rand() % 65536;
+    AVLTree<SimpEvent> events;
 
-    std::cout << "=======================" << xPos << "======================="<< std::endl;
-    BOOST_FOREACH( const ActiveEdge &edge, edges)
+    BOOST_FOREACH( ActiveEdge &edge, edges)
     {
-        if (intersects(edge, xPos)) 
-            l.addEdge(edge, xPos);
+        events.insert( SimpEvent( SEG_START, &edge, NULL));
+        events.insert( SimpEvent( SEG_END, &edge, NULL));
     }        
-    std::cout << "=======================" << xPos << " intersected by " << l.size() << " edges ======================="<< std::endl;
 
-    //std::cout << l.size() << std::endl;
+    LineArrangement line_arrangement;
 
-    BigInt prev_pos = 0;
-    LineSegment s(xPos, 0, xPos, 65536);
     
-    for (LineArrangement::const_iterator it = l.begin(); it != l.end(); it++)
+    while ( events.size() )
     {
-        LineSegment e( it->left, it->right);
-        assert( e.intersects(s));
-
-        Vertex intersect = e.getRoundedIntersection(s);
-       
-        assert( intersect.y >= prev_pos);
-        prev_pos = intersect.y;
-        //std::cout << (*it)  << " [" << intersect << "] "<< endl;
-    }
-
-    LineArrangement::const_iterator second = l.begin(); second++;
-    
-    BigInt xNew = (uint64_t)0xFFFFFFFFFFFFFFFFull;
-    
-    for (LineArrangement::const_iterator first = l.begin(); second != l.end(); first++, second++)
-    {
-        LineSegment A( first->left, first->right);
-        LineSegment B( second->left, second->right);
-        
-        if (! A.intersects(B)) continue;
-        Vertex v = A.getRoundedIntersection(B);
-        if (v.x > xPos && v.x < xNew) xNew = v.x;
-        if (v.x > xPos) std::cout << v.x << std::endl;
+        SimpEvent event = events.pop();
+        switch (event.type)
+        {
+        case SEG_START:
+            {
+                int128_t x_pos = event.m_thisEdge->left.x;
+                line_arrangement.addEdge( *event.m_thisEdge, x_pos);
+                
+            }
+            break;
+        case SEG_END:
+            break;
+        case INTERSECTION:
+            break;
+        default:
+            assert(false && "Invalid simplification event type");break;
+        }
     }
     
-    std::cout << "new intersection is at x=" << xNew << std::endl;
     
-    /* TODOs:
-        determine the next intersection point of two line segments (i.e. that line section intersection point with the smallest
-        x-coordinate 'xNew' that is bigger than 'xPos'); this can only be an intersection between adjacent line segments in 'l'
-        
-        obtain random x-values in the interval (xPos, xNew) and ensure that the order of line segments in 'l' is still value for
-        all of these x-values (i.e. that no intersection took place in the interval (xPos, xNew)
-    */
-
 /*
     Vertex a(1,0);
     Vertex b(0,1);
