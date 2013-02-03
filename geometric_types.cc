@@ -277,6 +277,7 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
         assert( seg1 != seg2);
         //cout << "connecting two segments" << endl << *seg1 << endl << *seg2 << endl;
         
+        /*
         if (otherCoordinate(seg1->front()) < otherCoordinate( seg1->back()  ) &&
             otherCoordinate(seg2->back())  < otherCoordinate( seg2->front() ) )
         {
@@ -290,6 +291,16 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
             seg1->append(*seg2, (seg1->back() == seg2->front()) );
             delete seg2;
         } else assert(false && "invalid segment orientation");
+        */
+        
+        if ( otherCoordinate(seg1->front()) > otherCoordinate(seg1->back() )) 
+            seg1->reverse(); //now seg1 ends with the vertex at which seg2 is to be appended
+         
+        if ( otherCoordinate(seg2->front()) < otherCoordinate(seg2->back() ))
+            seg2->reverse(); //now seg2 starts with the vertex with which it is to be appended to seg1
+            
+        seg1->append(*seg2, (seg1->back() == seg2->front()) );
+        delete seg2;
         
         queue.push( pair<BigInt, PolygonSegment*>(max( otherCoordinate( seg1->front()), 
                                                        otherCoordinate( seg1->back() )), seg1));
@@ -306,7 +317,7 @@ void PolygonSegment::canonicalize()
     bool closed = m_vertices.front() == m_vertices.back();
     if (closed)
     {
-        // first==last causes to many special cases, so remove the duplicate here add re-add it later
+        // first==last causes to many special cases, so remove the duplicate(s) here add re-add one later.
         /* As a side-effect, this re-adding will only occur iff the polygon still has at least 3 vertices
          * after removing colinearities and consecutive duplicates. So only non-degenerated polygon will 
          * ever be closed, and closed polygons are guaranteed to never be degenerated.
@@ -378,7 +389,7 @@ void PolygonSegment::canonicalize()
         if (*v1 == *v2)
         {
             m_vertices.erase(v1);
-                v1 = v2++;
+            v1 = v2++;
         } else
         {
             v1++;

@@ -68,7 +68,6 @@ public:
         assert(data[3] == 0 && data[2] == 0 && "Overflow");
         assert( (data[1] & 0x80000000) == 0 && "Overflow"); //the int64_t needs the highest-order bit as its 'sign' bit
 
-        
         uint64_t a = ((uint64_t)data[1]) << 32 | data[0];
         return isPositive ? a : (~a)+1;
     }
@@ -79,6 +78,20 @@ public:
         return ((uint64_t)data[1]) << 32 | data[0];
     }
 
+
+    explicit operator int32_t() const
+    {
+        assert(data[3] == 0 && data[2] == 0 && data[1] == 0 && "Overflow");
+        assert( (data[0] & 0x80000000) == 0 && "Overflow"); //the int64_t needs the highest-order bit as its 'sign' bit
+
+        return isPositive ? data[0] : (~data[0])+1;
+    }
+
+    explicit operator uint32_t() const
+    {
+        assert(data[3] == 0 && data[2] == 0 && data[1] == 0 && "Overflow");
+        return data[0];
+    }
 
 private:
     int128_t(bool pIsPositive, uint32_t d3, uint32_t d2, uint32_t d1, uint32_t d0): 

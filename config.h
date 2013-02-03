@@ -8,7 +8,7 @@
 typedef mpz_class BigInt;
 #endif
 
-#if true
+#if false
 #include "validatingbigint.h"
 typedef ValidatingBigint BigInt;
 #else

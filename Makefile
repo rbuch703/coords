@@ -3,7 +3,7 @@ CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.c
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc polygonreconstructor.cc mem_map.cc helpers.cc validatingbigint.cc int128.cc
 GEO_SRC = geo_unit_tests.cc geometric_types.cc simplifypolygon.cc validatingbigint.cc int128.cc
-GL_TEST_SRC = gl_test.cc geometric_types.cc validatingbigint.cc int128.cc
+GL_TEST_SRC = gl_test.cc #geometric_types.cc validatingbigint.cc int128.cc
 
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
@@ -12,7 +12,7 @@ SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o)
 
-CFLAGS = -g -Wall -Wextra -std=c++11 #-O2
+CFLAGS = -g -Wall -Wextra -std=c++11 -O2
 CCFLAGS = $(CFLAGS)
 LD_FLAGS = #--as-needed
 .PHONY: all clean
