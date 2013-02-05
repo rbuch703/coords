@@ -25,7 +25,8 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     
     PolygonSegment poly(segment);
     //assert (poly.isSimple());
-    poly.canonicalize();
+    #warning next line may be the cause of memory corruption
+    //poly.canonicalize();
     //std::cout << poly.isClockwiseHeuristic() << endl;
     if (poly.vertices().size() < 4) return;
    
@@ -35,9 +36,9 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     
     BOOST_FOREACH( const Vertex vertex, poly.vertices())
     {
-        BigInt val = vertex.x;
+        int32_t val = (int32_t)vertex.x;
         fwrite(&val, sizeof(val), 1, f);
-        val = vertex.y;
+        val = (int32_t)vertex.y;
         fwrite(&val, sizeof(val), 1, f);
         
     }
@@ -210,7 +211,7 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     list<PolygonSegment> vLeft, vRight;
 
     /** beware of coordinate semantics: OSM data is stored as (lat,lon)-pairs, where lat is the "vertical" component
-      * Thus, compared to computer graphics (x,y)-pairs, the coordinates are switched */
+      * Thus, compared to computer graphics (x,y)-pairs, the axes are switched */
     BOOST_FOREACH( const PolygonSegment seg, segments)
         seg.clipSecondComponent( mid_h, vLeft, vRight);
 
