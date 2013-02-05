@@ -422,6 +422,38 @@ int128_t operator<<(int128_t a, uint32_t i)
     return a;
 }
 
+int128_t operator>>(int128_t a, uint32_t i)
+{
+    /*WARNING: on x86/x64 the shift operations use the ASM operation 'shr' internally.
+     *         shr shifts not by 'i', but by 'i % 32'
+     *         Therefore, all shifts of - AND INCLUDING - 32 and greater have to be handled seperately
+     */
+    if (a == int128_t(0) ) return a;
+    
+    if ( i > 128) return 0; //would shift out everything
+    
+    while (i >= 32) //shift by a whole uint32_t
+    {
+        
+        a.data[0] = a.data[1];
+        a.data[1] = a.data[2];
+        a.data[2] = a.data[3];
+        a.data[3] = 0;
+        i-=32;
+    }
+
+    /* WARNING: needs to early-terminate here, because '<<' is also modulo 32, so x<<32 returns x instead of 0**/
+    if (i == 0) return a;
+
+    a.data[0] = (a.data[0] >> i) | (a.data[1] << (32 -i));
+    a.data[1] = (a.data[1] >> i) | (a.data[2] << (32 -i));
+    a.data[2] = (a.data[2] >> i) | (a.data[3] << (32 -i));
+    a.data[3] = (a.data[3] >> i);
+
+    return a;
+}
+
+
 std::ostream& operator<<(std::ostream &os, int128_t a)
 {
 #ifdef HEX_MODE

@@ -92,12 +92,12 @@ public:
     
     void remove(const SimpEventType type, ActiveEdge thisEdge, ActiveEdge otherEdge)
     {
-        assert ( AVLTree<SimpEvent>::contains( SimpEvent(type, thisEdge, otherEdge))  !=
+        /*assert ( AVLTree<SimpEvent>::contains( SimpEvent(type, thisEdge, otherEdge))  !=
                  AVLTree<SimpEvent>::contains( SimpEvent(type, otherEdge,thisEdge)));
-        if (AVLTree<SimpEvent>::contains( SimpEvent(type, thisEdge, otherEdge)))
-            AVLTree<SimpEvent>::remove(SimpEvent(type, thisEdge, otherEdge));
-        else
-            AVLTree<SimpEvent>::remove(SimpEvent(type, otherEdge, thisEdge));
+        if (AVLTree<SimpEvent>::contains( SimpEvent(type, thisEdge, otherEdge)))*/
+        AVLTree<SimpEvent>::remove(SimpEvent(type, thisEdge, otherEdge));
+        /*else
+            AVLTree<SimpEvent>::remove(SimpEvent(type, otherEdge, thisEdge));*/
     }
     
     

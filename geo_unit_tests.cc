@@ -35,6 +35,26 @@ BigInt getRandom()
     
 }
 
+void getIntersection(ActiveEdge &a, ActiveEdge &b, BigFraction &out_x, BigFraction &out_y) 
+{
+    LineSegment A(a.left, a.right);
+    LineSegment B(b.left, b.right);
+
+    assert (A.intersects(B));
+    BigInt num, denom;
+    BigFraction coeff(num, denom);
+    
+    A.getIntersectionCoefficient(B, num, denom);
+    
+    out_x = coeff*(A.end.x - A.start.x) + A.start.x;
+    out_y = coeff*(A.end.y - A.start.y) + A.start.y;
+}
+
+bool intersect(ActiveEdge a, ActiveEdge b)
+{
+    return LineSegment(a.left, a.right).intersects(LineSegment(b.left, b.right));
+}
+
 int main()
 {
 
@@ -74,7 +94,8 @@ int main()
                             
                  */
             
-                int128_t x_pos = event.m_thisEdge.left.x;
+                BigInt x_pos = event.m_thisEdge.left.x;
+                BigInt y_pos = event.m_thisEdge.left.y;
                 ActiveEdge &edge = event.m_thisEdge;
                 AVLTreeNode<ActiveEdge>* node = lines.addEdge( edge, x_pos);
                 if (lines.hasPredecessor(node) && lines.hasSuccessor(node))
@@ -82,13 +103,54 @@ int main()
                     ActiveEdge pred = lines.getPredecessor(node);
                     ActiveEdge succ = lines.getSuccessor(node);
                     
-                    assert (pred.isLessThanOrEqual(edge, x_pos));
-                    assert (edge.isLessThanOrEqual(succ, x_pos));
-                    assert (pred.isLessThanOrEqual(succ, x_pos));
+                    assert (pred.isLessThanOrEqual(edge, x_pos)); /// integrity checks
+                    assert (edge.isLessThanOrEqual(succ, x_pos)); /// for the line
+                    assert (pred.isLessThanOrEqual(succ, x_pos)); /// arrangement
+
+                    if (intersect(pred, succ))
+                    {
+                        BigFraction x,y;
+                                    
+                        getIntersection(pred, succ, x, y);
+                        std::cout << "(" << x_pos << ", " << y_pos << "), (" 
+                                  << x << ", " << y << ")" << std::endl;
+                        assert ( (x != x_pos || y != y_pos)  && "not implemented");
+                        if ( x > x_pos || (x == x_pos && y > y_pos))
+                        {
+                            events.remove(INTERSECTION, pred, succ);
+                        }
+                    }
+                }
+                
+                if (lines.hasPredecessor(node))
+                {
+                    ActiveEdge pred = lines.getPredecessor(node);
+                    if (intersect(pred, edge))
+                    {
+                        BigFraction x,y;
+                                    
+                        getIntersection(pred, edge, /*out*/x, /*out*/y);
+                        assert ( (x != x_pos || y != y_pos) && "not implemented");
+                        
+                        if ( x > x_pos || (x == x_pos && y > y_pos))
+                            events.add( INTERSECTION, pred, edge);
+                    }
+                }
+                
+                if (lines.hasSuccessor(node))
+                {
+                    ActiveEdge succ = lines.getSuccessor(node);
+                    if (intersect(edge, succ))
+                    {
+                        BigFraction x,y;
+                                    
+                        getIntersection(succ, edge, /*out*/x, /*out*/y);
+                        assert ( (x != x_pos || y != y_pos) && "not implemented");
+                        
+                        if ( x > x_pos || (x == x_pos && y > y_pos))
+                            events.add( INTERSECTION, edge, succ);
+                    }
                     
-                    #error continue here: instead of "contains", direct compute whether an intersection exists
-                    if (events.contains( INTERSECTION, pred, succ))
-                        events.remove(   INTERSECTION, pred, succ);
                 }
                 
                 //FIXME: edge case than two lines lie on each other

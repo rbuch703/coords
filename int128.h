@@ -102,6 +102,7 @@ private:
     friend int128_t operator% (int128_t a, int128_t b);
 
     friend int128_t operator<<(int128_t a, uint32_t i);
+    friend int128_t operator>>(int128_t a, uint32_t i);
 
     friend int128_t operator| (const int128_t a, const int128_t b);
 

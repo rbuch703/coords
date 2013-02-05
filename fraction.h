@@ -49,12 +49,45 @@ public:
         denom*=other.num;
         return *this;
     }
+   
+    static int_type gcd(int_type u, int_type v)
+    {
+    
+      // simple cases (termination)
+      if (u == v)
+        return u;
+      if (u == 0)
+        return v;
+      if (v == 0)
+        return u;
+     
+      // look for factors of 2
+      if (u % 2 == 0) // u is even
+        return (v % 2 == 1) ? gcd(u >> 1, v) : gcd(u >> 1, v >> 1) << 1;
+
+      if (v % 2 == 0) // u is odd, v is even
+        return gcd(u, v >> 1);
+     
+      // reduce larger argument
+      if (u > v)
+        return gcd((u - v) >> 1, v);
+      return gcd((v - u) >> 1, u);
+    }
+    
+    Fraction reduced()
+    {
+        int_type g = gcd(num, denom);
+        return Fraction( num/g, denom/g );
+    }
     
     bool operator < (const Fraction &other) const { return num * other.denom <  other.num * denom; }
     bool operator <=(const Fraction &other) const { return num * other.denom <= other.num * denom; }
 
+    bool operator > (const Fraction &other) const { return num * other.denom >  other.num * denom; }
+    bool operator >=(const Fraction &other) const { return num * other.denom >= other.num * denom; }
+
     bool operator ==(const Fraction &other) const { return num * other.denom == other.num * denom; }
-    bool operator !=(const Fraction &other) const { return num * other.denom != other.denom * num; }
+    bool operator !=(const Fraction &other) const { return num * other.denom != other.num * denom; }
 
     Fraction operator+(const Fraction &other) const { Fraction res = *this; return res+=other; }
     Fraction operator-(const Fraction &other) const { Fraction res = *this; return res-=other; }
