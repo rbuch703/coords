@@ -12,7 +12,7 @@ SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o)
 
-CFLAGS = -g -Wall -Wextra -std=c++11 -O2
+CFLAGS = -g -Wall -Wextra -std=c++11 #-O2
 CCFLAGS = $(CFLAGS)
 LD_FLAGS = #--as-needed
 .PHONY: all clean

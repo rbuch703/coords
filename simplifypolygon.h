@@ -32,6 +32,9 @@ struct ActiveEdge
     bool isLessThanOrEqual(const ActiveEdge & other, const BigFraction &xPosition) const;
     bool operator<(const ActiveEdge &);
 
+    LineSegment toLineSegment() { return LineSegment(left, right); }
+
+
     operator bool() { return (left != Vertex(0,0))  and (right != Vertex(0,0)); }
     Vertex left, right;
     /* don't need this here, we can store the mapping between active edges and their
@@ -105,7 +108,8 @@ public:
 
 // ===========================================================
 
-class LineArrangement: public AVLTree<ActiveEdge>
+ // protected inheritance to hide detail of AVLTree, since for a LineArrangement, AVLTree::insert must never be used
+class LineArrangement: protected AVLTree<ActiveEdge>
 {
 public:
     AVLTreeNode<ActiveEdge>* addEdge(const ActiveEdge &a, const BigFraction xPosition);
@@ -120,7 +124,7 @@ public:
     {
         iterator it(node, *this);
         assert (it != begin());
-        return *it;
+        return *(--it);
     }
     
     bool hasSuccessor( AVLTreeNode<ActiveEdge>* node )
@@ -135,19 +139,29 @@ public:
         assert (++it != end());
         return *it;
     }
-    /*AVLTreeNode<ActiveEdge>* findPos(ActiveEdge item, const BigInt xPos)
+  
+public:
+    void remove(ActiveEdge item, const BigFraction xPos)
+    {
+        AVLTreeNode<ActiveEdge> *node = findPos(item, xPos);
+        assert( node && "Node to be removed does not exist");
+        AVLTree<ActiveEdge>::remove(node);
+    }
+    
+public:
+    AVLTreeNode<ActiveEdge>* findPos(ActiveEdge item, const BigFraction xPos)
     {
     	if (! m_pRoot) return NULL;
 
 	    AVLTreeNode<ActiveEdge>* pPos = m_pRoot;
 	    while ( pPos->m_Data != item)
 	    {
-	        pPos = (lessThan(item, pPos->m_Data) ) ? pPos->m_pLeft : pPos->m_pRight;
+	        pPos = item.isLessThan(pPos->m_Data, xPos) ? pPos->m_pLeft : pPos->m_pRight;
 		    if (!pPos) return NULL;
 	    }
 	    return pPos;
     }
-    
+    /*
 	AVLTree::iterator getIterator(ActiveEdge e, const BigInt xPos)
 	{
 	    AVLTreeNode<ActiveEdge>* p = findPos(e, xPos);

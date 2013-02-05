@@ -55,6 +55,20 @@ bool intersect(ActiveEdge a, ActiveEdge b)
     return LineSegment(a.left, a.right).intersects(LineSegment(b.left, b.right));
 }
 
+void scheduleIntersectionIfExists(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos, SimpEventQueue &events)
+{
+    if (intersect(a, b))
+    {
+        BigFraction x,y;
+                    
+        getIntersection(a, b, /*out*/x, /*out*/y);
+        assert ( (x != x_pos || y != y_pos) && "not implemented");
+        
+        if ( x > x_pos || (x == x_pos && y > y_pos))
+            events.add( INTERSECTION, a, b);
+    }
+}
+
 int main()
 {
 
@@ -86,80 +100,93 @@ int main()
         switch (event.type)
         {
         case SEG_START:
-            {
-                /* algorithm: 
-                    1. insert the segment at the correct position in the line arrangement
-                       (so that the lines 'physically' directly to its left and right are also 
-                       its neighbors in the line arrangement data structure
-                            
-                 */
+        {
+            /* algorithm: 
+                1. insert the segment at the correct position in the line arrangement
+                   (so that the lines 'physically' directly to its left and right are also 
+                   its neighbors in the line arrangement data structure
+                2. if there was a scheduled intersection between its predecessor and successor, remove that event
+                3. if it potentially intersects with its predecessor or successor, add the corresponding events
+                        
+             */
+            BigInt x_pos = event.m_thisEdge.left.x;
+            BigInt y_pos = event.m_thisEdge.left.y;
+            ActiveEdge &edge = event.m_thisEdge;
             
-                BigInt x_pos = event.m_thisEdge.left.x;
-                BigInt y_pos = event.m_thisEdge.left.y;
-                ActiveEdge &edge = event.m_thisEdge;
-                AVLTreeNode<ActiveEdge>* node = lines.addEdge( edge, x_pos);
-                if (lines.hasPredecessor(node) && lines.hasSuccessor(node))
-                {
-                    ActiveEdge pred = lines.getPredecessor(node);
-                    ActiveEdge succ = lines.getSuccessor(node);
-                    
-                    assert (pred.isLessThanOrEqual(edge, x_pos)); /// integrity checks
-                    assert (edge.isLessThanOrEqual(succ, x_pos)); /// for the line
-                    assert (pred.isLessThanOrEqual(succ, x_pos)); /// arrangement
+            std::cout << "adding edge " << edge << std::endl;
+            AVLTreeNode<ActiveEdge>* node = lines.addEdge( edge, x_pos);
+            
+            //TODO: add edge case where the new line segment overlaps (i.e. is colinear) with an older one
+            
+            if (lines.hasPredecessor(node) && lines.hasSuccessor(node))
+            {
+                ActiveEdge pred = lines.getPredecessor(node);
+                ActiveEdge succ = lines.getSuccessor(node);
+                
+                assert (pred.isLessThanOrEqual(edge, x_pos)); /// integrity checks
+                assert (edge.isLessThanOrEqual(succ, x_pos)); /// for the line
+                assert (pred.isLessThanOrEqual(succ, x_pos)); /// arrangement
 
-                    if (intersect(pred, succ))
-                    {
-                        BigFraction x,y;
-                                    
-                        getIntersection(pred, succ, x, y);
-                        std::cout << "(" << x_pos << ", " << y_pos << "), (" 
-                                  << x << ", " << y << ")" << std::endl;
-                        assert ( (x != x_pos || y != y_pos)  && "not implemented");
-                        if ( x > x_pos || (x == x_pos && y > y_pos))
-                        {
-                            events.remove(INTERSECTION, pred, succ);
-                        }
-                    }
-                }
-                
-                if (lines.hasPredecessor(node))
+
+                if (intersect(pred, succ))
                 {
-                    ActiveEdge pred = lines.getPredecessor(node);
-                    if (intersect(pred, edge))
+                    BigFraction x,y;
+                                
+                    getIntersection(pred, succ, x, y);
+                    assert ( (x != x_pos || y != y_pos)  && "not implemented");
+                    if ( x > x_pos || (x == x_pos && y > y_pos))
                     {
-                        BigFraction x,y;
-                                    
-                        getIntersection(pred, edge, /*out*/x, /*out*/y);
-                        assert ( (x != x_pos || y != y_pos) && "not implemented");
-                        
-                        if ( x > x_pos || (x == x_pos && y > y_pos))
-                            events.add( INTERSECTION, pred, edge);
+                        events.remove(INTERSECTION, pred, succ);
                     }
                 }
-                
-                if (lines.hasSuccessor(node))
-                {
-                    ActiveEdge succ = lines.getSuccessor(node);
-                    if (intersect(edge, succ))
-                    {
-                        BigFraction x,y;
-                                    
-                        getIntersection(succ, edge, /*out*/x, /*out*/y);
-                        assert ( (x != x_pos || y != y_pos) && "not implemented");
-                        
-                        if ( x > x_pos || (x == x_pos && y > y_pos))
-                            events.add( INTERSECTION, edge, succ);
-                    }
-                    
-                }
-                
-                //FIXME: edge case than two lines lie on each other
             }
+            
+            if (lines.hasPredecessor(node))
+                scheduleIntersectionIfExists(lines.getPredecessor(node), edge, x_pos, y_pos, events);
+            
+            if (lines.hasSuccessor(node))
+                scheduleIntersectionIfExists(edge, lines.getSuccessor(node), x_pos, y_pos, events);
+            
             break;
+        }
         case SEG_END:
+        {
+            /* Algorithm:
+                * 1. remove segment from line arrangement
+                * 2. if its predecessor and successor have a future intersection, add that event to the queue
+            */
+                ActiveEdge &edge = event.m_thisEdge;
+                
+                AVLTreeNode<ActiveEdge> *node = lines.findPos(edge, event.x);
+                assert(node);
+                
+                if (lines.hasPredecessor(node) && lines.hasSuccessor(node))
+                    scheduleIntersectionIfExists(lines.getPredecessor(node), lines.getSuccessor(node),
+                                                 event.x, event.y, events);
+                
+                lines.remove(edge, event.x);
+                std::cout << "removing edge " << edge << std::endl;
             break;
+        }
         case INTERSECTION:
+        {
+            /* algorithm: 1. report intersection
+                          (make sure no other intersection takes plaec at the same position
+                          2. remove intersection events of the two intersecting edges with their outer neighbors
+                          3. swap the two intersectings edge in the LineArrangement
+                          4. re-add new intersection events with their new outer neighbors
+
+            
+            */
+            std::cout << "intersection between " << event.m_thisEdge << " and " << event.m_otherEdge << std::endl;
+            
+            #warning CONTINUEHERE: 
+            //BigFraction x_pos = event.x;
+            //BigFraction y_pos = event.y;
+            //ActiveEdge &edge = ;
+            assert (event.m_thisEdge.toLineSegment().intersects(event.m_otherEdge.toLineSegment()));
             break;
+        }
         default:
             assert(false && "Invalid simplification event type");break;
         }

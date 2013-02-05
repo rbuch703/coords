@@ -95,6 +95,7 @@ protected:
 
 	void updateDepth( AVLTreeNode<t> *pNode );
     void sort( t* dest, int &dest_idx, AVLTreeNode<t> *root) const;
+	void remove ( AVLTreeNode<t> * node);
 	void print(AVLTreeNode<t> *root, int depth = 0) const;
 protected:    
     AVLTreeNode<t> *m_pRoot;
@@ -136,7 +137,7 @@ public:
 	    {	
 	        if (m_pCurrent == NULL)
 	        {
-	            m_pCurrent = m_tree->m_pRoot;
+	            m_pCurrent = m_tree.m_pRoot;
 	            if (! m_pCurrent) return *this;
 	            while (m_pCurrent->m_pRight) m_pCurrent = m_pCurrent->m_pRight;
 	            return *this;
@@ -159,7 +160,7 @@ public:
             return *this;	
 	    }
 
-	    iterator& operator --() { (*this)--;} 
+	    iterator& operator --() {return (*this)--;} 
 
 	
 	    bool operator==(const iterator &other) const { return m_pCurrent == other.m_pCurrent;}
@@ -287,12 +288,10 @@ void AVLTree<t>::sort( t* dest, int &dest_idx, AVLTreeNode<t> *root) const
 }
 
 template <class t>
-void AVLTree<t>::remove( const t &item)
+void AVLTree<t>::remove ( AVLTreeNode<t> * node)
 {
-    num_items--;
-    AVLTreeNode<t> *parent;
-    AVLTreeNode<t> *node = findPos(item, parent);
     assert(node && "Item not found");
+    num_items--;
 
     /** BASIC idea: find the node closest in-order to the one to be removed,
         (i.e. its in-order predecessor or successor). Then remove the actual 
@@ -344,7 +343,7 @@ void AVLTree<t>::remove( const t &item)
     } 
     else m_pRoot = child;
 
-    parent = node->m_pParent; 
+    AVLTreeNode<t> *parent = node->m_pParent; 
     delete node;
     if (parent)
         updateDepth(parent);
@@ -354,6 +353,13 @@ void AVLTree<t>::remove( const t &item)
     if (m_pRoot)
         m_pRoot->check();
 #endif
+}
+
+
+template <class t>
+void AVLTree<t>::remove( const t &item)
+{
+    remove(findPos(item));
 }
 
 /*
