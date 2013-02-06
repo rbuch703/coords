@@ -12,7 +12,7 @@
 class int128_t
 {
 public:
-    int128_t() {}
+    int128_t() {data[0] = data[1] = data[2] = data[3] = 0; isPositive = true;}
     int128_t(uint32_t a) { data[0] = a; data[1] = data[2] = data[3] = 0; isPositive = true;}
     int128_t(int32_t a) 
     { 

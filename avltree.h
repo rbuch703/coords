@@ -161,11 +161,13 @@ public:
 	    }
 
 	    iterator& operator --() {return (*this)--;} 
-
+        
+        AVLTreeNode<t> * getNode() { return m_pCurrent; }
 	
 	    bool operator==(const iterator &other) const { return m_pCurrent == other.m_pCurrent;}
 	    bool operator!=(const iterator &other) const { return m_pCurrent != other.m_pCurrent;}
 	    friend class const_iterator;
+        
     private:
 	    AVLTreeNode<t> *m_pCurrent;
 	    AVLTree<t>     &m_tree;

@@ -44,7 +44,7 @@ bool ActiveEdge::isLessThan(const ActiveEdge & other, const BigFraction &xPositi
 bool ActiveEdge::isEqual(const ActiveEdge & other, const BigFraction &xPosition) const
 { return getYValueAt(xPosition) == other.getYValueAt(xPosition); }
     
-bool ActiveEdge::isLessThanOrEqual(const ActiveEdge & other, const BigFraction &xPosition) const
+bool ActiveEdge::isLessOrEqual(const ActiveEdge & other, const BigFraction &xPosition) const
 { return getYValueAt(xPosition) <= other.getYValueAt(xPosition); }
     
     //HACK: the operator needs to be defined for the AVLTree to work at all; but it must never be used,
@@ -52,6 +52,26 @@ bool ActiveEdge::isLessThanOrEqual(const ActiveEdge & other, const BigFraction &
     //the comparison is to be evaluated is provided as well.
 bool ActiveEdge::operator<(const ActiveEdge &) { 
     assert(false && "ActiveEdges cannot be compared");
+}
+
+bool ActiveEdge::intersects(ActiveEdge other) const
+{
+    return LineSegment(left, right).intersects(LineSegment(other.left, other.right));
+}
+
+void ActiveEdge::getIntersectionWith(ActiveEdge &other, BigFraction &out_x, BigFraction &out_y) const
+{
+    LineSegment A(left, right);
+    LineSegment B(other.left, other.right);
+
+    assert (A.intersects(B));
+    BigInt num, denom;
+    
+    A.getIntersectionCoefficient(B, num, denom);
+    BigFraction coeff(num, denom);
+    
+    out_x = coeff*(A.end.x - A.start.x) + A.start.x;
+    out_y = coeff*(A.end.y - A.start.y) + A.start.y;
 }
 
 
@@ -66,7 +86,6 @@ SimpEvent::SimpEvent() { type = (SimpEventType)-1;}
 SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge pThisEdge, ActiveEdge pOtherEdge):
     type(pType), m_thisEdge(pThisEdge), m_otherEdge(pOtherEdge)
 {
-    
     switch (type)
     {
         case SEG_START:
@@ -92,9 +111,6 @@ SimpEvent::SimpEvent( SimpEventType pType, ActiveEdge pThisEdge, ActiveEdge pOth
                 x = BigFraction( l1.start.x*denom + num*(l1.end.x-l1.start.x), denom);
                 // y = (start.y + num * (end.y - start.y) / denom) = (start.y*denom + num*(end.y-start.y))/denom
                 y = BigFraction( l1.start.y*denom + num*(l1.end.y - l1.start.y), denom);
-                
-                /* canonical form: denominator is non-negative; this ensures that 
-                   the "<"-predicate computation does not require sign flips */
             }
             break;
         default: 
@@ -157,3 +173,4 @@ AVLTreeNode<ActiveEdge>* LineArrangement::addEdge(const ActiveEdge &a, const Big
     updateDepth(*pos);
     return *pos;
 }
+

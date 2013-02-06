@@ -74,6 +74,8 @@ public:
       return gcd((v - u) >> 1, u);
     }
     
+    double toDouble() const { return num.toDouble() / denom.toDouble(); }
+    
     Fraction reduced()
     {
         int_type g = gcd(num, denom);
@@ -104,7 +106,8 @@ private:
 template<typename int_type> 
 ostream & operator<<(ostream &out, const Fraction<int_type> &val)
 {
-    std::cout << "(" << val.get_num() << "/" << val.get_denom() << ")";
+    //std::cout << "(" << val.get_num() << "/" << val.get_denom() << ")";
+    std::cout << val.toDouble();
     return out;
 }
 
