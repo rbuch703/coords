@@ -72,6 +72,9 @@ public:
 class SimpEventQueue : protected AVLTree<SimpEvent> 
 {
 public:
+
+    int size() const { return AVLTree<SimpEvent>::size(); }
+
     void add(const SimpEventType type, ActiveEdge thisEdge, 
              ActiveEdge otherEdge = ActiveEdge( Vertex(0,0), Vertex(0,0)) )
     {
@@ -100,73 +103,77 @@ public:
         AVLTree<SimpEvent>::remove(SimpEvent(type, thisEdge, otherEdge));
     }
     
-    void scheduleIntersectionIfExists(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos)
+    void scheduleIntersection(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos)
     {
-        if ( a.intersects(b) )
-        {
-            BigFraction x,y;
-                        
-            a.getIntersectionWith( b, /*out*/x, /*out*/y);
-            assert ( (x != x_pos || y != y_pos) && "not implemented");
-            
-            if ( x > x_pos || (x == x_pos && y > y_pos))
-                this->add( INTERSECTION, a, b);
-        }
+        if (! a.intersects(b) ) return;
+        BigFraction x,y;
+                    
+        a.getIntersectionWith( b, /*out*/x, /*out*/y);
+        assert ( (x != x_pos || y != y_pos) && "not implemented");
+        
+        if ( x > x_pos || (x == x_pos && y > y_pos))
+            this->add( INTERSECTION, a, b);
     }
 
-    void removeIntersectionIfExists(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos)
+    void unscheduleIntersection(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos)
     {
-        if ( a.intersects( b ) )
-        {
-            BigFraction x,y;
+        if (! a.intersects( b ) ) return;
+        BigFraction x,y;
 
-            a.getIntersectionWith(b, x, y);
-            assert ( (x != x_pos || y != y_pos)  && "not implemented");
-            if ( x > x_pos || (x == x_pos && y > y_pos))
-                this->remove(INTERSECTION, a, b);
-        }
+        a.getIntersectionWith(b, x, y);
+        assert ( (x != x_pos || y != y_pos)  && "not implemented");
+        if ( x > x_pos || (x == x_pos && y > y_pos))
+            this->remove(INTERSECTION, a, b);
     }
     
 };
 
 // ===========================================================
 
+
+typedef AVLTreeNode<ActiveEdge> *EdgeContainer;
  // protected inheritance to hide detail of AVLTree, since for a LineArrangement, AVLTree::insert must never be used
 class LineArrangement: protected AVLTree<ActiveEdge>
 {
 public:
-    AVLTreeNode<ActiveEdge>* addEdge(const ActiveEdge &a, const BigFraction xPosition);
+    EdgeContainer addEdge(const ActiveEdge &a, const BigFraction xPosition);
 
-    bool isConsistent(AVLTreeNode<ActiveEdge>* node, BigFraction xPos) const
+    bool isConsistent(EdgeContainer node, BigFraction xPos) const
     {
-        bool left = !node->m_pLeft || (node->m_pLeft->m_Data.isLessOrEqual(node->m_Data, xPos) && isConsistent(node->m_pLeft, xPos));
-        bool right= !node->m_pRight|| (node->m_Data.isLessOrEqual(node->m_pRight->m_Data, xPos) && isConsistent(node->m_pRight, xPos));
+        bool left = !node->m_pLeft || 
+                    (node->m_pLeft->m_Data.isLessOrEqual(node->m_Data, xPos) 
+                    && isConsistent(node->m_pLeft, xPos));
+                    
+        bool right= !node->m_pRight ||
+                    (node->m_Data.isLessOrEqual(node->m_pRight->m_Data, xPos) && 
+                    isConsistent(node->m_pRight, xPos));
         return left && right;
     }
-
     
-    bool isConsistent(BigFraction xPos) const { return isConsistent(m_pRoot, xPos); }
+    int size() const { return AVLTree<ActiveEdge>::size(); }
     
-    bool hasPredecessor( AVLTreeNode<ActiveEdge>* node)
+    bool isConsistent(BigFraction xPos) const { return !m_pRoot || isConsistent(m_pRoot, xPos); }
+    
+    bool hasPredecessor( EdgeContainer node)
     {
         iterator it(node, *this);
         return it != begin();
     }
 
-    ActiveEdge getPredecessor( AVLTreeNode<ActiveEdge>* node)
+    ActiveEdge getPredecessor( EdgeContainer node)
     {
         iterator it(node, *this);
         assert (it != begin());
         return *(--it);
     }
     
-    bool hasSuccessor( AVLTreeNode<ActiveEdge>* node )
+    bool hasSuccessor( EdgeContainer node )
     {
         iterator it(node, *this);
         return ++it != end();
     }
     
-    ActiveEdge getSuccessor( AVLTreeNode<ActiveEdge>* node)
+    ActiveEdge getSuccessor( EdgeContainer node)
     {
         iterator it(node, *this);
         assert (++it != end());
@@ -180,7 +187,7 @@ public:
         AVLTree<ActiveEdge>::remove(node);
     }
     
-    AVLTreeNode<ActiveEdge>* findPos(ActiveEdge item, const BigFraction xPos)
+    EdgeContainer findPos(ActiveEdge item, const BigFraction xPos)
     {
     	if (! m_pRoot) return NULL;
 
@@ -196,7 +203,7 @@ public:
 	    return pPos;
     }
     
-    list<AVLTreeNode<ActiveEdge>*> findAllIntersectingEdges(ActiveEdge item, const BigFraction xPos)
+    list<EdgeContainer> findAllIntersectingEdges(ActiveEdge item, const BigFraction xPos)
     {
         /* findPos will return any ActiveEdge that intersects 'item' at xPos, not necessarily xPos itself*/
 	    AVLTreeNode<ActiveEdge> *pPos = findPos(item, xPos);    

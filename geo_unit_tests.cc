@@ -98,14 +98,14 @@ int main()
                 assert (pred.isLessThan(succ, x_pos)); /// assert for not implemented edge case (equal) 
 
 
-                events.removeIntersectionIfExists(pred, succ, x_pos, y_pos);
+                events.unscheduleIntersection(pred, succ, x_pos, y_pos);
             }
             
             if (lines.hasPredecessor(node))
-                events.scheduleIntersectionIfExists(lines.getPredecessor(node), edge, x_pos, y_pos);
+                events.scheduleIntersection(lines.getPredecessor(node), edge, x_pos, y_pos);
             
             if (lines.hasSuccessor(node))
-                events.scheduleIntersectionIfExists(edge, lines.getSuccessor(node), x_pos, y_pos);
+                events.scheduleIntersection(edge, lines.getSuccessor(node), x_pos, y_pos);
             
             break;
         }
@@ -117,12 +117,15 @@ int main()
             */
                 ActiveEdge &edge = event.m_thisEdge;
                 
+                //FIXME: edge case that this segement intersects another segement at this end point
+                list<EdgeContainer> nodes = lines.findAllIntersectingEdges(edge, event.x);
+                assert(nodes.size() == 1 && "Not implemented");
+                
                 AVLTreeNode<ActiveEdge> *node = lines.findPos(edge, event.x);
                 assert(node);
                 
                 if (lines.hasPredecessor(node) && lines.hasSuccessor(node))
-                    events.scheduleIntersectionIfExists(lines.getPredecessor(node), lines.getSuccessor(node),
-                            event.x, event.y);
+                    events.scheduleIntersection(lines.getPredecessor(node), lines.getSuccessor(node), event.x, event.y);
                 
                 lines.remove(edge, event.x);
                 std::cout << "removing edge " << edge << std::endl;
@@ -143,11 +146,7 @@ int main()
 
             std::cout << "intersection between " << event.m_thisEdge << " and " << event.m_otherEdge << " at (" << int_x << ", " << int_y << " )" << std::endl;
             
-            /*AVLTreeNode<ActiveEdge> *node
-            events.removeIntersectionIfExists(*/
-            
-            #warning CONTINUEHERE: 
-            list<AVLTreeNode<ActiveEdge>*> nodes = lines.findAllIntersectingEdges(event.m_thisEdge, event.x);
+            list<EdgeContainer> nodes = lines.findAllIntersectingEdges(event.m_thisEdge, event.x);
             if (nodes.size() != 2)
             {
                 std::cout << "### nodes dump" << std::endl;
@@ -155,6 +154,28 @@ int main()
                     std::cout << node->m_Data << std::endl;
             }
             assert( nodes.size() == 2 && "Multiple intersections on a single position are not implemented");
+            
+            EdgeContainer left = nodes.front();
+            EdgeContainer right = nodes.back();
+            
+            if (lines.hasPredecessor(left))
+                events.unscheduleIntersection( lines.getPredecessor(left), left->m_Data, event.x, event.y);
+            
+            if (lines.hasSuccessor(right))
+                events.unscheduleIntersection( right->m_Data, lines.getSuccessor(right), event.x, event.y);
+
+            assert ( left->m_Data.isEqual(right->m_Data, event.x));
+            
+            ActiveEdge tmp = left->m_Data;
+            left->m_Data = right->m_Data;
+            right->m_Data = tmp;
+
+            if (lines.hasPredecessor(left))
+                events.scheduleIntersection( lines.getPredecessor(left), left->m_Data, event.x, event.y);
+
+            if (lines.hasSuccessor(right))
+                events.scheduleIntersection( right->m_Data, lines.getSuccessor(right), event.x, event.y);
+            
             break;
         }
         default:
@@ -165,6 +186,20 @@ int main()
         
     }
     
+    assert( lines.size() == 0);
+    assert( events.size() == 0);
+    std::cout << "Found " << num_intersections << " intersections " << std::endl;
+    
+    int n_ints = 0;
+    for (list<ActiveEdge>::const_iterator it = edges.begin(); it != edges.end(); it++)
+    {
+        list<ActiveEdge>::const_iterator it2 = it;
+        
+        for (it2++; it2 != edges.end(); it2++)
+            if (it->intersects(*it2)) n_ints++;
+    }
+
+    std::cout << "Found " << n_ints << " intersections " << std::endl;
     
 /*
     Vertex a(1,0);
