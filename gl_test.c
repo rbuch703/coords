@@ -1,11 +1,5 @@
 
 #include <GL/glfw.h>
-#include <string>
-#include <list>
-#include <map>
-#include <iostream>
-#include <vector>
-#include <boost/foreach.hpp>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -15,13 +9,89 @@
 
 #include <sys/stat.h>
 
+#include <malloc.h>
+#include <string.h>
+
 //#include "geometric_types.h"
 
-/** FIXME: do not use the AABoundingBox class: this is a geometric computing class whose numerical members 
-  *        are all of type BigInt. This allows for exact computation, but slows down the computation
-  *        dramatically  */
-using namespace std;
+//using namespace std;
 
+typedef struct vertex_data_t
+{
+    int64_t num_vertices;
+    int32_t *vertices;
+} vertex_data_t;
+
+typedef struct tile_t
+{
+    vertex_data_t *polygons;
+    int64_t num_polygons;
+    int64_t num_max_polygons;
+} tile_t;
+
+tile_t read_tile(const char* filename)
+{
+    tile_t tile = { malloc( 64 * sizeof(vertex_data_t)), 0, 64};
+    
+    printf("opening file %s\n",filename);
+    
+    FILE* f = fopen(filename, "rb");
+    assert (f != NULL);
+    
+    int64_t nVertices = 0;
+    while (fread(&nVertices, sizeof(nVertices), 1, f))
+    {
+    
+        vertex_data_t polygon = {nVertices, malloc( sizeof(int32_t) * 2 * nVertices) };
+    
+        if (1 != fread(polygon.vertices, nVertices*8, 1, f))
+            assert( 0 && "error reading file");
+        
+        if (tile.num_polygons == tile.num_max_polygons)
+        {
+            tile.polygons = realloc(tile.polygons, 2 * tile.num_max_polygons * sizeof(vertex_data_t));
+            tile.num_max_polygons *= 2;
+        }
+
+        tile.polygons[tile.num_polygons++] = polygon;        
+    }
+    fclose(f);
+    return tile;
+}
+
+void free_tile(tile_t tile)
+{
+    while (tile.num_polygons)
+    {
+        free(tile.polygons[-- (tile.num_polygons)].vertices );
+    }
+    free(tile.polygons);
+}
+
+void render_tile(tile_t tile)
+{
+
+    //glColor3f(1,1,1);
+    //BOOST_FOREACH( CountVertexPair p, polygons)
+    for (int i = 0; i < tile.num_polygons; i++) 
+    {
+        glBegin(GL_LINE_STRIP);
+            /*PolygonSegment ps(p.second, p.first);
+            if (ps.isClockwise())
+                glColor3f(1,1,1);
+            else
+                glColor3f(0,0,0);*/
+            
+            int32_t* v = tile.polygons[i].vertices;
+            for (int64_t num_vertices = tile.polygons[i].num_vertices; num_vertices; num_vertices--, v+=2)
+            {
+                glVertex2d(v[1], v[0]);
+            }
+        glEnd();
+    }
+}
+
+#if 0
 typedef pair<int64_t, int32_t*> CountVertexPair;
 
 class Tile {
@@ -50,33 +120,12 @@ class Tile {
                 delete [] p.second;
         }
 
-        void render()
-        {
-        
-            //glColor3f(1,1,1);
-            BOOST_FOREACH( CountVertexPair p, polygons)
-            {
-                glBegin(GL_LINE_STRIP);
-                    /*PolygonSegment ps(p.second, p.first);
-                    if (ps.isClockwise())
-                        glColor3f(1,1,1);
-                    else
-                        glColor3f(0,0,0);*/
-                    
-                    int32_t* v = p.second;
-                    for (int64_t num_vertices = p.first; num_vertices; num_vertices--, v+=2)
-                    {
-                        glVertex2d(v[1], v[0]);
-                    }
-                glEnd();
-            }
-        }
     
     list<CountVertexPair> polygons;
     
 };
-
-bool button_state[] = {false, false, false};
+#endif
+int button_state[] = {0, 0, 0};
 double g_top =    900000000;
 double g_bottom =-900000000;
 double g_left = -1800000000;
@@ -129,11 +178,11 @@ void mouseMoved(int x, int y)
     mouse_y = y;
 }
 
-map<string, Tile> tile_cache;
+//map<string, Tile> tile_cache;
 
-void renderTile(string filename)
+void render_path(const char* filename)
 {
-    if (!tile_cache.count(filename))
+    /*if (!tile_cache.count(filename))
     {
         struct stat dummy;
         if ( stat( filename.c_str(), &dummy ) == 0 )
@@ -144,22 +193,41 @@ void renderTile(string filename)
         
         return;
     }
-    tile_cache[filename].render();
-    
+    tile_cache[filename].render();*/
+    tile_t tile = read_tile(filename);
+    render_tile(tile);
+    free_tile(tile);
     
 }
 
-struct Rect
+typedef struct rect_t
 {
     double top, left, bottom, right;
-    double width() const { return right - left; }
-};
+//    double width() const { return right - left; }
+} rect_t;
 
-static const string BASEPATH = "output/coast/seg#";
-void render(const Rect &view, Rect tile, string position)
+double max(double a, double b) { return a> b ? a : b;}
+double min(double a, double b) { return a< b ? a : b;}
+
+double width(rect_t rect) { return rect.right - rect.left;}
+
+static const char* BASEPATH = "output/coast/seg#";
+
+void render(const rect_t view, rect_t tile, char *position)
 {
     struct stat dummy;
-    if ( stat( (BASEPATH+position).c_str(), &dummy ) != 0) return;
+    
+    int buf_size = strlen(BASEPATH) + strlen(position) + 2;
+    char *path = calloc( 1, buf_size ); // plus zero termination and an additional character (see below)
+    // path = BASEPATH + position
+    snprintf(path, buf_size, "%s%s", BASEPATH, position);
+    
+    
+    if ( stat( path, &dummy ) != 0) 
+    {   
+        free(path);
+        return;
+    }
 
     assert (
         (max( view.left, tile.left) <= min( view.right, tile.right)) && 
@@ -168,42 +236,56 @@ void render(const Rect &view, Rect tile, string position)
     /* if no child exists, then this tile is the highest resolution tile available 
      * at least one child exists, then the the existing tiles provide higher resolution for the respective areas.
      * Since in some areas, no data may to be drawn at all, some children may not exist */
-    bool hasChildren = 
-        stat( (BASEPATH+position+"0").c_str(), &dummy ) == 0 ||
-        stat( (BASEPATH+position+"1").c_str(), &dummy ) == 0 ||
-        stat( (BASEPATH+position+"2").c_str(), &dummy ) == 0 ||
-        stat( (BASEPATH+position+"3").c_str(), &dummy ) == 0;
+    int hasChildren = 0;
+    
+    static const char *chars = "0123";
+    for (int i = 0; i < 4; i++)
+    {
+        path[buf_size-2] = chars[i]; //overwrites the zero termination; but since another 0x00 follows, the string is still valid
+        hasChildren |= stat( path, &dummy ) == 0;
+    }
         
-        
-    bool sufficientResolution = tile.width() < view.width();
+    int sufficientResolution = width(tile) < width(view);
     if (!hasChildren || sufficientResolution) 
-    { 
+    {
+        path[buf_size-2] = '\0'; 
         //cout << "rendering tile " << position << endl;
-        //renderTile(BASEPATH+position);
-        Tile(BASEPATH+position).render(); 
+        render_path(path);
+        free(path);
+        //Tile(BASEPATH+position).render(); 
         return;
     }
+    free(path);
     
     double mid_x = (tile.right+tile.left) / 2.0;
     double mid_y = (tile.top + tile.bottom) / 2.0;
     
-    Rect tl2 = {tile.top, tile.left, mid_y,       mid_x};
-    Rect bl0 = {mid_y,    tile.left, tile.bottom, mid_x};
-    Rect tr3 = {tile.top, mid_x,     mid_y,       tile.right};
-    Rect br1 = {mid_y,    mid_x,     tile.bottom, tile.right};
+    rect_t tl2 = {tile.top, tile.left, mid_y,       mid_x};
+    rect_t bl0 = {mid_y,    tile.left, tile.bottom, mid_x};
+    rect_t tr3 = {tile.top, mid_x,     mid_y,       tile.right};
+    rect_t br1 = {mid_y,    mid_x,     tile.bottom, tile.right};
+    
+    int len = strlen(position);
+    char* pos = calloc(1,  len + 2);
+    strncpy(pos, position, len);
     
     if ( mid_x > view.left) //has to render left half
     {
-        if (mid_y > view.bottom) render(view, bl0, position+"0");
-        if (mid_y < view.top   ) render(view, tl2, position+"2");
+        pos[len] = '0';
+        if (mid_y > view.bottom) render(view, bl0, pos);
+        pos[len] = '2';
+        if (mid_y < view.top   ) render(view, tl2, pos);
     }
     
     if ( mid_x < view.right) //has to render right half
     {
-        if (mid_y > view.bottom) render(view, br1, position+"1");
-        if (mid_y < view.top   ) render(view, tr3, position+"3");
+        pos[len] = '1';
+        if (mid_y > view.bottom) render(view, br1, pos);
+        pos[len] = '3';
+        if (mid_y < view.top   ) render(view, tr3, pos);
     }
 
+    free(pos);
 }
 
 int main () {
@@ -238,9 +320,11 @@ int main () {
         //glColor3f(0,0,0);
         //t.render();
         glColor3f(1,1,1);
-        cout << "Cache has stored " << tile_cache.size() << " tiles" << endl;
-        render( Rect() = { g_top, g_left, g_bottom, g_right },
-                Rect() = { 900000000, -1800000000, -900000000, 1800000000}, "");
+        
+        //cout << "Cache has stored " << tile_cache.size() << " tiles" << endl;
+        rect_t view ={ g_top, g_left, g_bottom, g_right };
+        rect_t world={ 900000000, -1800000000, -900000000, 1800000000};
+        render( view, world, "");
         //t0.render();
         //t2.render();
         // Swap front and back rendering buffers

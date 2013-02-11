@@ -161,6 +161,39 @@ void extractNetwork(FILE* src/*, double allowedDeviation*/, string base_name)
     
 }
 #endif
+
+void clipFirstComponent(list<PolygonSegment> in, int32_t clip_pos, list<PolygonSegment> &out1, list<PolygonSegment> &out2)
+{
+    for (uint64_t i = in.size(); i; i--)
+    {
+        PolygonSegment seg = in.back();
+        bool isClockwise = seg.isClockwise();
+        in.pop_back();
+        list<PolygonSegment> l1, l2;
+        seg.clipFirstComponent( clip_pos, l1, l2);
+        
+        for (uint64_t j = l1.size(); j; j--)
+        {
+            PolygonSegment s = l1.back();
+            l1.pop_back();
+            if (! (isClockwise == s.isClockwise()) )
+                s.reverse();
+            out1.push_back(s);
+        }
+        assert(l1.size() == 0);
+        for (uint64_t j = l2.size(); j; j--)
+        {
+            PolygonSegment s = l2.back();
+            l2.pop_back();
+            if (! (isClockwise == s.isClockwise()))
+                s.reverse();
+            out2.push_back(s);
+        }
+        assert(l2.size() == 0);
+        
+    }
+}
+
 void clipRecursive(string file_base, string position, list<PolygonSegment>& segments, 
                    int32_t top, int32_t left, int32_t bottom, int32_t right, uint32_t level = 0)
 {
@@ -209,11 +242,19 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     int32_t mid_v = (top/2)  + (bottom/2);
     
     list<PolygonSegment> vLeft, vRight;
-
-    /** beware of coordinate semantics: OSM data is stored as (lat,lon)-pairs, where lat is the "vertical" component
-      * Thus, compared to computer graphics (x,y)-pairs, the axes are switched */
-    BOOST_FOREACH( const PolygonSegment seg, segments)
+    //FIXME: change this code to preserve the orientation while clipping 
+    //       (as the later clipping along the first component does already)
+    
+    // segments.size() is a O(n) operation in the GNU stl, so better cache it;
+    for (uint64_t i = segments.size(); i; i--)
+    {
+        PolygonSegment seg = segments.back();
+        segments.pop_back();
+        /** beware of coordinate semantics: OSM data is stored as (lat,lon)-pairs, where lat is the "vertical" component
+          * Thus, compared to computer graphics (x,y)-pairs, the axes are switched */
         seg.clipSecondComponent( mid_h, vLeft, vRight);
+    }
+    assert(segments.size() == 0);
 
     BOOST_FOREACH( const PolygonSegment seg, vLeft)    assert( seg.vertices().front() == seg.vertices().back());
     BOOST_FOREACH( const PolygonSegment seg, vRight)   assert( seg.vertices().front() == seg.vertices().back());
@@ -221,35 +262,37 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     list<PolygonSegment> vTop, vBottom;
 
     //process left half (top-left and bottom-left quarters)    
-    BOOST_FOREACH( const PolygonSegment seg, vLeft)
+    /*
+    for (uint64_t i = vLeft.size(); i; i--)
+    {
+        PolygonSegment seg = vLeft.back();
+        vLeft.pop_back();
         seg.clipFirstComponent( mid_v, vTop, vBottom);
+    }
+    assert(vLeft.size() == 0);*/
+    
+    clipFirstComponent(vLeft, mid_v, vTop, vBottom);
     
     clipRecursive( file_base, position+ "0", vTop,    top,   left, mid_v,  mid_h, level+1);
-    clipRecursive( file_base, position+ "2", vBottom, mid_v, left, bottom, mid_h, level+1);
     vTop.clear();
+    clipRecursive( file_base, position+ "2", vBottom, mid_v, left, bottom, mid_h, level+1);
     vBottom.clear();
     
     //process right half (top-right and bottom-right quarters)
-    BOOST_FOREACH( const PolygonSegment seg, vRight)
+    /*for (uint64_t i = vRight.size(); i; i--)
+    {
+        PolygonSegment seg = vRight.back();
+        vRight.pop_back();
         seg.clipFirstComponent( mid_v, vTop, vBottom);
+    }*/
+    clipFirstComponent(vRight, mid_v, vTop, vBottom);
+
 
     clipRecursive( file_base, position+ "1", vTop,    top,   mid_h, mid_v,  right, level+1);
+    vTop.clear();
     clipRecursive( file_base, position+ "3", vBottom, mid_v, mid_h, bottom, right,  level+1);
+    vBottom.clear();
     
-    //list<PolygonSegment> above, below;
-    
-    //segment.clipHorizontally(40*10000000, above, below);
-    /*segment.clipHorizontally(0, above, below);
-    if (above.size() == 0 || below.size() == 0) return; // no clipping took place
-
-    for (list<PolygonSegment>::const_iterator it = above.begin(); it != above.end(); it++)
-        dumpPolygon(file_base, *it);
-
-    for (list<PolygonSegment>::const_iterator it = below.begin(); it != below.end(); it++)
-        dumpPolygon(file_base, *it);
-    */    
-    //if (segment.simplifyArea(100*1000))// && segment.vertices().size() > 1000)
-
 }
 
 void reconstructCoastline(FILE * src, list<PolygonSegment> &poly_storage)
