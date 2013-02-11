@@ -12,15 +12,46 @@
 #include <malloc.h>
 #include <string.h>
 
-//#include "geometric_types.h"
-
-//using namespace std;
 
 typedef struct vertex_data_t
 {
     int64_t num_vertices;
     int32_t *vertices;
 } vertex_data_t;
+
+int isClockwise(vertex_data_t polygon)
+{
+    int32_t *vertex_data = polygon.vertices;
+    assert( polygon.num_vertices >= 4);
+    assert( vertex_data[0] == vertex_data[(polygon.num_vertices-1)*2]);
+    assert( vertex_data[1] == vertex_data[(polygon.num_vertices-1)*2+1]);
+
+    //int32_t *min_vertex = {vertex_data[0], vertex_data[1]};
+    uint32_t min_idx = 0;
+    for (int i = 0; i < polygon.num_vertices; i++)
+        if ( vertex_data[2*i] < vertex_data[min_idx] ||
+           ((vertex_data[2*i]== vertex_data[min_idx])&&
+            (vertex_data[2*i+1] < vertex_data[min_idx+1]) ) )
+            min_idx = i;
+            
+    uint32_t pred_idx = min_idx == 0 ? polygon.num_vertices-1 : min_idx-1;
+    uint32_t succ_idx = min_idx == polygon.num_vertices-1 ? 0: min_idx+1;
+
+    int64_t end_x = vertex_data[2*succ_idx];
+    int64_t end_y = vertex_data[2*succ_idx+1];
+    
+    int64_t start_x = vertex_data[2*pred_idx];
+    int64_t start_y = vertex_data[2*pred_idx+1];
+    
+    int64_t x = vertex_data[2*min_idx];
+    int64_t y = vertex_data[2*min_idx];
+    
+    int64_t pseudodistance = (end_x - start_x)*(start_y - y) - (end_y - start_y)*(start_x - x);
+    #warning undefined behavior in case of collinear vertices
+    //assert ( pseudodistance != 0 && "colinear vertices");
+    
+    return pseudodistance < 0;
+}
 
 typedef struct tile_t
 {
@@ -76,11 +107,10 @@ void render_tile(tile_t tile)
     for (int i = 0; i < tile.num_polygons; i++) 
     {
         glBegin(GL_LINE_STRIP);
-            /*PolygonSegment ps(p.second, p.first);
-            if (ps.isClockwise())
+            if (isClockwise(tile.polygons[i]))
                 glColor3f(1,1,1);
             else
-                glColor3f(0,0,0);*/
+                glColor3f(0,0,0);
             
             int32_t* v = tile.polygons[i].vertices;
             for (int64_t num_vertices = tile.polygons[i].num_vertices; num_vertices; num_vertices--, v+=2)
@@ -91,40 +121,6 @@ void render_tile(tile_t tile)
     }
 }
 
-#if 0
-typedef pair<int64_t, int32_t*> CountVertexPair;
-
-class Tile {
-    public:
-        Tile() {}
-        Tile(string filename) 
-        {
-            std::cout << "opening file " << filename << std::endl;
-            FILE* f = fopen(filename.c_str(), "rb");
-            if (f == NULL) return;
-            int64_t nVertices = 0;
-            while (fread(&nVertices, sizeof(nVertices), 1, f))
-            {
-                int32_t *data = new int32_t[nVertices*2];
-                if (1 != fread(data, nVertices*8, 1, f))
-                    assert(false && "error reading file");
-                
-                polygons.push_back( CountVertexPair(nVertices, data));
-            }
-            fclose(f);
-        }
-        
-        ~Tile()
-        {
-            BOOST_FOREACH( CountVertexPair p, polygons)
-                delete [] p.second;
-        }
-
-    
-    list<CountVertexPair> polygons;
-    
-};
-#endif
 int button_state[] = {0, 0, 0};
 double g_top =    900000000;
 double g_bottom =-900000000;
@@ -178,22 +174,9 @@ void mouseMoved(int x, int y)
     mouse_y = y;
 }
 
-//map<string, Tile> tile_cache;
-
 void render_path(const char* filename)
 {
-    /*if (!tile_cache.count(filename))
-    {
-        struct stat dummy;
-        if ( stat( filename.c_str(), &dummy ) == 0 )
-            tile_cache.insert( pair<string, Tile>(filename, Tile(filename)));
-        else
-            tile_cache.insert(pair<string, Tile>(filename, Tile())); //insert a dummy to prevent further stat's tothe no-existent file
-        cout << "reading file " << filename << endl;
-        
-        return;
-    }
-    tile_cache[filename].render();*/
+
     tile_t tile = read_tile(filename);
     render_tile(tile);
     free_tile(tile);
@@ -203,15 +186,13 @@ void render_path(const char* filename)
 typedef struct rect_t
 {
     double top, left, bottom, right;
-//    double width() const { return right - left; }
 } rect_t;
 
 double max(double a, double b) { return a> b ? a : b;}
 double min(double a, double b) { return a< b ? a : b;}
-
 double width(rect_t rect) { return rect.right - rect.left;}
-
-static const char* BASEPATH = "output/coast/seg#";
+#warning using backup tiles
+static const char* BASEPATH = "output/coast.bak/seg#";
 
 void render(const rect_t view, rect_t tile, char *position)
 {
@@ -314,19 +295,13 @@ int main () {
         
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        //glOrtho(-10, 10, -10, 10, 0, 10);
         glOrtho(g_left, g_right, g_bottom, g_top, 0, 10);
 
-        //glColor3f(0,0,0);
-        //t.render();
         glColor3f(1,1,1);
         
-        //cout << "Cache has stored " << tile_cache.size() << " tiles" << endl;
         rect_t view ={ g_top, g_left, g_bottom, g_right };
         rect_t world={ 900000000, -1800000000, -900000000, 1800000000};
         render( view, world, "");
-        //t0.render();
-        //t2.render();
         // Swap front and back rendering buffers
         glfwSwapBuffers ();
         // Check if ESC key was pressed or window was closed
@@ -336,8 +311,6 @@ int main () {
     // Close window and terminate GLFW
     glfwTerminate ();
     
-    //delete p;
-    // Exit program
     return 0;
 }
 

@@ -167,30 +167,8 @@ void clipFirstComponent(list<PolygonSegment> in, int32_t clip_pos, list<PolygonS
     for (uint64_t i = in.size(); i; i--)
     {
         PolygonSegment seg = in.back();
-        bool isClockwise = seg.isClockwise();
         in.pop_back();
-        list<PolygonSegment> l1, l2;
-        seg.clipFirstComponent( clip_pos, l1, l2);
-        
-        for (uint64_t j = l1.size(); j; j--)
-        {
-            PolygonSegment s = l1.back();
-            l1.pop_back();
-            if (! (isClockwise == s.isClockwise()) )
-                s.reverse();
-            out1.push_back(s);
-        }
-        assert(l1.size() == 0);
-        for (uint64_t j = l2.size(); j; j--)
-        {
-            PolygonSegment s = l2.back();
-            l2.pop_back();
-            if (! (isClockwise == s.isClockwise()))
-                s.reverse();
-            out2.push_back(s);
-        }
-        assert(l2.size() == 0);
-        
+        seg.clipFirstComponent( clip_pos, out1, out2);
     }
 }
 

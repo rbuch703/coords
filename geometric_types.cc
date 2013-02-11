@@ -164,11 +164,17 @@ static Vertex getSuccessor(list<Vertex>::const_iterator it, const list<Vertex> &
     bool closed = lst.front() == lst.back();
 
     it++;
-    if (it != lst.end()) 
+    if (it != lst.end())
         return *it;
     
     it = lst.begin();
-    if (closed) it++;
+    if (closed && it != lst.end()) //check for lst.end() is necessary for lists with 0/1 elements
+    {
+        it++;    
+        if (it == lst.end())    //work-around for lists with a single element
+            it--;
+    }
+    
     return *it;
 }
 
@@ -179,7 +185,7 @@ static Vertex getPredecessor(list<Vertex>::const_iterator it, const list<Vertex>
     list<Vertex>::const_iterator pred = (it == lst.begin()) ? lst.end(): it;
     if (pred == lst.end() && closed)
         pred--; // move from end() to the actual last element (which equals the first element);
-    return *(--pred);
+    return pred == lst.begin() ? *pred : *(--pred);
 }
 
 
@@ -207,8 +213,7 @@ template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinat
 static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, list<PolygonSegment> &out)
 {
 
-
-    assert (lst.size() > 0);
+    if (lst.size() == 0) return;
     
     if (lst.size() ==1)
     {
@@ -533,11 +538,37 @@ static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSeg
 void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
 {
     list<PolygonSegment*> above, below;
+
+    #warning disabled clockwise test for debugging
+    bool clockwise = isClockwise();
     
     clip<getYCoordinate, getXCoordinate>( m_vertices, clip_y, above, below);
 
-    if (above.size()) connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, out_above);
-    if (below.size()) connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, out_below);
+    list<PolygonSegment> tmp_above, tmp_below;
+    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, out_above);
+    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, out_below);
+
+    for (uint64_t j = tmp_above.size(); j; j--)
+    {
+        PolygonSegment s = tmp_above.front();
+        tmp_above.pop_front();
+        if (! (clockwise == s.isClockwise()) )
+            s.reverse();
+        out_above.push_back(s);
+    }
+    assert(tmp_above.size() == 0);
+    
+    
+    for (uint64_t j = tmp_below.size(); j; j--)
+    {
+        PolygonSegment s = tmp_below.front();
+        tmp_below.pop_front();
+        if (! (clockwise == s.isClockwise()))
+            s.reverse();
+        out_below.push_back(s);
+    }
+    assert(tmp_below.size() == 0);
+
 
 }
 
@@ -545,16 +576,41 @@ void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &ou
 {
     list<PolygonSegment*> left, right;
     
+    bool clockwise = isClockwise();
+    
     clip<getXCoordinate, getYCoordinate>( m_vertices, clip_x, left, right);
 
-    if (left.size())  connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  out_left );
-    if (right.size()) connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, out_right);
+    list<PolygonSegment> tmp_left, tmp_right;
+    connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  tmp_left );
+    connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, tmp_right);
+    
+    for (uint64_t j = tmp_left.size(); j; j--)
+    {
+        PolygonSegment s = tmp_left.front();
+        tmp_left.pop_front();
+        if (! (clockwise == s.isClockwise()) )
+            s.reverse();
+        out_left.push_back(s);
+    }
+    assert(tmp_left.size() == 0);
+    
+    
+    for (uint64_t j = tmp_right.size(); j; j--)
+    {
+        PolygonSegment s = tmp_right.front();
+        tmp_right.pop_front();
+        if (! (clockwise == s.isClockwise()))
+            s.reverse();
+        out_right.push_back(s);
+    }
+    assert(tmp_right.size() == 0);
+    
 }
 
 bool PolygonSegment::isClockwise() const
 {
     assert (front() == back() && " Clockwise test is defined for closed polygons only");
-    
+    if (m_vertices.size() < 3) return false; //'clockwise' is only meaningful for closed polygons; and those require at least 3 vertices
     list<Vertex>::const_iterator vMin = m_vertices.begin();
     
     for (list<Vertex>::const_iterator v = m_vertices.begin(); v != m_vertices.end(); v++)
