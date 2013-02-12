@@ -19,38 +19,47 @@ typedef struct vertex_data_t
     int32_t *vertices;
 } vertex_data_t;
 
-int isClockwise(vertex_data_t polygon)
+int64_t get_x(int32_t* data, int64_t i) { return data[i*2];}
+int64_t get_y(int32_t* data, int64_t i) { return data[i*2+1];}
+int64_t isClockwise(vertex_data_t polygon)
 {
     int32_t *vertex_data = polygon.vertices;
     assert( polygon.num_vertices >= 4);
-    assert( vertex_data[0] == vertex_data[(polygon.num_vertices-1)*2]);
-    assert( vertex_data[1] == vertex_data[(polygon.num_vertices-1)*2+1]);
+    assert( get_x(vertex_data, 0) == get_x(vertex_data, polygon.num_vertices-1) );
+    assert( get_y(vertex_data, 0) == get_y(vertex_data, polygon.num_vertices-1) );
+    
+    int64_t n_vertices = polygon.num_vertices-1; //ignore the last vertex, which is a duplicate of the first one
 
     //int32_t *min_vertex = {vertex_data[0], vertex_data[1]};
     uint32_t min_idx = 0;
-    for (int i = 0; i < polygon.num_vertices; i++)
-        if ( vertex_data[2*i] < vertex_data[min_idx] ||
-           ((vertex_data[2*i]== vertex_data[min_idx])&&
-            (vertex_data[2*i+1] < vertex_data[min_idx+1]) ) )
+    for (int i = 0; i < n_vertices; i++)
+        if ( get_x(vertex_data,i) < get_x(vertex_data, min_idx) ||
+            ((get_x(vertex_data,i)== get_x( vertex_data, min_idx) ) && 
+             (get_y(vertex_data,i) < get_y( vertex_data, min_idx) ) ) )
             min_idx = i;
             
-    uint32_t pred_idx = min_idx == 0 ? polygon.num_vertices-1 : min_idx-1;
-    uint32_t succ_idx = min_idx == polygon.num_vertices-1 ? 0: min_idx+1;
+    uint32_t pred_idx = min_idx == 0 ? n_vertices - 1 : min_idx - 1;
+    uint32_t succ_idx = min_idx == n_vertices - 1 ? 0 : min_idx + 1;
 
-    int64_t end_x = vertex_data[2*succ_idx];
-    int64_t end_y = vertex_data[2*succ_idx+1];
+    assert( (min_idx != pred_idx) && (min_idx != succ_idx) && (pred_idx != succ_idx) );
+    int64_t end_x = get_x(vertex_data, succ_idx);
+    int64_t end_y = get_y(vertex_data, succ_idx);
     
-    int64_t start_x = vertex_data[2*pred_idx];
-    int64_t start_y = vertex_data[2*pred_idx+1];
+    int64_t start_x = get_x(vertex_data, pred_idx);
+    int64_t start_y = get_y(vertex_data, pred_idx);
     
-    int64_t x = vertex_data[2*min_idx];
-    int64_t y = vertex_data[2*min_idx];
+    int64_t x = get_x( vertex_data, min_idx);
+    int64_t y = get_y( vertex_data, min_idx);
+
+    //assert( end_x != x || end_y != y);
+
+    assert( start_x != end_x || start_y != end_y);
     
     int64_t pseudodistance = (end_x - start_x)*(start_y - y) - (end_y - start_y)*(start_x - x);
     #warning undefined behavior in case of collinear vertices
-    //assert ( pseudodistance != 0 && "colinear vertices");
+    //assert ( pseudodistance != 0 && "colinear vertices, cannot determine orientation");
     
-    return pseudodistance < 0;
+    return pseudodistance;// < 0;
 }
 
 typedef struct tile_t
@@ -107,10 +116,13 @@ void render_tile(tile_t tile)
     for (int i = 0; i < tile.num_polygons; i++) 
     {
         glBegin(GL_LINE_STRIP);
-            if (isClockwise(tile.polygons[i]))
+            int64_t pd = isClockwise(tile.polygons[i]);
+            if (pd > 0)
                 glColor3f(1,1,1);
-            else
+            else if (pd < 0)
                 glColor3f(0,0,0);
+            else
+                glColor3f(1,0,0);
             
             int32_t* v = tile.polygons[i].vertices;
             for (int64_t num_vertices = tile.polygons[i].num_vertices; num_vertices; num_vertices--, v+=2)
@@ -192,7 +204,7 @@ double max(double a, double b) { return a> b ? a : b;}
 double min(double a, double b) { return a< b ? a : b;}
 double width(rect_t rect) { return rect.right - rect.left;}
 #warning using backup tiles
-static const char* BASEPATH = "output/coast.bak/seg#";
+static const char* BASEPATH = "output/coast/seg#";
 
 void render(const rect_t view, rect_t tile, char *position)
 {

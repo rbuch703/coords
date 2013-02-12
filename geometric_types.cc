@@ -98,6 +98,7 @@ PolygonSegment::PolygonSegment( const list<OSMVertex> &vertices)
 
 bool PolygonSegment::simplifyArea(double allowedDeviation)
 {
+    bool clockwise = isClockwise();
     assert( m_vertices.front() == m_vertices.back() && "Not a Polygon");
     /** simplifySection() requires the Polygon to consist of at least two vertices,
         so we need to test the number of vertices here. Also, a segment cannot be a polygon
@@ -109,6 +110,8 @@ bool PolygonSegment::simplifyArea(double allowedDeviation)
     list<Vertex>::iterator last = m_vertices.end();
     last--;
     simplifySection( m_vertices.begin(), last, allowedDeviation);
+
+    canonicalize();
     
     /** Need three vertices to form an area; four since first and last are identical
         If the polygon was simplified to degenerate to a line or even a single point,
@@ -117,6 +120,7 @@ bool PolygonSegment::simplifyArea(double allowedDeviation)
     if (m_vertices.size() < 4) { m_vertices.clear(); return false; }
 
     assert( m_vertices.front() == m_vertices.back());
+    if ( isClockwise() != clockwise) m_vertices.reverse();
     return true;
 }
 
@@ -222,7 +226,9 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
         
         if (seg->front() != seg->back()) seg->append(seg->front());
         
-        out.push_back(*seg);
+        seg->canonicalize();
+        if (seg->vertices().size() >= 4)   //skip degenerate segments (points, lines) that do not form a polygon
+            out.push_back(*seg);
         delete seg;
         return;
     }
@@ -271,8 +277,10 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
                 seg1->append(seg1->vertices().front());
 
             assert( seg1->front() == seg1->back() && "clipped polygon is not closed");
-
-            out.push_back(*seg1);
+            
+            seg1->canonicalize();
+            if (seg1->vertices().size() >= 4)
+                out.push_back(*seg1);
             delete seg1;
             continue;
         }
@@ -281,22 +289,6 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
         queue.pop();
         assert( seg1 != seg2);
         //cout << "connecting two segments" << endl << *seg1 << endl << *seg2 << endl;
-        
-        /*
-        if (otherCoordinate(seg1->front()) < otherCoordinate( seg1->back()  ) &&
-            otherCoordinate(seg2->back())  < otherCoordinate( seg2->front() ) )
-        {
-            seg2->append( *seg1, seg2->back() == seg1->front() );
-            delete seg1;
-            seg1 = seg2;
-        } 
-        else if (otherCoordinate(seg2->front()) < otherCoordinate( seg2->back()  ) &&
-                   otherCoordinate(seg1->back())  < otherCoordinate( seg1->front() ) )
-        {
-            seg1->append(*seg2, (seg1->back() == seg2->front()) );
-            delete seg2;
-        } else assert(false && "invalid segment orientation");
-        */
         
         if ( otherCoordinate(seg1->front()) > otherCoordinate(seg1->back() )) 
             seg1->reverse(); //now seg1 ends with the vertex at which seg2 is to be appended
@@ -316,9 +308,11 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
 
 /** ensures that no two consecutive vertices of a polygon are identical, 
     and that no three consecutive vertices are colinear.
-    This is necessary for many advanced algorithms */
+    This property is a necessary prerequisite for many advanced algorithms */
 void PolygonSegment::canonicalize()
 {
+    if (m_vertices.size() == 0) return;
+    
     bool closed = m_vertices.front() == m_vertices.back();
     if (closed)
     {
@@ -333,14 +327,15 @@ void PolygonSegment::canonicalize()
     if ( m_vertices.size() < 2) return; //segments of length 0 and 1 are always canonical
     
     if ( m_vertices.size() == 2)
-    { //segments of length 2 are never colinear, only need to check if vertices are identical
-        if (m_vertices.front() == m_vertices.back()) m_vertices.pop_back();
+    { //segments of length 2 cannot be colinear, only need to check if vertices are identical
+        if (m_vertices.front() == m_vertices.back()) 
+            m_vertices.pop_back();
         return;
     }
     
-    assert( m_vertices.size() >= 3);
+    assert( m_vertices.size() >= 3 );
     list<Vertex>::iterator v3 = m_vertices.begin();
-    list<Vertex>::iterator v1 = v3++; 
+    list<Vertex>::iterator v1 = v3++;
     list<Vertex>::iterator v2 = v3++;
     
     //at this point, v1, v2, v3 hold references to the first three vertices of the polygon
@@ -348,6 +343,8 @@ void PolygonSegment::canonicalize()
     //first part: find and remove colinear vertices
     while (v3 != m_vertices.end())
     {
+        assert ( (v1!=v2) && (v2!=v3) && (v3!=v1) );
+    
         if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) //colinear
         {
             m_vertices.erase(v2);
@@ -389,6 +386,9 @@ void PolygonSegment::canonicalize()
     //second part: remove consecutive identical vertices
     v1 = m_vertices.begin();
     v2 = ++m_vertices.begin();
+    assert( v1!= v2);
+    assert( m_vertices.size() > 1);
+    
     while (v2 != m_vertices.end())
     {
         if (*v1 == *v2)
@@ -399,10 +399,17 @@ void PolygonSegment::canonicalize()
         {
             v1++;
             v2++;
-        }   
+        }
     }
     
-    while (m_vertices.front() == m_vertices.back()) m_vertices.pop_back();
+    /* when relying only on front() == back() as a loop condition, the while-loop could delete even the final element,
+     * and continue after that. But at that point, calls to front() and back() are invalid, and cause segfault.
+     * Thus the additional check with m_vertices.size() */
+    int num_vertices = m_vertices.size();   // without caching this, the next line could degenerate to O(n²)
+    while (m_vertices.front() == m_vertices.back() && (--num_vertices))
+    {
+        m_vertices.pop_back();
+    }
     
     if (closed && m_vertices.size() >= 3)
         //re-duplicate the first vertex to again mark the polygon as closed 
@@ -527,52 +534,39 @@ static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSeg
     }
     if (isAbove) above.push_back(current_seg);
     else below.push_back(current_seg);
-    
-    #warning may produce degenerated polygons with zero area
-    //FIXME: test whether all vertices of a segment lie completely on the clipping line; if so, discard the segment
-    
-    #warning may produce connected line segments that are co-linear and should be replaced by a single line
 }
 
+void ensureOrientation( list<PolygonSegment> &in, list<PolygonSegment> &out, bool clockwise)
+{
+    for (uint64_t j = in.size(); j; j--)
+    {
+        PolygonSegment s = in.front();
+        in.pop_front();
+        if (! (clockwise == s.isClockwise()) )
+            s.reverse();
+        out.push_back(s);
+    }
+    assert(in.size() == 0);
 
-void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below) const
+}
+
+void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below)
 {
     list<PolygonSegment*> above, below;
 
-    #warning disabled clockwise test for debugging
     bool clockwise = isClockwise();
     
     clip<getYCoordinate, getXCoordinate>( m_vertices, clip_y, above, below);
 
     list<PolygonSegment> tmp_above, tmp_below;
-    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, out_above);
-    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, out_below);
+    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, tmp_above);
+    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, tmp_below);
 
-    for (uint64_t j = tmp_above.size(); j; j--)
-    {
-        PolygonSegment s = tmp_above.front();
-        tmp_above.pop_front();
-        if (! (clockwise == s.isClockwise()) )
-            s.reverse();
-        out_above.push_back(s);
-    }
-    assert(tmp_above.size() == 0);
-    
-    
-    for (uint64_t j = tmp_below.size(); j; j--)
-    {
-        PolygonSegment s = tmp_below.front();
-        tmp_below.pop_front();
-        if (! (clockwise == s.isClockwise()))
-            s.reverse();
-        out_below.push_back(s);
-    }
-    assert(tmp_below.size() == 0);
-
-
+    ensureOrientation(tmp_above, out_above, clockwise);
+    ensureOrientation(tmp_below, out_below, clockwise);
 }
 
-void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right) const
+void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right)
 {
     list<PolygonSegment*> left, right;
     
@@ -584,32 +578,15 @@ void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &ou
     connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  tmp_left );
     connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, tmp_right);
     
-    for (uint64_t j = tmp_left.size(); j; j--)
-    {
-        PolygonSegment s = tmp_left.front();
-        tmp_left.pop_front();
-        if (! (clockwise == s.isClockwise()) )
-            s.reverse();
-        out_left.push_back(s);
-    }
-    assert(tmp_left.size() == 0);
-    
-    
-    for (uint64_t j = tmp_right.size(); j; j--)
-    {
-        PolygonSegment s = tmp_right.front();
-        tmp_right.pop_front();
-        if (! (clockwise == s.isClockwise()))
-            s.reverse();
-        out_right.push_back(s);
-    }
-    assert(tmp_right.size() == 0);
-    
+    ensureOrientation(tmp_left, out_left, clockwise);
+    ensureOrientation(tmp_right, out_right, clockwise);
 }
 
-bool PolygonSegment::isClockwise() const
+bool PolygonSegment::isClockwise()
 {
-    assert (front() == back() && " Clockwise test is defined for closed polygons only");
+    assert (front() == back() && "Clockwise test is defined for closed polygons only");
+    canonicalize(); // otherwise, the minimum vertex and its two neighbors may be colinear, meaning that isClockwise won't work
+    
     if (m_vertices.size() < 3) return false; //'clockwise' is only meaningful for closed polygons; and those require at least 3 vertices
     list<Vertex>::const_iterator vMin = m_vertices.begin();
     

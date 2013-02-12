@@ -25,10 +25,10 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
     
     PolygonSegment poly(segment);
     //assert (poly.isSimple());
-    #warning next line may be the cause of memory corruption
-    //poly.canonicalize();
     //std::cout << poly.isClockwiseHeuristic() << endl;
+    poly.canonicalize();
     if (poly.vertices().size() < 4) return;
+    
    
     FILE* f = fopen(file_base.c_str(), "ab");
     uint64_t nVertices = poly.vertices().size();
@@ -43,11 +43,6 @@ void dumpPolygon(string file_base, const PolygonSegment& segment)
         
     }
     
-    /*BOOST_FOREACH( const Vertex vertex, segment.vertices())
-        out << vertex.x << ", " << vertex.y << endl;
-
-    out.close();*/
-    
     fclose(f);
 }
 
@@ -58,11 +53,10 @@ list<PolygonSegment> poly_storage;
 
 void handlePolygon(string, PolygonSegment& segment)
 {
+    segment.canonicalize();
     poly_storage.push_back(segment);
-
     //#warning FIXME: filter out those "polygons" that have less than four vertices
     //dumpPolygon(file_base, segment);
-
 }
 
 #if 0
@@ -162,12 +156,12 @@ void extractNetwork(FILE* src/*, double allowedDeviation*/, string base_name)
 }
 #endif
 
-void clipFirstComponent(list<PolygonSegment> in, int32_t clip_pos, list<PolygonSegment> &out1, list<PolygonSegment> &out2)
+void clipFirstComponent(list<PolygonSegment> &in, int32_t clip_pos, list<PolygonSegment> &out1, list<PolygonSegment> &out2)
 {
     for (uint64_t i = in.size(); i; i--)
     {
-        PolygonSegment seg = in.back();
-        in.pop_back();
+        PolygonSegment seg = in.front();
+        in.pop_front();
         seg.clipFirstComponent( clip_pos, out1, out2);
     }
 }
@@ -210,7 +204,10 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
         */
         PolygonSegment simp(seg);
         if (simp.simplifyArea( (right-(uint64_t)left)/2048 ))
+        {
+            simp.canonicalize();
             dumpPolygon(file_base+"#"+position, simp);
+        }
     }
          
     //if (level == 5)
@@ -220,14 +217,12 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
     int32_t mid_v = (top/2)  + (bottom/2);
     
     list<PolygonSegment> vLeft, vRight;
-    //FIXME: change this code to preserve the orientation while clipping 
-    //       (as the later clipping along the first component does already)
-    
-    // segments.size() is a O(n) operation in the GNU stl, so better cache it;
+
+    // segments.size() is an O(n) operation in the GNU stl, so better cache it;
     for (uint64_t i = segments.size(); i; i--)
     {
-        PolygonSegment seg = segments.back();
-        segments.pop_back();
+        PolygonSegment seg = segments.front();
+        segments.pop_front();
         /** beware of coordinate semantics: OSM data is stored as (lat,lon)-pairs, where lat is the "vertical" component
           * Thus, compared to computer graphics (x,y)-pairs, the axes are switched */
         seg.clipSecondComponent( mid_h, vLeft, vRight);
@@ -239,32 +234,16 @@ void clipRecursive(string file_base, string position, list<PolygonSegment>& segm
 
     list<PolygonSegment> vTop, vBottom;
 
-    //process left half (top-left and bottom-left quarters)    
-    /*
-    for (uint64_t i = vLeft.size(); i; i--)
-    {
-        PolygonSegment seg = vLeft.back();
-        vLeft.pop_back();
-        seg.clipFirstComponent( mid_v, vTop, vBottom);
-    }
-    assert(vLeft.size() == 0);*/
-    
     clipFirstComponent(vLeft, mid_v, vTop, vBottom);
+    assert(vLeft.size() == 0);
     
     clipRecursive( file_base, position+ "0", vTop,    top,   left, mid_v,  mid_h, level+1);
     vTop.clear();
     clipRecursive( file_base, position+ "2", vBottom, mid_v, left, bottom, mid_h, level+1);
     vBottom.clear();
     
-    //process right half (top-right and bottom-right quarters)
-    /*for (uint64_t i = vRight.size(); i; i--)
-    {
-        PolygonSegment seg = vRight.back();
-        vRight.pop_back();
-        seg.clipFirstComponent( mid_v, vTop, vBottom);
-    }*/
     clipFirstComponent(vRight, mid_v, vTop, vBottom);
-
+    assert(vRight.size() == 0);
 
     clipRecursive( file_base, position+ "1", vTop,    top,   mid_h, mid_v,  right, level+1);
     vTop.clear();
@@ -303,7 +282,7 @@ void reconstructCoastline(FILE * src, list<PolygonSegment> &poly_storage)
         recon.clearPolygonList();
     }
     cout << "closed " << poly_storage.size() << " polygons, " << num_self_closed << " were closed in themselves" << endl;
-    cout << "closing polygons" << endl;
+    cout << "heuristically closing incomplete polygons" << endl;
     recon.forceClosePolygons();
     const list<PolygonSegment>& lst = recon.getClosedPolygons();
     cout << "done, found " << lst.size() << endl;

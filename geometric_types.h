@@ -26,7 +26,7 @@ struct Vertex
     //double   distanceToLine(const Vertex &A, const Vertex &B) const;
 
     /** returns the product of the signed distance to the line AB and the length of the line AB, |AB|.
-      * the result is guaranteed to be exact, and is zero iff. The point lies on the line*/
+      * the result is guaranteed to be exact, and is zero iff. The point lies *on* the line*/
     BigInt pseudoDistanceToLine(const Vertex &A, const Vertex &B) const;
     bool    operator==(const Vertex &other) const;
     bool    operator!=(const Vertex &other) const;
@@ -34,7 +34,7 @@ struct Vertex
     Vertex  operator+(const Vertex &a) const;
     Vertex  operator-(const Vertex &a) const;
 public:    
-    /** just a safety precaution (wouldn't need to be BigInt, could just be int64_t): 
+    /** just a safety precaution (wouldn't need to be BigInt, could just be int32_t): 
       * having these as BigInt ensures that all operations on them will also be performed as BigInts)*/
     BigInt x, y;    
     
@@ -100,13 +100,13 @@ public:
     
     
     void canonicalize();    //remove successive identical and colinear vertices
-    bool isClockwise() const;
+    bool isClockwise();
     bool isSimple() const; // FIXME: is O(n²), will be too slow for many applications
     
     /** semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the
         upper part, everything else to the lower part    */
-    void clipSecondComponent( BigInt clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out) const;
-    void clipFirstComponent(  BigInt clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out) const;
+    void clipSecondComponent( BigInt clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out);
+    void clipFirstComponent(  BigInt clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out);
 
     /** @returns: 'true' if the resulting polygon is a proper one, 'false' if it should be discarded completely. 
         In the latter case the state of the polygon is undefined. */
