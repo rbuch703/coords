@@ -4,8 +4,8 @@
 #include <queue>
 #include <boost/foreach.hpp>
 
-BigInt getXCoordinate(const Vertex &v) { return v.x;}
-BigInt getYCoordinate(const Vertex &v) { return v.y;}
+static BigInt getXCoordinate(const Vertex &v) { return v.x;}
+static BigInt getYCoordinate(const Vertex &v) { return v.y;}
 
 /** 
     @brief: BASIC ALGORITHM (for clipping along the x-axis):
@@ -24,7 +24,7 @@ BigInt getYCoordinate(const Vertex &v) { return v.y;}
 typedef BigInt (*VertexCoordinate)(const Vertex &v);
 
 
-PolygonSegment::PolygonSegment(const int32_t * vertices, int64_t num_vertices)
+VertexChain::VertexChain(const int32_t * vertices, int64_t num_vertices)
 {
     while (num_vertices--)
     {
@@ -33,7 +33,7 @@ PolygonSegment::PolygonSegment(const int32_t * vertices, int64_t num_vertices)
     }
 }
 
-void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
+void VertexChain::append(const VertexChain &other, bool shareEndpoint)
 {
     if (shareEndpoint) 
     {
@@ -52,14 +52,14 @@ void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
 }
 
 
-PolygonSegment::PolygonSegment( const list<OSMVertex> &vertices)
+VertexChain::VertexChain( const list<OSMVertex> &vertices)
 {
     BOOST_FOREACH( OSMVertex v, vertices)
         append( Vertex( v.x, v.y));
 }
 
 
-bool PolygonSegment::simplifyArea(double allowedDeviation)
+bool VertexChain::simplifyArea(double allowedDeviation)
 {
     bool clockwise = isClockwise();
     assert( m_vertices.front() == m_vertices.back() && "Not a Polygon");
@@ -87,14 +87,14 @@ bool PolygonSegment::simplifyArea(double allowedDeviation)
     return true;
 }
 
-void PolygonSegment::simplifyStroke(double allowedDeviation)
+void VertexChain::simplifyStroke(double allowedDeviation)
 {
     list<Vertex>::iterator last = m_vertices.end();
     last--;
     simplifySection( m_vertices.begin(), last, allowedDeviation);
 }
 
-void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)
+void VertexChain::simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)
 {
     list<Vertex>::iterator it_max;
     
@@ -158,14 +158,14 @@ static Vertex getPredecessor(list<Vertex>::const_iterator it, const list<Vertex>
 
 
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, list<PolygonSegment> &out)
+static void connectClippedSegments( BigInt clip_pos, list<VertexChain*> lst, list<VertexChain> &out)
 {
 
     if (lst.size() == 0) return;
     
     if (lst.size() ==1)
     {
-        PolygonSegment *seg = lst.front();
+        VertexChain *seg = lst.front();
         lst.pop_front();
         
         if (seg->front() != seg->back()) seg->append(seg->front());
@@ -194,20 +194,20 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
         lst.pop_front();
     }
     
-    priority_queue< pair< BigInt, PolygonSegment*> > queue;
-    BOOST_FOREACH( PolygonSegment* seg, lst)
+    priority_queue< pair< BigInt, VertexChain*> > queue;
+    BOOST_FOREACH( VertexChain* seg, lst)
     {
         assert( ( significantCoordinate( seg->vertices().front()) == clip_pos) && 
                 ( significantCoordinate( seg->vertices().back() ) == clip_pos));
                 
-        queue.push( pair<BigInt, PolygonSegment*>( max( otherCoordinate(seg->vertices().front()),
+        queue.push( pair<BigInt, VertexChain*>( max( otherCoordinate(seg->vertices().front()),
                                                         otherCoordinate(seg->vertices().back() ) ), seg));
     }
     
     
     while (queue.size())
     {
-        PolygonSegment *seg1 = queue.top().second; 
+        VertexChain *seg1 = queue.top().second; 
         queue.pop();
         /** this is either the last remaining segment, or its endpoints are the two segment endpoints 
           * with the highest y-coordinates. Either way, make this segment form a closed polygon by itself
@@ -229,7 +229,7 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
             continue;
         }
 
-        PolygonSegment *seg2 = queue.top().second; 
+        VertexChain *seg2 = queue.top().second; 
         queue.pop();
         assert( seg1 != seg2);
         //cout << "connecting two segments" << endl << *seg1 << endl << *seg2 << endl;
@@ -243,7 +243,7 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
         seg1->append(*seg2, (seg1->back() == seg2->front()) );
         delete seg2;
         
-        queue.push( pair<BigInt, PolygonSegment*>(max( otherCoordinate( seg1->front()), 
+        queue.push( pair<BigInt, VertexChain*>(max( otherCoordinate( seg1->front()), 
                                                        otherCoordinate( seg1->back() )), seg1));
     }
 
@@ -253,7 +253,7 @@ static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, 
 /** ensures that no two consecutive vertices of a polygon are identical, 
     and that no three consecutive vertices are colinear.
     This property is a necessary prerequisite for many advanced algorithms */
-void PolygonSegment::canonicalize()
+void VertexChain::canonicalize()
 {
     if (m_vertices.size() == 0) return;
     
@@ -360,21 +360,21 @@ void PolygonSegment::canonicalize()
         m_vertices.push_back(m_vertices.front());   
 }
 
-const Vertex&       PolygonSegment::front()     const  { return m_vertices.front(); }
-const Vertex&       PolygonSegment::back()      const  { return m_vertices.back(); }
-const list<Vertex>& PolygonSegment::vertices()  const  { return m_vertices; }
-void                PolygonSegment::reverse()          { m_vertices.reverse(); }
-void                PolygonSegment::append(const Vertex& node) { m_vertices.push_back(node); }
+const Vertex&       VertexChain::front()     const  { return m_vertices.front(); }
+const Vertex&       VertexChain::back()      const  { return m_vertices.back(); }
+const list<Vertex>& VertexChain::vertices()  const  { return m_vertices; }
+void                VertexChain::reverse()          { m_vertices.reverse(); }
+void                VertexChain::append(const Vertex& node) { m_vertices.push_back(node); }
 
 
-void PolygonSegment::append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end )
+void VertexChain::append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end )
 {
     m_vertices.insert(m_vertices.end(),begin, end);
 }
 
 
 #if 0
-bool PolygonSegment::isSimple() const
+bool VertexChain::isSimple() const
 {
 
     #warning causes false positives when three/four edges touch without intersecting
@@ -410,12 +410,12 @@ bool PolygonSegment::isSimple() const
 
 
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSegment*> &above, list<PolygonSegment*> &below)
+static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<VertexChain*> &above, list<VertexChain*> &below)
 {
     assert( polygon.front() == polygon.back());
     #warning TODO: handle the edge case that front() and back() both lie on the split line
 
-    PolygonSegment *current_seg = new PolygonSegment();
+    VertexChain *current_seg = new VertexChain();
     list<Vertex>::const_iterator v2 = polygon.begin();
 
     do { current_seg->append( *v2 ); v2++;}
@@ -455,7 +455,7 @@ static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSeg
             below.push_back(current_seg);
 
         isAbove = !isAbove;
-        current_seg = new PolygonSegment();
+        current_seg = new VertexChain();
         current_seg->append( Vertex(vClip) );
         current_seg->append( *v2);
     }
@@ -463,11 +463,11 @@ static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSeg
     else below.push_back(current_seg);
 }
 
-void ensureOrientation( list<PolygonSegment> &in, list<PolygonSegment> &out, bool clockwise)
+static void ensureOrientation( list<VertexChain> &in, list<VertexChain> &out, bool clockwise)
 {
     for (uint64_t j = in.size(); j; j--)
     {
-        PolygonSegment s = in.front();
+        VertexChain s = in.front();
         in.pop_front();
         if (! (clockwise == s.isClockwise()) )
             s.reverse();
@@ -477,15 +477,15 @@ void ensureOrientation( list<PolygonSegment> &in, list<PolygonSegment> &out, boo
 
 }
 
-void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below)
+void VertexChain::clipSecondComponent( BigInt clip_y, list<VertexChain> &out_above, list<VertexChain> &out_below)
 {
-    list<PolygonSegment*> above, below;
+    list<VertexChain*> above, below;
 
     bool clockwise = isClockwise();
     
     clip<getYCoordinate, getXCoordinate>( m_vertices, clip_y, above, below);
 
-    list<PolygonSegment> tmp_above, tmp_below;
+    list<VertexChain> tmp_above, tmp_below;
     connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, tmp_above);
     connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, tmp_below);
 
@@ -493,15 +493,15 @@ void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &o
     ensureOrientation(tmp_below, out_below, clockwise);
 }
 
-void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right)
+void VertexChain::clipFirstComponent( BigInt clip_x, list<VertexChain> &out_left, list<VertexChain> &out_right)
 {
-    list<PolygonSegment*> left, right;
+    list<VertexChain*> left, right;
     
     bool clockwise = isClockwise();
     
     clip<getXCoordinate, getYCoordinate>( m_vertices, clip_x, left, right);
 
-    list<PolygonSegment> tmp_left, tmp_right;
+    list<VertexChain> tmp_left, tmp_right;
     connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  tmp_left );
     connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, tmp_right);
     
@@ -509,7 +509,7 @@ void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &ou
     ensureOrientation(tmp_right, out_right, clockwise);
 }
 
-bool PolygonSegment::isClockwise()
+bool VertexChain::isClockwise()
 {
     assert (front() == back() && "Clockwise test is defined for closed polygons only");
     canonicalize(); // otherwise, the minimum vertex and its two neighbors may be colinear, meaning that isClockwise won't work

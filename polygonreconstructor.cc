@@ -11,18 +11,18 @@
 #include <iostream>
 #include <assert.h>
 
-typedef pair<Vertex, PolygonSegment*> Vertex2Segment;
+typedef pair<Vertex, VertexChain*> Vertex2Segment;
 
-PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
+VertexChain* PolygonReconstructor::add(const VertexChain &s)
 {
-    PolygonSegment *seg = new PolygonSegment(s);
+    VertexChain *seg = new VertexChain(s);
 
       //if there is another segment that connects seemlessly  to this one
     while ( openEndPoints.count(seg->front()) || openEndPoints.count(seg->back()))
     {
         if (openEndPoints.count(seg->front())) //other polygon connects to 'front' of this one
         {
-            PolygonSegment *other = openEndPoints[seg->front()];
+            VertexChain *other = openEndPoints[seg->front()];
             openEndPoints.erase( other->front());
             openEndPoints.erase( other->back());
             
@@ -42,7 +42,7 @@ PolygonSegment* PolygonReconstructor::add(const PolygonSegment &s)
         
         if (openEndPoints.count(seg->back())) //other polygon connects to 'back' of this one
         {
-            PolygonSegment *other = openEndPoints[seg->back()];
+            VertexChain *other = openEndPoints[seg->back()];
             openEndPoints.erase( other->front());
             openEndPoints.erase( other->back());
             
@@ -86,7 +86,7 @@ void PolygonReconstructor::forceClosePolygons()
     uint32_t nEndPoints = openEndPoints.size();
     Vertex vEndPoints[nEndPoints];
     uint32_t i = 0;
-    //for (map<Vertex, PolygonSegment*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
+    //for (map<Vertex, VertexChain*>::const_iterator poly = openEndPoints.begin(); poly != openEndPoints.end(); poly++, i++)
     //    vEndPoints[i] = poly->first;
     
     BOOST_FOREACH( Vertex2Segment poly, openEndPoints)
@@ -105,8 +105,8 @@ void PolygonReconstructor::forceClosePolygons()
         assert(minDist != 0xFFFFFFFFFFFFFFFFll);
         //cout << "Minimum gap size is " << (sqrt(minDist)/100) << "m" << endl;
         assert( openEndPoints.count(vEndPoints[min_i]) && openEndPoints.count(vEndPoints[min_j]) );
-        PolygonSegment* seg1 = openEndPoints[vEndPoints[min_i]];
-        PolygonSegment* seg2 = openEndPoints[vEndPoints[min_j]];
+        VertexChain* seg1 = openEndPoints[vEndPoints[min_i]];
+        VertexChain* seg2 = openEndPoints[vEndPoints[min_j]];
         
         Vertex v1 = vEndPoints[min_i];
         Vertex v2 = vEndPoints[min_j];
@@ -169,7 +169,7 @@ struct EndPointDistance
 };
 
 
-static void closeSomePolygons( map<Vertex, PolygonSegment*> &openEndPoints, list<PolygonSegment> &res, const uint64_t max_dist_sq)
+static void closeSomePolygons( map<Vertex, VertexChain*> &openEndPoints, list<VertexChain> &res, const uint64_t max_dist_sq)
 {
     uint64_t nEndPoints = openEndPoints.size();
 
@@ -213,8 +213,8 @@ static void closeSomePolygons( map<Vertex, PolygonSegment*> &openEndPoints, list
         Vertex v1 = vEndPoints[nextPair.m_i];
         Vertex v2 = vEndPoints[nextPair.m_j];
 
-        PolygonSegment* seg1 = openEndPoints[v1];
-        PolygonSegment* seg2 = openEndPoints[v2];
+        VertexChain* seg1 = openEndPoints[v1];
+        VertexChain* seg2 = openEndPoints[v2];
         
         //we now proceed to connect the two end points, so they are no longer accessible
         vEndPointAccessible[nextPair.m_i] = vEndPointAccessible[nextPair.m_j] = false;
@@ -269,18 +269,18 @@ void PolygonReconstructor::forceClosePolygons()
 }
 
 void PolygonReconstructor::clear() {
-    set<PolygonSegment*> segs;
+    set<VertexChain*> segs;
     /** we need to delete all remaining manually allocated polygon segments
       * These are all registered in openEndPoints, but each polygon segment appears twice in this list.
       * So, we first have to obtain a list of unique pointers to these segments*/
       
     BOOST_FOREACH( Vertex2Segment v2s, openEndPoints)
         if (!segs.count(v2s.second)) segs.insert(v2s.second);
-    //for (map<Vertex, PolygonSegment*>::iterator it = openEndPoints.begin(); it != openEndPoints.end(); it++)
+    //for (map<Vertex, VertexChain*>::iterator it = openEndPoints.begin(); it != openEndPoints.end(); it++)
     //    if (!segs.count(it->second)) segs.insert(it->second);
-     //delete remaining PolygonSegment
+     //delete remaining VertexChain
 
-    for (set<PolygonSegment*>::iterator seg = segs.begin(); seg != segs.end(); seg++)
+    for (set<VertexChain*>::iterator seg = segs.begin(); seg != segs.end(); seg++)
         delete *seg;
         
     openEndPoints.clear();

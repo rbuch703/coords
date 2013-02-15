@@ -11,7 +11,7 @@ CONV_OBJ = $(CONV_SRC:.cc=.o)
 SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 
-FLAGS = -g -Wall -Wextra  -fprofile-arcs -ftest-coverage #-O2
+FLAGS = -g -Wall -Wextra  #-fprofile-arcs -ftest-coverage #-O2
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = -fprofile-arcs#--as-needed

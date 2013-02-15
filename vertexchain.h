@@ -4,14 +4,14 @@
 
 #include "geometric_types.h"
 
-class PolygonSegment
+class VertexChain
 {
 public:
-    PolygonSegment() {};
-    PolygonSegment(const PolygonSegment & other): m_vertices(other.m_vertices) { }
-    PolygonSegment( const list<OSMVertex> &vertices);
+    VertexChain() {};
+    VertexChain(const VertexChain & other): m_vertices(other.m_vertices) { }
+    VertexChain( const list<OSMVertex> &vertices);
 
-    PolygonSegment(const int32_t *vertices, int64_t num_vertices);
+    VertexChain(const int32_t *vertices, int64_t num_vertices);
     
     const Vertex& front() const;
     const Vertex& back()  const;
@@ -20,7 +20,7 @@ public:
     void reverse();
     void append(const Vertex& node);
     void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end );
-    void append(const PolygonSegment &other, bool shareEndpoint);
+    void append(const VertexChain &other, bool shareEndpoint);
     
     
     void canonicalize();    //remove successive identical and colinear vertices
@@ -29,8 +29,8 @@ public:
     
     /** semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the
         upper part, everything else to the lower part    */
-    void clipSecondComponent( BigInt clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out);
-    void clipFirstComponent(  BigInt clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out);
+    void clipSecondComponent( BigInt clip_y, list<VertexChain> &top_out, list<VertexChain> &bottom_out);
+    void clipFirstComponent(  BigInt clip_x, list<VertexChain> &left_out, list<VertexChain> &right_out);
 
     /** @returns: 'true' if the resulting polygon is a proper one, 'false' if it should be discarded completely. 
         In the latter case the state of the polygon is undefined. */
@@ -41,6 +41,6 @@ private:
     std::list<Vertex> m_vertices;
 };
 
-std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg);
+std::ostream& operator <<(std::ostream& os, const VertexChain &seg);
 
 #endif

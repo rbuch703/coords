@@ -107,7 +107,7 @@ int main()
         
     }
 
-    PolygonSegment p;
+    VertexChain p;
     p.append(Vertex(0,1));
     p.append(Vertex(1,0));
     p.append(Vertex(2,0));

@@ -373,8 +373,6 @@ void findIntersectionsBruteForce(list<LineSegment> &segments, map<LineSegment, l
                 intersections_out[*seg2].push_back(*seg1);
             }
     }
-    
-    
 }
 
 #if 0
