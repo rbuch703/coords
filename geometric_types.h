@@ -40,7 +40,42 @@ public:
     
 };
 
-//Vertex operator*(const BigInt &a, const Vertex &b);
+/** semantics:  a line segment starts *at* its vertex 'start', and ends *at* its vertex 'end',
+                i.e. 'start' and 'end' are part of the segment.
+                By this definition, adjacent line segments making up a simple closed polygon *will* intersect*/
+struct LineSegment
+{
+    LineSegment():start(Vertex(0,0)), end(Vertex(0,0)) {}
+    LineSegment( const Vertex v_start, const Vertex v_end/*, int32_t v_tag1, int32_t v_tag2*/);
+    LineSegment( BigInt start_x, BigInt start_y, BigInt end_x, BigInt end_y/*, int32_t v_tag1, int32_t v_tag2*/);
+
+    bool isColinearWith(const Vertex v) const;
+    bool isParallelTo( const LineSegment &other) const;
+    bool intersects( const LineSegment &other) const;
+    bool overlapsWith(const LineSegment &other) const;
+    //returns the intersection of the two line segments, with each coordinate rounded *up* to the next integer
+    Vertex getRoundedIntersection(const LineSegment &other) const;
+    
+    BigFraction getCoefficient(const Vertex v) const;
+    double getIntersectionCoefficient( const LineSegment &other) const;
+    //void getIntersection(LineSegment &other, BigFraction &out_x, BigFraction &out_y) const;
+    void getIntersectionCoefficient( const LineSegment &other, BigInt &out_num, BigInt &out_denom) const;
+    
+    explicit operator bool() const;
+    
+    //these are purely logical comparison operator with no intended geometric meaning
+    bool operator< (const LineSegment &other) const;
+    bool operator==(const LineSegment &other) const;
+    Vertex start, end;
+};
+
+inline std::ostream& operator <<(std::ostream& os, const LineSegment &edge)
+{
+    os << "(" << edge.start.x.toDouble() << ", " << edge.start.y.toDouble() << ") - (";
+    os        << edge.end.x.toDouble()   << ", " << edge.end.y.toDouble() << ")";
+    //os << edge.start << " - " << edge.end;
+    return os;
+}
 
 
 struct AABoundingBox
@@ -60,64 +95,11 @@ struct AABoundingBox
 };
 
 
-/** semantics:  a line segment starts *at* its vertex 'start', and ends *right before* its vertex end,
-                i.e. 'start' is part of the segment, while 'end' is not.
-                By this definition, adjacent line segments making up a simple closed polygon do not intersect*/
-struct LineSegment
-{
-    LineSegment( const Vertex v_start, const Vertex v_end/*, int32_t v_tag1, int32_t v_tag2*/);
-    LineSegment( BigInt start_x, BigInt start_y, BigInt end_x, BigInt end_y/*, int32_t v_tag1, int32_t v_tag2*/);
-
-    bool isColinearWith(const Vertex v) const;                                                  
-    bool parallelTo( const LineSegment &other) const;
-    bool intersects( const LineSegment &other) const;
-    //returns the intersection of the two line segments, with each coordinate rounded *up* to the next integer
-    Vertex getRoundedIntersection(const LineSegment &other) const;
-    double getIntersectionCoefficient( const LineSegment &other) const;
-    void getIntersectionCoefficient( const LineSegment &other, BigInt &out_num, BigInt &out_denom) const;
-    
-    Vertex start, end;
-};
-
-
-class PolygonSegment
-{
-public:
-    PolygonSegment() {};
-    PolygonSegment(const PolygonSegment & other): m_vertices(other.m_vertices) { }
-    PolygonSegment( const list<OSMVertex> &vertices);
-
-    PolygonSegment(const int32_t *vertices, int64_t num_vertices);
-    
-    const Vertex& front() const;
-    const Vertex& back()  const;
-    const list<Vertex>& vertices() const;
-    
-    void reverse();
-    void append(const Vertex& node);
-    void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end );
-    void append(const PolygonSegment &other, bool shareEndpoint);
-    
-    
-    void canonicalize();    //remove successive identical and colinear vertices
-    bool isClockwise();
-    bool isSimple() const; // FIXME: is O(n²), will be too slow for many applications
-    
-    /** semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the
-        upper part, everything else to the lower part    */
-    void clipSecondComponent( BigInt clip_y, list<PolygonSegment> &top_out, list<PolygonSegment> &bottom_out);
-    void clipFirstComponent(  BigInt clip_x, list<PolygonSegment> &left_out, list<PolygonSegment> &right_out);
-
-    /** @returns: 'true' if the resulting polygon is a proper one, 'false' if it should be discarded completely. 
-        In the latter case the state of the polygon is undefined. */
-    bool simplifyArea(double allowedDeviation);
-    void simplifyStroke(double allowedDeviation);
-private:
-    void simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);
-    std::list<Vertex> m_vertices;
-};
 
 std::ostream& operator <<(std::ostream& os, const Vertex v);
-std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg);
+
+bool resolveOverlap(LineSegment &A, LineSegment &B);
+void findIntersectionsBruteForce(list<LineSegment> &segments, map<LineSegment, list<LineSegment> > &intersections_out);
+void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments);
 
 #endif

@@ -56,8 +56,8 @@ int64_t isClockwise(vertex_data_t polygon)
     assert( start_x != end_x || start_y != end_y);
     
     int64_t pseudodistance = (end_x - start_x)*(start_y - y) - (end_y - start_y)*(start_x - x);
-    #warning undefined behavior in case of collinear vertices
-    //assert ( pseudodistance != 0 && "colinear vertices, cannot determine orientation");
+    //#warning undefined behavior in case of collinear vertices
+    assert ( pseudodistance != 0 && "colinear vertices, cannot determine orientation");
     
     return pseudodistance;// < 0;
 }
@@ -203,7 +203,6 @@ typedef struct rect_t
 double max(double a, double b) { return a> b ? a : b;}
 double min(double a, double b) { return a< b ? a : b;}
 double width(rect_t rect) { return rect.right - rect.left;}
-#warning using backup tiles
 static const char* BASEPATH = "output/coast/seg#";
 
 void render(const rect_t view, rect_t tile, char *position)

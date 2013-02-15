@@ -61,642 +61,6 @@ std::ostream& operator <<(std::ostream& os, const Vertex v)
 
 /** =================================================*/
 
-PolygonSegment::PolygonSegment(const int32_t * vertices, int64_t num_vertices)
-{
-    while (num_vertices--)
-    {
-        m_vertices.push_back( Vertex( vertices[0], vertices[1]));
-        vertices+=2;
-    }
-}
-
-void PolygonSegment::append(const PolygonSegment &other, bool shareEndpoint)
-{
-    if (shareEndpoint) 
-    {
-        assert(back() == other.front());
-        m_vertices.insert( m_vertices.end(), ++other.m_vertices.begin(), other.m_vertices.end());
-    } else
-    {
-        assert(back() != other.front()); //otherwise we would have two consecutive identical vertices
-        //cout << "concatenating line segments that are " 
-        //     << sqrt( (back() -other.front()).squaredLength() )/100.0 << "m apart"<< endl;
-        m_vertices.insert( m_vertices.end(),   other.m_vertices.begin(), other.m_vertices.end());
-    }
-    
-    //std::cout << "Merged: " << res
-    //return res;
-}
-
-
-PolygonSegment::PolygonSegment( const list<OSMVertex> &vertices)
-{
-    BOOST_FOREACH( OSMVertex v, vertices)
-        append( Vertex( v.x, v.y));
-}
-
-
-bool PolygonSegment::simplifyArea(double allowedDeviation)
-{
-    bool clockwise = isClockwise();
-    assert( m_vertices.front() == m_vertices.back() && "Not a Polygon");
-    /** simplifySection() requires the Polygon to consist of at least two vertices,
-        so we need to test the number of vertices here. Also, a segment cannot be a polygon
-        if its vertex count is less than four (since the polygon of smallest order is a triangle,
-        and first and last vertex are identical. Since simplification cannot add vertices,
-        We can safely terminate the simplification here, if we are short of four vertices. */
-    if ( m_vertices.size() < 4) { m_vertices.clear(); return false; }
-
-    list<Vertex>::iterator last = m_vertices.end();
-    last--;
-    simplifySection( m_vertices.begin(), last, allowedDeviation);
-
-    canonicalize();
-    
-    /** Need three vertices to form an area; four since first and last are identical
-        If the polygon was simplified to degenerate to a line or even a single point,
-        This means that the whole polygon would not be visible given the current 
-        allowedDeviation. It may thus be omitted completely */
-    if (m_vertices.size() < 4) { m_vertices.clear(); return false; }
-
-    assert( m_vertices.front() == m_vertices.back());
-    if ( isClockwise() != clockwise) m_vertices.reverse();
-    return true;
-}
-
-void PolygonSegment::simplifyStroke(double allowedDeviation)
-{
-    list<Vertex>::iterator last = m_vertices.end();
-    last--;
-    simplifySection( m_vertices.begin(), last, allowedDeviation);
-}
-
-void PolygonSegment::simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)
-{
-    list<Vertex>::iterator it_max;
-    
-    double max_dist_sq = 0;
-    Vertex A = *segment_first;
-    Vertex B = *segment_last;
-    list<Vertex>::iterator it  = segment_first;
-    // make sure that 'it' starts from segment_first+1; segment_first must never be deleted
-    for (it++; it != segment_last; it++)
-    {
-        double dist_sq = (A == B) ? 
-            (*it-A).squaredLength().toDouble() : 
-            it->squaredDistanceToLine(A, B);
-        if (dist_sq > max_dist_sq) { it_max = it; max_dist_sq = dist_sq;}
-    }
-    if (max_dist_sq == 0) return;
-    
-    if (max_dist_sq < allowedDeviation*allowedDeviation) 
-    {
-        // no point further than 'allowedDeviation' from line A-B --> can delete all points in between
-        segment_first++;
-        // erase range includes first iterator but excludes second one
-        m_vertices.erase( segment_first, segment_last);
-        assert( m_vertices.front() == m_vertices.back());
-    } else  //use point with maximum deviation as additional necessary point in the simplified polygon, recurse
-    {
-        simplifySection(segment_first, it_max, allowedDeviation);
-        simplifySection(it_max, segment_last, allowedDeviation);
-    }
-}
-
-static Vertex getSuccessor(list<Vertex>::const_iterator it, const list<Vertex> &lst)
-{
-    bool closed = lst.front() == lst.back();
-
-    it++;
-    if (it != lst.end())
-        return *it;
-    
-    it = lst.begin();
-    if (closed && it != lst.end()) //check for lst.end() is necessary for lists with 0/1 elements
-    {
-        it++;    
-        if (it == lst.end())    //work-around for lists with a single element
-            it--;
-    }
-    
-    return *it;
-}
-
-static Vertex getPredecessor(list<Vertex>::const_iterator it, const list<Vertex> &lst)
-{
-    bool closed = lst.front() == lst.back();
-    
-    list<Vertex>::const_iterator pred = (it == lst.begin()) ? lst.end(): it;
-    if (pred == lst.end() && closed)
-        pred--; // move from end() to the actual last element (which equals the first element);
-    return pred == lst.begin() ? *pred : *(--pred);
-}
-
-
-BigInt getXCoordinate(const Vertex &v) { return v.x;}
-BigInt getYCoordinate(const Vertex &v) { return v.y;}
-
-/** 
-    @brief: BASIC ALGORITHM (for clipping along the x-axis):
-        Sort all polygon segments by endpoint with biggest y coordinate
-        while list of segments is not empty:
-            take segment with biggest endpoint y coordinate
-            if this is the last remaining open polygon segment --> close it by connecting its end points, remove from list
-            if the y coordinate of the other end point of this segment is also bigger than the y coordinates
-                of all other polygon segment end points --> close this segment by connecting its end points, remove from list
-            otherwise:
-                also take the segment with the next-highest endpoint y coordinate
-                connect both segments at their endpoints with highest y coordinate
-                put the connected segment by into the queue; its position will change, since its endpoint with
-                    highest y coordinate has been connected and thus is no longer an endpoint
-*/
-typedef BigInt (*VertexCoordinate)(const Vertex &v);
-
-
-template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void connectClippedSegments( BigInt clip_pos, list<PolygonSegment*> lst, list<PolygonSegment> &out)
-{
-
-    if (lst.size() == 0) return;
-    
-    if (lst.size() ==1)
-    {
-        PolygonSegment *seg = lst.front();
-        lst.pop_front();
-        
-        if (seg->front() != seg->back()) seg->append(seg->front());
-        
-        seg->canonicalize();
-        if (seg->vertices().size() >= 4)   //skip degenerate segments (points, lines) that do not form a polygon
-            out.push_back(*seg);
-        delete seg;
-        return;
-    }
-    
-    /** This connecting algorithm assumes that all segments start and end at the clipping line 
-      * (since they were created by splitting the original polygon along that line).
-      * However, the first and last segment in the list may be the first and last line segment from the original polygon
-      * and start/end anywhere (because the original polygon may have started at any given point).
-      * Thus, in order for the connecting algorithm to work, the first segment has to be joined with the last
-      * segment, if the corresponding vertices do not lie on the clipping line. */
-
-    if ( significantCoordinate(lst.front()->vertices().front() ) != clip_pos && 
-         significantCoordinate(lst.back()->vertices().back()   ) != clip_pos)
-    {
-        assert(lst.front()->vertices().front() == lst.back()->vertices().back() );
-        lst.back()->append( *lst.front(), true);
-        //cout << lst.front() << endl;
-        delete lst.front();
-        lst.pop_front();
-    }
-    
-    priority_queue< pair< BigInt, PolygonSegment*> > queue;
-    BOOST_FOREACH( PolygonSegment* seg, lst)
-    {
-        assert( ( significantCoordinate( seg->vertices().front()) == clip_pos) && 
-                ( significantCoordinate( seg->vertices().back() ) == clip_pos));
-                
-        queue.push( pair<BigInt, PolygonSegment*>( max( otherCoordinate(seg->vertices().front()),
-                                                        otherCoordinate(seg->vertices().back() ) ), seg));
-    }
-    
-    
-    while (queue.size())
-    {
-        PolygonSegment *seg1 = queue.top().second; 
-        queue.pop();
-        /** this is either the last remaining segment, or its endpoints are the two segment endpoints 
-          * with the highest y-coordinates. Either way, make this segment form a closed polygon by itself
-         **/
-        if ((queue.size() == 0) || 
-            (queue.top().first < min( otherCoordinate(seg1->front()), 
-                                      otherCoordinate(seg1->back() ) )))  
-        {
-            //cout << "creating closed polygon out of single segment" << endl << *seg1 << endl;
-            if (seg1->front() != seg1->back())
-                seg1->append(seg1->vertices().front());
-
-            assert( seg1->front() == seg1->back() && "clipped polygon is not closed");
-            
-            seg1->canonicalize();
-            if (seg1->vertices().size() >= 4)
-                out.push_back(*seg1);
-            delete seg1;
-            continue;
-        }
-
-        PolygonSegment *seg2 = queue.top().second; 
-        queue.pop();
-        assert( seg1 != seg2);
-        //cout << "connecting two segments" << endl << *seg1 << endl << *seg2 << endl;
-        
-        if ( otherCoordinate(seg1->front()) > otherCoordinate(seg1->back() )) 
-            seg1->reverse(); //now seg1 ends with the vertex at which seg2 is to be appended
-         
-        if ( otherCoordinate(seg2->front()) < otherCoordinate(seg2->back() ))
-            seg2->reverse(); //now seg2 starts with the vertex with which it is to be appended to seg1
-            
-        seg1->append(*seg2, (seg1->back() == seg2->front()) );
-        delete seg2;
-        
-        queue.push( pair<BigInt, PolygonSegment*>(max( otherCoordinate( seg1->front()), 
-                                                       otherCoordinate( seg1->back() )), seg1));
-    }
-
-}
-
-
-/** ensures that no two consecutive vertices of a polygon are identical, 
-    and that no three consecutive vertices are colinear.
-    This property is a necessary prerequisite for many advanced algorithms */
-void PolygonSegment::canonicalize()
-{
-    if (m_vertices.size() == 0) return;
-    
-    bool closed = m_vertices.front() == m_vertices.back();
-    if (closed)
-    {
-        // first==last causes to many special cases, so remove the duplicate(s) here add re-add one later.
-        /* As a side-effect, this re-adding will only occur iff the polygon still has at least 3 vertices
-         * after removing colinearities and consecutive duplicates. So only non-degenerated polygon will 
-         * ever be closed, and closed polygons are guaranteed to never be degenerated.
-        */
-        m_vertices.pop_back(); 
-    }
-
-    if ( m_vertices.size() < 2) return; //segments of length 0 and 1 are always canonical
-    
-    if ( m_vertices.size() == 2)
-    { //segments of length 2 cannot be colinear, only need to check if vertices are identical
-        if (m_vertices.front() == m_vertices.back()) 
-            m_vertices.pop_back();
-        return;
-    }
-    
-    assert( m_vertices.size() >= 3 );
-    list<Vertex>::iterator v3 = m_vertices.begin();
-    list<Vertex>::iterator v1 = v3++;
-    list<Vertex>::iterator v2 = v3++;
-    
-    //at this point, v1, v2, v3 hold references to the first three vertices of the polygon
-    
-    //first part: find and remove colinear vertices
-    while (v3 != m_vertices.end())
-    {
-        assert ( (v1!=v2) && (v2!=v3) && (v3!=v1) );
-    
-        if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) //colinear
-        {
-            m_vertices.erase(v2);
-            v2 = v3++;
-        }
-        else
-        {
-            v1++;
-            v2++;
-            v3++;
-        }
-    }
-    
-    /** special case: in closed polygons, the last two and the first vertex, 
-        or the last and the first two vertices may be colinear */
-    if (closed)
-    {
-        if (m_vertices.size() >= 3)
-        {
-            list<Vertex>::iterator v1 = --m_vertices.end();
-            list<Vertex>::iterator v2 = m_vertices.begin(); 
-            list<Vertex>::iterator v3 = ++m_vertices.begin();
-            if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) 
-                m_vertices.erase(v2);
-        }
-
-        // if we still have three vertices, even after potentially removing one in the previous step
-        if (m_vertices.size() >= 3)
-        {
-            list<Vertex>::iterator v1 = ----m_vertices.end();
-            list<Vertex>::iterator v2 = --m_vertices.end(); 
-            list<Vertex>::iterator v3 = m_vertices.begin();
-            if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) 
-                m_vertices.erase(v2);
-        }
-        
-    }
-
-    //second part: remove consecutive identical vertices
-    v1 = m_vertices.begin();
-    v2 = ++m_vertices.begin();
-    assert( v1!= v2);
-    assert( m_vertices.size() > 1);
-    
-    while (v2 != m_vertices.end())
-    {
-        if (*v1 == *v2)
-        {
-            m_vertices.erase(v1);
-            v1 = v2++;
-        } else
-        {
-            v1++;
-            v2++;
-        }
-    }
-    
-    /* when relying only on front() == back() as a loop condition, the while-loop could delete even the final element,
-     * and continue after that. But at that point, calls to front() and back() are invalid, and cause segfault.
-     * Thus the additional check with m_vertices.size() */
-    int num_vertices = m_vertices.size();   // without caching this, the next line could degenerate to O(n²)
-    while (m_vertices.front() == m_vertices.back() && (--num_vertices))
-    {
-        m_vertices.pop_back();
-    }
-    
-    if (closed && m_vertices.size() >= 3)
-        //re-duplicate the first vertex to again mark the polygon as closed 
-        m_vertices.push_back(m_vertices.front());   
-}
-
-const Vertex& PolygonSegment::front() const 
-{ 
-    return m_vertices.front();
-}
-
-const Vertex& PolygonSegment::back()  const 
-{ 
-    return m_vertices.back();
-}
-
-const list<Vertex>& PolygonSegment::vertices() const 
-{ 
-    return m_vertices;
-}
-
-void PolygonSegment::reverse() 
-{ 
-    m_vertices.reverse();
-}
-
-void PolygonSegment::append(const Vertex& node) 
-{
-    m_vertices.push_back(node);
-}
-
-void PolygonSegment::append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end ) 
-{
-    m_vertices.insert(m_vertices.end(),begin, end);
-}
-
-
-
-bool PolygonSegment::isSimple() const
-{
-
-    #warning causes false positives when three/four edges touch without intersecting
-    /*  e.g.:   _________
-     *             /\
-     *            /  \            */
-
-    for (list<Vertex>::const_iterator v1 = m_vertices.begin(); v1 != m_vertices.end(); v1++)
-    {
-        list<Vertex>::const_iterator v2 = v1;
-        v2++;
-        if (v2 == m_vertices.end()) 
-            break;
-        
-        list<Vertex>::const_iterator v3 = v2;
-        while (++v3 != m_vertices.end())
-        {
-            list<Vertex>::const_iterator v4 = v3;
-            v4++;
-            if (v4 == m_vertices.end()) 
-                break;
-
-            LineSegment ls1(*v1, *v2);
-            LineSegment ls2(*v3, *v4);
-            if (ls1.intersects(ls2)) 
-                return false;
-        }
-    }
-    return true;
-}
-
-
-
-template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<PolygonSegment*> &above, list<PolygonSegment*> &below)
-{
-    assert( polygon.front() == polygon.back());
-    #warning TODO: handle the edge case that front() and back() both lie on the split line
-
-    PolygonSegment *current_seg = new PolygonSegment();
-    list<Vertex>::const_iterator v2 = polygon.begin();
-
-    do { current_seg->append( *v2 ); v2++;}
-    while (significantCoordinate (current_seg->back()) == clip_pos);
-
-    bool isAbove = significantCoordinate( current_seg->back() ) <= clip_pos;
-    list<Vertex>::const_iterator v1 = v2;
-    for ( v1--; v2 != polygon.end(); v1++, v2++)
-    {
-        if (( isAbove && significantCoordinate(*v2) <= clip_pos) || 
-            (!isAbove && significantCoordinate(*v2)  > clip_pos))
-            { current_seg->append(*v2); continue;} //still on the same side of the clipping line
-
-        // if this point is reached, v1 and v2 are on opposite sides of the clipping line
-        assert(significantCoordinate(*v2) != significantCoordinate(*v1) );
-        //line (v1, v2) must have intersected the clipping line
-        
-        /*BigInt clip_other = otherCoordinate(*v1) + ((clip_pos - significantCoordinate(*v1)) *
-                        ( otherCoordinate(*v2) - otherCoordinate(*v1) ) )/
-                        ( significantCoordinate(*v2) - significantCoordinate(*v1) )*/;
-        int64_t num = (int64_t)((clip_pos - significantCoordinate(*v1)) * ( otherCoordinate(*v2) - otherCoordinate(*v1) ) );
-        int64_t denom=(int64_t)( significantCoordinate(*v2) - significantCoordinate(*v1) );
-        
-        BigInt clip_other = (int64_t)( (int64_t)otherCoordinate(*v1) + (num+ 0.5)/denom);
-        
-        Vertex vClip;
-        if      (significantCoordinate == getXCoordinate) vClip = Vertex(clip_pos, clip_other);
-        else if (significantCoordinate == getYCoordinate) vClip = Vertex(clip_other, clip_pos);
-        else  {assert(false && "unsupported coordinate accessor"); exit(0);}
-        
-        current_seg->append(vClip);
-        
-        
-        if (isAbove)
-            above.push_back(current_seg);
-        else
-            below.push_back(current_seg);
-
-        isAbove = !isAbove;
-        current_seg = new PolygonSegment();
-        current_seg->append( Vertex(vClip) );
-        current_seg->append( *v2);
-    }
-    if (isAbove) above.push_back(current_seg);
-    else below.push_back(current_seg);
-}
-
-void ensureOrientation( list<PolygonSegment> &in, list<PolygonSegment> &out, bool clockwise)
-{
-    for (uint64_t j = in.size(); j; j--)
-    {
-        PolygonSegment s = in.front();
-        in.pop_front();
-        if (! (clockwise == s.isClockwise()) )
-            s.reverse();
-        out.push_back(s);
-    }
-    assert(in.size() == 0);
-
-}
-
-void PolygonSegment::clipSecondComponent( BigInt clip_y, list<PolygonSegment> &out_above, list<PolygonSegment> &out_below)
-{
-    list<PolygonSegment*> above, below;
-
-    bool clockwise = isClockwise();
-    
-    clip<getYCoordinate, getXCoordinate>( m_vertices, clip_y, above, below);
-
-    list<PolygonSegment> tmp_above, tmp_below;
-    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, tmp_above);
-    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, tmp_below);
-
-    ensureOrientation(tmp_above, out_above, clockwise);
-    ensureOrientation(tmp_below, out_below, clockwise);
-}
-
-void PolygonSegment::clipFirstComponent( BigInt clip_x, list<PolygonSegment> &out_left, list<PolygonSegment> &out_right)
-{
-    list<PolygonSegment*> left, right;
-    
-    bool clockwise = isClockwise();
-    
-    clip<getXCoordinate, getYCoordinate>( m_vertices, clip_x, left, right);
-
-    list<PolygonSegment> tmp_left, tmp_right;
-    connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  tmp_left );
-    connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, tmp_right);
-    
-    ensureOrientation(tmp_left, out_left, clockwise);
-    ensureOrientation(tmp_right, out_right, clockwise);
-}
-
-bool PolygonSegment::isClockwise()
-{
-    assert (front() == back() && "Clockwise test is defined for closed polygons only");
-    canonicalize(); // otherwise, the minimum vertex and its two neighbors may be colinear, meaning that isClockwise won't work
-    
-    if (m_vertices.size() < 3) return false; //'clockwise' is only meaningful for closed polygons; and those require at least 3 vertices
-    list<Vertex>::const_iterator vMin = m_vertices.begin();
-    
-    for (list<Vertex>::const_iterator v = m_vertices.begin(); v != m_vertices.end(); v++)
-        if (*v < *vMin)
-            vMin = v;
-            
-    Vertex v = *vMin;
-    Vertex vPred = getPredecessor( vMin, m_vertices);
-    Vertex vSucc = getSuccessor(   vMin, m_vertices);
-    
-    
-    assert( v.pseudoDistanceToLine( vPred, vSucc) != 0 && "colinear vertices detected");
-    return v.pseudoDistanceToLine( vPred, vSucc) < 0;
-}
-
-/*
-static void getExtremeIntersections( const list<Vertex> vertices, const LineSegment line, 
-                              list<Vertex>::const_iterator &min_it,
-                              list<Vertex>::const_iterator &max_it)
-{
-    double min_intersect = 1;
-    double max_intersect = 0;
-    
-    for (list<Vertex>::const_iterator v = vertices.begin(); v != vertices.end(); v++)
-    {
-        LineSegment other( *v, getSuccessor(v, vertices), 0, 0);
-        if ( line.intersects(other))
-        {
-            double c = line.getIntersectionCoefficient(other);
-            if (c < min_intersect)
-            {
-                min_intersect = c;
-                min_it = v;
-            }
-            
-            if (c > max_intersect)
-            {
-                max_intersect = c;
-                max_it = v;
-            }
-        }   
-    }
-    
-    if (min_intersect == 0 || max_intersect == 1)
-    {
-        BOOST_FOREACH(Vertex v, vertices)
-            cout << v << endl;
-    }
-    assert (min_intersect > 0 && max_intersect < 1);
-
-}*/
-#if 0
-static bool isLeftTurnAt( const list<Vertex> &vertices, list<Vertex>::const_iterator it)
-{
-    assert ( (*it).pseudoDistanceToLine(getPredecessor(it, vertices), getSuccessor(it, vertices)) != 0);
-    return ( (*it).pseudoDistanceToLine(getPredecessor(it, vertices), getSuccessor(it, vertices)) < 0);
-
-}
-
-/** #warning: as long as isSimple() is an O(n²) algorithm, this may take a long time */
-bool PolygonSegment::isClockwiseHeuristic() const
-{
-    if (isSimple()) return isClockwise();
-    
-    int nVotesClockwise = 0;
-    int nVotesCounterClockwise = 0;
-    
-    list<Vertex>::const_iterator min = m_vertices.begin();
-    list<Vertex>::const_iterator max = m_vertices.begin();
-    AABoundingBox bb(*min);
-    for (list<Vertex>::const_iterator v = m_vertices.begin(); v != m_vertices.end(); v++)
-    {
-        if (*v < *min) min = v;
-        if (*max < *v) max = v;
-        bb+= *v;
-    }
-    
-    if (isLeftTurnAt(m_vertices, min) )  nVotesClockwise++; else nVotesCounterClockwise++;
-    if (isLeftTurnAt(m_vertices, max) )  nVotesClockwise++; else nVotesCounterClockwise++;
-
-    list<Vertex>::const_iterator intersect_min, intersect_max;
-
-    int64_t mid_h = (bb.left + bb.right)/2;
-    LineSegment vertSplit( mid_h, bb.top - 1, mid_h, bb.bottom+1, 0, 0);
-    getExtremeIntersections( m_vertices, vertSplit, intersect_min, intersect_max);
-    if (isLeftTurnAt(m_vertices, intersect_min)) nVotesClockwise++; else nVotesCounterClockwise++;
-    if (isLeftTurnAt(m_vertices, intersect_max)) nVotesClockwise++; else nVotesCounterClockwise++;
-
-    int64_t mid_v = (bb.top + bb.bottom) /2;
-    LineSegment horizSplit(bb.left - 1, mid_v, bb.right + 1, mid_v, 0, 0);
-    getExtremeIntersections( m_vertices, horizSplit, intersect_min, intersect_max);
-    if (isLeftTurnAt(m_vertices, intersect_min)) nVotesClockwise++; else nVotesCounterClockwise++;
-    if (isLeftTurnAt(m_vertices, intersect_max)) nVotesClockwise++; else nVotesCounterClockwise++;
-
-    
-    assert( nVotesClockwise + nVotesCounterClockwise == 6);
-    
-    if (nVotesClockwise > 4) return true;
-    else if (nVotesCounterClockwise > 4) return false;
-    else assert(false && "no clear vote");
-}
-
-std::ostream& operator <<(std::ostream& os, const PolygonSegment &seg)
-{
-    for (list<Vertex>::const_iterator it = seg.vertices().begin(); it != seg.vertices().end(); it++)
-        os << *it << endl;
-    return os;
-}
-#endif
 
 /** ============================================================================= */
 LineSegment::LineSegment( const Vertex v_start, const Vertex v_end): 
@@ -706,10 +70,12 @@ LineSegment::LineSegment( BigInt start_x, BigInt start_y, BigInt end_x, BigInt e
     start(Vertex(start_x, start_y)), end(Vertex(end_x, end_y)) { assert(start != end);}
 
 
-bool LineSegment::parallelTo( const LineSegment &other) const 
+bool LineSegment::isParallelTo( const LineSegment &other) const 
 { 
-    return (end.x- start.x)*(other.end.y - other.start.y) ==
-           (end.y- start.y)*(other.end.x - other.start.x);
+    BigInt v1 = (end.x- start.x)*(other.end.y - other.start.y);
+    BigInt v2 = (end.y- start.y)*(other.end.x - other.start.x);
+    return v1 == v2;
+           
 }
 
 
@@ -728,7 +94,7 @@ bool LineSegment::isColinearWith(const Vertex v) const
                                                   
 bool LineSegment::intersects( const LineSegment &other) const
 {
-    if (parallelTo(other))
+    if (isParallelTo(other))
     {
         // if the two parallel line segments do not lie on the same line, they cannot intersect
         if (start.pseudoDistanceToLine(other.start, other.end) != 0) return false;
@@ -745,10 +111,10 @@ bool LineSegment::intersects( const LineSegment &other) const
 
         assert(denom != 0); //should only be zero if the lines are parallel, but this case has already been handled above
 
-        //for the line segments to intersect, num1/denom and num2/denom both have to be inside the range [0, 1);
+        //for the line segments to intersect, num1/denom and num2/denom both have to be inside the range [0, 1];
         
-        //if the absolute of at least one coefficient would be bigger than or equal to one 
-        if (abs(num1) >=abs(denom) || abs(num2) >= abs(denom)) return false; 
+        //if the absolute of at least one coefficient would be bigger than one 
+        if (abs(num1) >abs(denom) || abs(num2) > abs(denom)) return false; 
         
         // at least one coefficient would be negative
         if (( num1 < 0 || num2 < 0) && denom > 0) return false; 
@@ -761,7 +127,7 @@ bool LineSegment::intersects( const LineSegment &other) const
 
 void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &out_num, BigInt &out_denom) const
 {
-    assert( !parallelTo(other));
+    assert( !isParallelTo(other));
     //TODO: handle edge case that two line segments overlap
     out_num = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
     out_denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
@@ -770,20 +136,20 @@ void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &
 
 }
 
-Vertex LineSegment::getRoundedIntersection(const LineSegment &other) const
+static Vertex getRoundedIntersectionPoint(const LineSegment &A, const LineSegment &B)
 {
+    assert (A.start.x <= A.end.x && B.start.x <= B.end.x);
 
     BigInt num, denom;
-    assert (start.x <= end.x && other.start.x <= other.end.x);
-
-    this->getIntersectionCoefficient(other, num, denom);
+    
+    A.getIntersectionCoefficient(B, num, denom);
     assert ( ((num >= 0 && denom > 0 && num <= denom) || (num <= 0 && denom < 0 && num >= denom)) && "Do not intersect");
     /*int64_t iNum = (int64_t)num;
     int64_t iDenom = (int64_t)denom;
     assert (iNum == num && iDenom == denom);*/
     
     
-    Vertex v( (start.x + num * (end.x - start.x) / denom), (start.y + num * (end.y - start.y) / denom) );
+    Vertex v( (A.start.x + num * (A.end.x - A.start.x) / denom), (A.start.y + num * (A.end.y - A.start.y) / denom) );
     /** make sure that the intersection position is rounded *up* to the next integer
       * first, this is only necessary if the division num/denom has a remainder - otherwise the result is already exact
       * second, it is only necessary if the slope in the respective direction is positive
@@ -793,12 +159,20 @@ Vertex LineSegment::getRoundedIntersection(const LineSegment &other) const
       **/
     if (num % denom != 0)    
     {
-        if (end.x > start.x) v.x = v.x + 1;
-        if (end.y > start.y) v.y = v.y + 1;
+        if (A.end.x > A.start.x) v.x = v.x + 1;
+        if (A.end.y > A.start.y) v.y = v.y + 1;
     }
     
     return v;
 }
+
+
+Vertex LineSegment::getRoundedIntersection(const LineSegment &other) const
+{
+    LineSegment A = start < end ? LineSegment(start, end) : LineSegment(end, start);
+    LineSegment B = other.start < other.end ? LineSegment(other.start, other.end) : LineSegment(other.end, other.start);
+    return getRoundedIntersectionPoint( A, B);
+ }
 
 
 double LineSegment::getIntersectionCoefficient( const LineSegment &other) const
@@ -808,41 +182,202 @@ double LineSegment::getIntersectionCoefficient( const LineSegment &other) const
     return num.toDouble()/denom.toDouble();
 }
 
-/** ============================================================================= */
 
-/*
-bool intersect (const Vertex l1_start, const Vertex l1_end, const Vertex l2_start, const Vertex l2_end)
+bool LineSegment::operator<(const LineSegment &other) const
 {
-    Vertex dir1 = l1_end - l1_start;
-    Vertex dir2 = l2_end - l2_start;
-    assert( dir1 != Vertex(0,0) && dir2!= Vertex(0,0));
-    
-    if (dir1.parallelTo(dir2))
-    {
-        
-    } else
-    {
-        
-    }
-}*/
-
-#if 0
-void findIntersectionsBruteForce(const list<LineSegment> &segments, list<LineSegment> &intersections_out)
-{
-    for (list<LineSegment>::const_iterator seg1 = segments.begin(); seg1!= segments.end(); seg1++)
-    {
-        list<LineSegment>::const_iterator seg2 = seg1;
-        seg2++;
-        for (; seg2!= segments.end(); seg2++)
-        {
-            if (seg1->intersects(*seg2)) 
-            { 
-                intersections_out.push_back(*seg1); intersections_out.push_back(*seg2);
-            }
-        }
-    }
+    return (start < other.start) ||
+           ((start == other.start) && (end < other.end));
 }
 
+bool LineSegment::operator==(const LineSegment &other) const
+{
+    return (start == other.start) && (end == other.end);
+}
+
+
+BigFraction LineSegment::getCoefficient(const Vertex v) const
+{
+    assert (start != end);
+    
+    if (start.x == end.x)
+    {
+        assert( v.x == start.x && "vertex does not lie on line segment");
+        return BigFraction( v.y-start.y, end.y-start.y);
+    } else if (start.y == end.y)
+    {
+        assert( v.y == start.y && "vertex does not lie on line segment");
+        return BigFraction( v.x-start.x, end.x-start.x);
+    }
+    
+    BigFraction c1(v.y-start.y, end.y-start.y);
+#ifndef NDEBUG
+    BigFraction c2(v.x-start.x, end.x-start.x);
+    assert( c1 == c2 && "incorrect coefficient computation");
+#endif
+    return c1;
+}
+
+bool LineSegment::overlapsWith(const LineSegment &other) const
+{
+    if (!isParallelTo(other)) return false;
+    if (!isColinearWith(other.start)) return false;
+    assert( isColinearWith(other.end)); // if parallel and one point is colinear to 'this', the other point has to be, too
+    static const BigFraction zero(0,1); // (0/1)
+    static const BigFraction one(1,1);  // (1/1)
+    
+    BigFraction c1 = getCoefficient(other.start);
+    BigFraction c2 = getCoefficient(other.end);
+    
+    if ((c1 < zero && c2 <= zero) || (c1 <= zero && c2 <  zero)) return false; //if both segments have at most one point in common at lower end of 'this'
+    if ((c1 >= one && c2 >   one) || (c1 >  one  && c2 >= one )) return false; //... or at the upper end of 'this'
+    
+    return true;
+    
+}
+
+LineSegment::operator bool() const
+{
+    static const Vertex zero(0,0);
+    return start != zero || end != zero;
+}
+/** ============================================================================= */
+
+bool resolveOverlap(LineSegment &A, LineSegment &B)
+{
+    if (! A.isParallelTo(B)) return false;
+    
+    
+    BigFraction c1( A.getCoefficient(B.start));
+    BigFraction c2( A.getCoefficient(B.end));
+    static const BigFraction zero(0,1);
+    static const BigFraction one(1,1);
+
+    if ((c1 <= zero && c2 <= zero) || (c1 >= one && c2 >= one)) return false; //no overlap
+        
+    if ((c1 >= zero && c1 <= one) && (c2 >= zero && c2 <= one)) // B is completely contained in A
+    {  
+        B = LineSegment(); //invalidate B
+        return true;
+    } 
+
+    if ((c1 <= zero && c2 >= one) || (c2 <= zero && c1 >= one)) // A is completely contained in B
+    {
+        A = LineSegment(); //invalidate A
+        return true;
+    }
+    
+    //at this point, exactly one of the endpoints of B lies in A
+    bool start_in_A = (c1 > zero && c1 < one);
+    bool end_in_A   = (c2 > zero && c2 < one);
+    
+    assert(  start_in_A ^ end_in_A); 
+    
+    if (start_in_A)
+    {
+        if      ( c2 < zero )  { B.start = A.start; return true;}
+        else if ( c2 > one  )  { B.start = A.end; return true; }
+        else assert(false);
+    }
+    else if (end_in_A)
+    {
+        if      ( c1 < zero ) { B.end = A.start; return true;}
+        else if ( c1 > one  ) { B.end = A.end; return true; }
+        else assert(false);
+    }
+    else assert(false);
+    return false;
+}
+
+
+/* This method modifies the set of line segments so that all intersections occur at integer coordinates.
+   
+   To that end, intersecting segments are split into two segments at the intersection
+   point (start-intersect, intersect-end) and the intersection point is moved to the nearest integer
+   coordinate. As a side-effect, intersections now occur only at line segment end points.
+*/
+void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
+{
+    list<LineSegment>::iterator seg1 = segments.begin();
+    while (seg1 != segments.end())
+    {
+        list<LineSegment>::iterator seg2 = segments.begin();
+               
+        bool seg1_needs_increment = true;
+        
+        while (seg2!= segments.end())
+        {
+            if (seg2 == seg1)  { (seg2++); continue; }
+            
+            #warning CONTINUEHERE
+            //TODO: 
+            //if (seg1.overlapsWith(seg2))
+
+            bool seg2_needs_increment = true;
+            if (seg1->intersects(*seg2) && ( !seg1->isParallelTo(*seg2) ))
+            {
+                static int num_ints = 0;
+                num_ints++;
+                std::cout << "Intersection " << num_ints << " between " << (*seg1) << " and " << (*seg2) << std::endl;
+                Vertex intersect = seg1->getRoundedIntersection(*seg2);
+                if ((intersect != seg2->start) && (intersect != seg2->end))
+                {
+                    std::cout << "\tSplitting " << *seg2 << " at " << intersect << endl;
+                    segments.push_back( LineSegment(seg2->start, intersect) );
+                    segments.push_back( LineSegment(intersect, seg2->end) );
+                    list<LineSegment>::iterator to_del = seg2;
+                    seg2++;
+                    seg2_needs_increment = false;
+                    segments.erase(to_del);
+                }
+                
+                if ((intersect != seg1->start) && (intersect != seg1->end))
+                {
+                    std::cout << "\tSplitting " << *seg1 << " at " << intersect << endl;
+                    segments.push_back( LineSegment(seg1->start, intersect) );
+                    segments.push_back( LineSegment(intersect, seg1->end) );
+                    list<LineSegment>::iterator to_del = seg1;
+                    seg1++;
+                    seg1_needs_increment = false;
+                    segments.erase(to_del);
+                    break; // old seg1 value is no longer valid --> break 'while(seg2 ...)' loop
+                }
+            }
+            if (seg2_needs_increment)
+                seg2++;
+        }
+        
+        if (seg1_needs_increment)
+            seg1++;
+    }
+
+}
+
+void findIntersectionsBruteForce(list<LineSegment> &segments, map<LineSegment, list<LineSegment>> &intersections_out)
+{
+    
+    for (list<LineSegment>::iterator seg1 = segments.begin(); seg1 != segments.end(); seg1++)
+    {
+        list<LineSegment>::iterator seg2 = seg1;
+        for (seg2++; seg2 != segments.end(); seg2++)
+            if (seg1->intersects(*seg2))
+            {
+#ifndef NDEBUG
+                Vertex v = seg1->getRoundedIntersection(*seg2);
+                assert ( v == seg1->start || v == seg1->end);
+                assert ( v == seg2->start || v == seg2->end);
+#endif
+                if (!intersections_out.count(*seg1)) intersections_out.insert(pair<LineSegment,list<LineSegment> >(*seg1, list<LineSegment>() ));
+                if (!intersections_out.count(*seg2)) intersections_out.insert(pair<LineSegment,list<LineSegment> >(*seg2, list<LineSegment>() ));
+                
+                intersections_out[*seg1].push_back(*seg2);
+                intersections_out[*seg2].push_back(*seg1);
+            }
+    }
+    
+    
+}
+
+#if 0
 void findPairwiseIntersections(const list<LineSegment> &set1, const list<LineSegment> &set2, list<LineSegment> &intersections_out)
 {
     for (list<LineSegment>::const_iterator seg1 = set1.begin(); seg1!= set1.end(); seg1++)
@@ -935,153 +470,6 @@ void findIntersections(const list<Vertex> &path, list<LineSegment> &intersection
     findIntersections( segments, box, intersections_out);
 }
 
-/** Algorithm to create simple (i.e. non-selfintersecting) polygons:
-  * find the first intersection between two line segments. Since each line segment
-  * consist of two vertices with indices X and X+1, these line segments will have indices
-  * X, X+1, Y, Y+1 ( WLOG, X is the smallest index)
-  * To resolve the self-intersection, cut out all vertices from X+1 to Y (both inclusive)
-  * and let them form their own polygon. This removes a single self-intersection. Now,
-  * apply the algorithm to the two separate poylgons separately until no self-intersections remain
-  */
-void createSimplePolygons(const list<Vertex> in, const list<LineSegment> intersections, list<PolygonSegment> &out)
-{
-
-    if ( in.size() < 4) 
-    {
-        cout << "not a polygon->discarded" << endl;
-        return;
-    }
-    //cout << "======" << endl;
-    assert(in.front() == in.back());
-    //if (in.front() != in.back()) in.push_back(in.front());
-    
-    //findIntersections(in, intersections);
-    assert(intersections.size() % 2 == 0); //each intersection is given by *two* line segments
-    
-    if (intersections.size() == 0) //no self intersection --> whole polygon is intersection-free
-    {
-        PolygonSegment tmp;
-        tmp.append(in.begin(), in.end());
-        out.push_back(tmp);
-        return;
-    }
-    int32_t earliest_idx = 0x7fffffff;
-    uint32_t num_earliest = 0;
-    for (list<LineSegment>::const_iterator it = intersections.begin(); it!= intersections.end(); it++)
-    {
-        assert (it->tag1+1 == it->tag2);
-        if (it->tag1 == earliest_idx) num_earliest++;
-        //if (it->tag2 == earliest_idx) num_earliest++;
-        if (it->tag1 < earliest_idx) {earliest_idx = it->tag1; num_earliest = 1;}
-        //if (it->tag2 < earliest_idx) {earliest_idx = it->tag2; num_earliest = 1;}
-    }
-    
-    list<LineSegment>::const_iterator earliest_int_seg, earliest_int_seg2;
-    double earliest_coeff = 1.0;
-    
-    bool even = true;
-    /** not that we know the first line segment to be part of a self-intersection,
-      * find the one other segment that intersects it the earliest (there may only be one intersection at all)*/
-    for (list<LineSegment>::const_iterator it = intersections.begin(); it!= intersections.end(); it++)
-    {
-        if (it->tag1 == earliest_idx)
-        {
-            list<LineSegment>::const_iterator other = it;
-            if (even) other++; else other--;
-            double coeff = it->getIntersectionCoefficient(*other);
-            if (coeff < earliest_coeff) 
-            {
-                earliest_coeff = coeff;
-                earliest_int_seg = it;
-                earliest_int_seg2 = other;
-            }
-        }
-        even=!even;
-    }
-    int32_t out_idx = earliest_idx; //the last vertex not to be cut out
-    int32_t in_idx = earliest_int_seg2->tag2; //the first vertex after the cut-out
-    //int32_t num_removed = in_idx - out_idx +1;
-    list<Vertex> first_poly, second_poly;
-    list<LineSegment> first_intersections, second_intersections;
-    int idx = 0;
-    for (list<Vertex>::const_iterator it = in.begin(); it != in.end(); it++, idx++)
-    {
-        if (idx <= out_idx || idx >= in_idx) 
-            first_poly.push_back(*it);
-        else second_poly.push_back(*it);
-    }
-    second_poly.push_back(second_poly.front()); //close the second polygon (first one is already closed)
-
-    list<LineSegment>::const_iterator seg1 = intersections.begin();
-    list<LineSegment>::const_iterator seg2= seg1; 
-    seg2++;
-    /** sort the set of intersection:
-        - those on lines that do not exist any more (because the line enpoints now belong to different polygons) are discarded
-        - those whose lines now belong to different polygons are discarded
-        - those whose lines belong to the same polygon (either both to the original, or both to the cut-out section) are
-          added to the corresponding list of segments;
-      */
-    //an intersection consists of two successive entries, so handle them together
-    for (;seg1 != intersections.begin(); seg1++,seg1++, seg2++, seg2++)
-    {
-        
-        bool v11_in = seg1->tag1 <= out_idx || seg1->tag1 >= in_idx;
-        bool v12_in = seg1->tag2 <= out_idx || seg1->tag2 >= in_idx;
-        bool v21_in = seg2->tag1 <= out_idx || seg2->tag1 >= in_idx;
-        bool v22_in = seg2->tag2 <= out_idx || seg2->tag2 >= in_idx;
-        if (v11_in != v12_in || v21_in != v22_in) continue; //line split, vertices now belong to different polygons
-        if (v11_in != v21_in) continue;                     //lines belong to two different polygons
-        assert( v12_in == v22_in);
-        if (v11_in && v12_in && v21_in && v22_in)
-        {
-            LineSegment s = *seg1;
-            if (s.tag1 >= in_idx) s.tag1-= num_removed;
-            if (s.tag2 >= in_idx) s.tag2-= num_removed;
-            first_intersections.push_back(s);
-            s = *seg2;
-            if (s.tag1 >= in_idx) s.tag1-= num_removed;
-            if (s.tag2 >= in_idx) s.tag2-= num_removed;
-            first_intersections.push_back(s);
-        } else if (!v11_in && !v12_in && !v21_in && !v22_in)
-        {
-            LineSegment s = *seg1;
-            s.tag1-= (out_idx+1);
-            s.tag2-= (out_idx+1);
-            second_intersections.push_back(s);
-            s = *seg2;
-            s.tag1-= (out_idx+1);
-            s.tag2-= (out_idx+1);
-            second_intersections.push_back(s);
-        }
-    }
-    
-    LineSegment new_1( earliest_int_seg->start, earliest_int_seg2->end, earliest_int_seg->tag1, earliest_int_seg->tag1+1);
-    
-
-    //TODO: add intersections of new lines ( [out_idx, in_idx], [out_idx+1, in_idx-1]) to first_intersections and second_intersections
-    list<LineSegment> ints;
-    findIntersections( first_poly, ints);
-    createSimplePolygons(first_poly, ints, out);
-    
-    ints.clear();
-    findIntersections( second_poly, ints);
-    createSimplePolygons(second_poly, ints, out);
-    
-/*    cout << "======" << endl;
-    idx=0;
-    for (list<Vertex>::const_iterator it = in.begin(); it != in.end(); it++, idx++)
-    {
-        if (idx > out_idx && idx < in_idx) cout << *it << endl;
-    }
-        
-
-    //TODO: cut out, recurse;
-    cout << earliest_idx << ", " << num_earliest << endl;
-    cout << "earliest intersection at index " << earliest_idx << " between " << earliest_int_seg->start << "->" 
-         << earliest_int_seg->end << " and " << earliest_int_seg2->start << "->" << earliest_int_seg2->end 
-         << " at " << earliest_coeff << endl;*/
-    //getIntersectionCoefficient    
-}
 
 
 #endif

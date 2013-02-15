@@ -34,6 +34,12 @@ bool operator>=(const int128_t a, const int128_t b) { return a > b || a == b;}
 
 bool operator==(int128_t a, int128_t b)
 {
+    //if both are zero, they are equal, no matter their sign
+    if ( a.data[3] == 0 && a.data[2] == 0 && a.data[1] == 0 && a.data[0] == 0 &&
+         b.data[3] == 0 && b.data[2] == 0 && b.data[1] == 0 && b.data[0] == 0)
+         return true;
+
+
     return (a.isPositive == b.isPositive && a.data[0] == b.data[0] && a.data[1] == b.data[1] &&
             a.data[2] == b.data[2] && a.data[3] == b.data[3]);
 }

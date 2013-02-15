@@ -38,6 +38,33 @@ BigFraction ActiveEdge::getYValueAt(const BigFraction &xPosition) const
     return dy + left.y;
 }
 
+BigFraction pseudoDistanceToLine( BigFraction start_x, BigFraction start_y, BigFraction end_x, BigFraction end_y, BigFraction x, BigFraction y)
+{
+    return (end_x - start_x)*(start_y - y) - (end_y - start_y)*(start_x - x);
+}
+
+bool ActiveEdge::isLessThanFuture(const ActiveEdge & other, const BigFraction &xPosition) const
+{
+    BigFraction y1 = getYValueAt(xPosition);
+    BigFraction y2 = other.getYValueAt(xPosition);
+    if (y1 != y2) return y1 < y2;
+    
+    if ( toLineSegment().parallelTo( other.toLineSegment() ) ) return false;
+    
+    assert(y1 == y2);
+    /* 'other' ends at the intersection point and thus has no future --> lines are not parallel, but
+     * pseudodistance would still be zero */
+    if ((xPosition == other.right.x ) && (y1 == other.right.y))  
+    {
+        assert (false && "Not implemented");
+    }
+    
+    BigFraction dist = pseudoDistanceToLine(xPosition, y1, other.right.x, other.right.y, right.x, right.y);
+    assert(dist != BigFraction(0) );
+    bool isLeftTurn =  (dist < BigFraction(0) );
+    return isLeftTurn;
+}
+
 bool ActiveEdge::isLessThan(const ActiveEdge & other, const BigFraction &xPosition) const
 { return getYValueAt(xPosition) < other.getYValueAt(xPosition); }
 
@@ -163,7 +190,7 @@ AVLTreeNode<ActiveEdge>* LineArrangement::addEdge(const ActiveEdge &a, const Big
     do
     {
         parent = *pos;
-        pos = a.isLessThan(parent->m_Data, xPosition) ? &parent->m_pLeft : &parent->m_pRight;
+        pos = a.isLessThanFuture(parent->m_Data, xPosition) ? &parent->m_pLeft : &parent->m_pRight;
     } while (*pos);
     
     assert (! *pos);

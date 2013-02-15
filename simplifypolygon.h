@@ -3,6 +3,7 @@
 #define SIMPLIFYPOLYGON_H
 
 #include "geometric_types.h"
+#include "vertexchain.h"
 #include "avltree.h"
 #include <list>
 
@@ -27,12 +28,14 @@ struct ActiveEdge
     ActiveEdge() {} 
     ActiveEdge(const Vertex pLeft, const Vertex pRight);
 
+    // returns whether 'this' will be less than 'other' at an x position infinitessimally to the right of xPosition
+    bool isLessThanFuture(const ActiveEdge & other, const BigFraction &xPosition) const;
     bool isLessThan(const ActiveEdge & other, const BigFraction &xPosition) const;
     bool isEqual(const ActiveEdge & other, const BigFraction &xPosition) const;
     bool isLessOrEqual(const ActiveEdge & other, const BigFraction &xPosition) const;
     bool operator<(const ActiveEdge &);
 
-    LineSegment toLineSegment() { return LineSegment(left, right); }
+    LineSegment toLineSegment() const { return LineSegment(left, right); }
 
     void getIntersectionWith(ActiveEdge &other, BigFraction &out_x, BigFraction &out_y) const;
     bool intersects(ActiveEdge other) const;
@@ -48,7 +51,11 @@ struct ActiveEdge
 };
 std::ostream& operator <<(std::ostream& os, const ActiveEdge &edge);
 
-enum SimpEventType { SEG_START, SEG_END, INTERSECTION };
+/* Order is important, since events for the same 2D-Point are processed in the
+ * order this enumeration is defined. With this order, it is ensured that all
+ * intersections for a point are found event if some line segements also start 
+ * or end at that point. */
+enum SimpEventType { SEG_START, INTERSECTION, SEG_END };
 
 // ===========================================================
 
@@ -109,9 +116,9 @@ public:
         BigFraction x,y;
                     
         a.getIntersectionWith( b, /*out*/x, /*out*/y);
-        assert ( (x != x_pos || y != y_pos) && "not implemented");
+        //assert ( (x != x_pos || y != y_pos) && "not implemented");
         
-        if ( x > x_pos || (x == x_pos && y > y_pos))
+        if ( (x >= x_pos) || ( (x == x_pos) && (y >= y_pos)))
             this->add( INTERSECTION, a, b);
     }
 

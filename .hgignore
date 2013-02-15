@@ -21,6 +21,15 @@ gl_test
 *.osm.bz2
 *.osm.gz
 
+# ignore gcc coverage data
+*.gcda
+*.gcno
+html
+coverage.info
+
+# oprofile data
+oprofile_data
+
 #ignore output files
 make.dep
 

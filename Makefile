@@ -1,8 +1,8 @@
 
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
-SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc polygonreconstructor.cc mem_map.cc helpers.cc validatingbigint.cc int128.cc
-GEO_SRC = geo_unit_tests.cc geometric_types.cc simplifypolygon.cc validatingbigint.cc int128.cc
+SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc validatingbigint.cc int128.cc
+GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128.cc #validatingbigint.cc 
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
 
 
@@ -11,10 +11,10 @@ CONV_OBJ = $(CONV_SRC:.cc=.o)
 SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 
-FLAGS = -g -Wall -Wextra  #-O2
+FLAGS = -g -Wall -Wextra  -fprofile-arcs -ftest-coverage #-O2
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = #--as-needed
+LD_FLAGS = -fprofile-arcs#--as-needed
 .PHONY: all clean
 
 all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test

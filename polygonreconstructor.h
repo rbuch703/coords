@@ -2,7 +2,7 @@
 #ifndef POLYGONRECONSTRUCTOR_H
 #define POLYGONRECONSTRUCTOR_H
 
-#include "geometric_types.h"
+#include "vertexchain.h"
 #include <map>
 #include <list>
 
