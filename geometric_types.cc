@@ -59,9 +59,6 @@ std::ostream& operator <<(std::ostream& os, const Vertex v)
     return os;
 }
 
-/** =================================================*/
-
-
 /** ============================================================================= */
 LineSegment::LineSegment( const Vertex v_start, const Vertex v_end): 
                         start(v_start), end(v_end) { assert(start != end);}
@@ -72,37 +69,34 @@ LineSegment::LineSegment( BigInt start_x, BigInt start_y, BigInt end_x, BigInt e
 
 bool LineSegment::isParallelTo( const LineSegment &other) const 
 { 
-    BigInt v1 = (end.x- start.x)*(other.end.y - other.start.y);
-    BigInt v2 = (end.y- start.y)*(other.end.x - other.start.x);
-    return v1 == v2;
-           
+    return (end.x- start.x)*(other.end.y - other.start.y) ==  (end.y- start.y)*(other.end.x - other.start.x);
 }
 
 
 // @returns whether the vertex lies on the line (not necessarily on the line segment)
 bool LineSegment::isColinearWith(const Vertex v) const
 {
-    if (( v.x-start.x)*(end.y - start.y) != 
-        ( v.y-start.y)*(end.x - start.x)) return false;
-    
-    BigInt squared_seg_len = (end - start).squaredLength();
-    BigInt dist_start =      (v - start).squaredLength();
-    BigInt dist_end =        (v - end).squaredLength();
-    return  dist_start <squared_seg_len && dist_end <= squared_seg_len;
+    return  (( v.x-start.x)*(end.y - start.y) == ( v.y-start.y)*(end.x - start.x));
 }
-                       
-                                                  
+
+// in accordance with the semantics of line segments, intersects() also returns 'true' is the segments only share a single point
 bool LineSegment::intersects( const LineSegment &other) const
 {
     if (isParallelTo(other))
     {
         // if the two parallel line segments do not lie on the same line, they cannot intersect
-        if (start.pseudoDistanceToLine(other.start, other.end) != 0) return false;
-        return isColinearWith(other.start) 
-            /*|| contains(other.end) */
-            || other.isColinearWith(start) 
-            /*|| other.contains(end )*/
-            || ((start == other.end) && (end == other.start));
+        if (! isColinearWith(other.start)) return false;
+        assert( isColinearWith(other.end) );
+            
+        // if they do lie on the same line, they intersect if they overlap
+        static const BigFraction zero(0,1); // (0/1)
+        static const BigFraction one(1,1);  // (1/1)
+        
+        BigFraction c1 = getCoefficient(other.start);
+        BigFraction c2 = getCoefficient(other.end);
+        
+        return !((c1 < zero && c2 < zero) || (c1 > one && c2 > one )); //no overlap iff 'other' lies completely to one side of 'this'
+        
     } else
     {
         BigInt num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
@@ -242,6 +236,10 @@ LineSegment::operator bool() const
 }
 /** ============================================================================= */
 
+/* resolves the overlap of two line segments by shortening one of them. 
+ * This may result in one segment being completely destroyed (=invalidated).
+ * It is guaranteed that this algorithm never extends a segment, it only shortens them
+ */
 bool resolveOverlap(LineSegment &A, LineSegment &B)
 {
     if (! A.isParallelTo(B)) return false;
@@ -300,33 +298,57 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
     list<LineSegment>::iterator seg1 = segments.begin();
     while (seg1 != segments.end())
     {
-        list<LineSegment>::iterator seg2 = segments.begin();
+        list<LineSegment>::iterator seg2 = segments.begin(); //must not start at (seg1)+1, because new segments may be added in the process, and these need to be checked against all other segments
                
         bool seg1_needs_increment = true;
         
         while (seg2!= segments.end())
         {
+            static int num_ints = 0;
+            num_ints++;
+            std::cout << num_ints << " testing for intersections between " << *seg1 << " and " << *seg2 << std::endl;
             if (seg2 == seg1)  { (seg2++); continue; }
             
-            #warning CONTINUEHERE
-            //TODO: 
-            //if (seg1.overlapsWith(seg2))
+            if (seg1->overlapsWith(*seg2))  //overlapping line segments would lead to an infinite number of intersections, so this case must be handled individually
+            {
+                std::cout << "overlap detected " << std::endl;
+                resolveOverlap(*seg1, *seg2);   //resolves the overlap, but may invalidate either segment. Thus, as a next step, invalidated segments need to be deleted
+                if (!(bool)*seg2)
+                {
+                    list<LineSegment>::iterator toDelete = seg2++;
+                    std::cout << "removing second segment" << std::endl;
+                    segments.erase(toDelete);
+                    if (seg2 == segments.end()) break;
+                    if (seg2 == seg1) continue;
+                    
+                }
+                
+                if (!(bool)*seg1)
+                {
+                    list<LineSegment>::iterator toDelete = seg1++;
+                    seg1_needs_increment = false;
+                    std::cout << "removing first segment" << std::endl;
+                    segments.erase(toDelete);
+                    break;
+                }
+            }
 
             bool seg2_needs_increment = true;
             if (seg1->intersects(*seg2) && ( !seg1->isParallelTo(*seg2) ))
             {
-                static int num_ints = 0;
-                num_ints++;
                 std::cout << "Intersection " << num_ints << " between " << (*seg1) << " and " << (*seg2) << std::endl;
                 Vertex intersect = seg1->getRoundedIntersection(*seg2);
                 if ((intersect != seg2->start) && (intersect != seg2->end))
                 {
                     std::cout << "\tSplitting " << *seg2 << " at " << intersect << endl;
                     segments.push_back( LineSegment(seg2->start, intersect) );
+                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     segments.push_back( LineSegment(intersect, seg2->end) );
+                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     list<LineSegment>::iterator to_del = seg2;
                     seg2++;
                     seg2_needs_increment = false;
+                    std::cout << "\t-> removing segment " << *to_del << std::endl;
                     segments.erase(to_del);
                 }
                 
@@ -334,10 +356,13 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
                 {
                     std::cout << "\tSplitting " << *seg1 << " at " << intersect << endl;
                     segments.push_back( LineSegment(seg1->start, intersect) );
+                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     segments.push_back( LineSegment(intersect, seg1->end) );
+                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     list<LineSegment>::iterator to_del = seg1;
                     seg1++;
                     seg1_needs_increment = false;
+                    std::cout << "\t-> removing segment " << *to_del << std::endl;
                     segments.erase(to_del);
                     break; // old seg1 value is no longer valid --> break 'while(seg2 ...)' loop
                 }
@@ -352,12 +377,44 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
 
 }
 
-void findIntersectionsBruteForce(list<LineSegment> &segments, map<LineSegment, list<LineSegment>> &intersections_out)
+map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments )
 {
+    map<Vertex, set<Vertex> > graph;
     
-    for (list<LineSegment>::iterator seg1 = segments.begin(); seg1 != segments.end(); seg1++)
+    for (list<LineSegment>::const_iterator seg = segments.begin(); seg != segments.end(); seg++)
     {
-        list<LineSegment>::iterator seg2 = seg1;
+        if (graph.count( seg->start ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->start, set<Vertex>()));
+        if (graph.count( seg->end   ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->end,   set<Vertex>()));
+        
+        graph[seg->start].insert( seg->end);
+        graph[seg->end].insert( seg->start);
+    }
+    
+    return graph;
+}
+
+bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments)
+{
+    for (list<LineSegment>::const_iterator seg1 = segments.begin(); seg1 != segments.end(); seg1++)
+    {
+        list<LineSegment>::const_iterator seg2 = seg1;
+        for (seg2++; seg2 != segments.end(); seg2++)
+            if (seg1->intersects(*seg2))
+            {
+                Vertex v = seg1->getRoundedIntersection(*seg2);
+                if ( v != seg1->start && v != seg1->end) return false;
+                if ( v != seg2->start && v != seg2->end) return false;
+            }
+    }
+    return true;
+}
+
+map<LineSegment, list<LineSegment>> findIntersectionsBruteForce(const list<LineSegment> &segments)
+{
+    map<LineSegment, list<LineSegment>> intersections;
+    for (list<LineSegment>::const_iterator seg1 = segments.begin(); seg1 != segments.end(); seg1++)
+    {
+        list<LineSegment>::const_iterator seg2 = seg1;
         for (seg2++; seg2 != segments.end(); seg2++)
             if (seg1->intersects(*seg2))
             {
@@ -366,13 +423,14 @@ void findIntersectionsBruteForce(list<LineSegment> &segments, map<LineSegment, l
                 assert ( v == seg1->start || v == seg1->end);
                 assert ( v == seg2->start || v == seg2->end);
 #endif
-                if (!intersections_out.count(*seg1)) intersections_out.insert(pair<LineSegment,list<LineSegment> >(*seg1, list<LineSegment>() ));
-                if (!intersections_out.count(*seg2)) intersections_out.insert(pair<LineSegment,list<LineSegment> >(*seg2, list<LineSegment>() ));
+                if (!intersections.count(*seg1)) intersections.insert(pair<LineSegment,list<LineSegment> >(*seg1, list<LineSegment>() ));
+                if (!intersections.count(*seg2)) intersections.insert(pair<LineSegment,list<LineSegment> >(*seg2, list<LineSegment>() ));
                 
-                intersections_out[*seg1].push_back(*seg2);
-                intersections_out[*seg2].push_back(*seg1);
+                intersections[*seg1].push_back(*seg2);
+                intersections[*seg2].push_back(*seg1);
             }
     }
+    return intersections;
 }
 
 #if 0

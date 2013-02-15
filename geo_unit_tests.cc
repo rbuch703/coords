@@ -117,7 +117,7 @@ int main()
     p.append(Vertex(3,2));  //was 1,2
     p.append(Vertex(0,1));
     
-    int numVertices = p.vertices().size() - (p.front() == p.back() ? 1 : 0);
+    //int numVertices = p.vertices().size() - (p.front() == p.back() ? 1 : 0);
     list<LineSegment> segs;
     const list<Vertex> &verts = p.vertices();
     
@@ -129,14 +129,25 @@ int main()
     
     moveIntersectionsToIntegerCoordinates(segs);
     std::cout << "== finished preparations == " << std::endl;
-    map<LineSegment, list<LineSegment>> intersections;
-    findIntersectionsBruteForce(segs, intersections);
+    BOOST_FOREACH( LineSegment seg, segs)
+        std::cout << "# " << seg << std::endl;
+    
+    TEST( intersectionsOnlyShareEndpoint(segs) );
+    map<LineSegment, list<LineSegment>> intersections = findIntersectionsBruteForce(segs);
+    map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
 
-    int numIntersections = 0;
-    for (map<LineSegment,list<LineSegment>>::const_iterator it = intersections.begin(); it != intersections.end(); it++)
-        numIntersections += it->second.size();
-    std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
-              << " line segments from " << numVertices << " vertices" << std::endl;
+    int numEdges = 0;
+    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
+    {
+        for(set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
+        {
+            std::cout << "\t" << it->first << ", " << *it2 << std::endl;
+        }
+        numEdges += it->second.size();
+    }
+    std::cout << "Connectivity graph consists of " << graph.size() << " vertices and " << numEdges << " edges." << std::endl;
+    //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
+    //          << " line segments from " << numVertices << " vertices" << std::endl;
 }
 
 

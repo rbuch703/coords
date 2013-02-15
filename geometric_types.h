@@ -3,12 +3,11 @@
 #define GEOMETRIC_TYPES_H
 
 #include <stdint.h>
-#include <assert.h>
 
 #include <ostream>
 #include <list>
 
-
+#include <set>
 #include "osm_types.h"
 
 #include "config.h"
@@ -99,7 +98,9 @@ struct AABoundingBox
 std::ostream& operator <<(std::ostream& os, const Vertex v);
 
 bool resolveOverlap(LineSegment &A, LineSegment &B);
-void findIntersectionsBruteForce(list<LineSegment> &segments, map<LineSegment, list<LineSegment> > &intersections_out);
+map<LineSegment, list<LineSegment>> findIntersectionsBruteForce(const list<LineSegment> &segments);
+map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments );
+bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments);
 void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments);
 
 #endif
