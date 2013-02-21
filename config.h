@@ -8,13 +8,15 @@
 typedef mpz_class BigInt;
 #endif
 
+/*
 #if false
-#include "validatingbigint.h"
-typedef ValidatingBigint BigInt;
+#include "validatingbigint.h" typedef ValidatingBigint BigInt;
 #else
-#include "int128.h"
-typedef int128_t BigInt;
+#include "int128.h" typedef int128_t BigInt;
 #endif
+*/
+
+typedef int64_t BigInt;
 
 #include "fraction.h"
 typedef Fraction<BigInt> BigFraction;

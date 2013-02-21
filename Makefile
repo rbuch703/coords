@@ -11,7 +11,12 @@ CONV_OBJ = $(CONV_SRC:.cc=.o)
 SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 
-FLAGS = -g -Wall -Wextra #-DNDEBUG #-fprofile-arcs -ftest-coverage # -O2
+# -ftrapv is extremely important to catch integer overflow bugs, which are otherwise hard to detect
+# OSM data covers almost the entire range of int32_t; multiplying two values (required for some algorithms)
+# already uses all bits of an int64_t, so, more complex algorithms could easily cause an - otherwise undetected -
+# integer overflow
+# WARNING:the gcc option -O2 appears to negate -ftrapv ! 
+FLAGS = -ftrapv -g -Wall -Wextra #-DNDEBUG -O2 #-fprofile-arcs -ftest-coverage # 
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = -fprofile-arcs#--as-needed

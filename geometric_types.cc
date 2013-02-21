@@ -22,7 +22,7 @@ double Vertex::squaredDistanceToLine(const Vertex &A, const Vertex &B) const
     if (num < 0) num = -num; //distance is an absolute value
     BigInt denom_sq = (B-A).squaredLength();//(B.x-A.x)*(B.x-A.x) + (B.y-A.y)*(B.y-A.y);
     assert(denom_sq != 0);
-    return (num*num).toDouble() / denom_sq.toDouble();
+    return asDouble(num*num) / asDouble(denom_sq);
 }
 
 
@@ -122,7 +122,20 @@ bool LineSegment::intersects( const LineSegment &other) const
 
 void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &out_num, BigInt &out_denom) const
 {
-    assert( !isParallelTo(other));
+    if (isParallelTo(other))
+    {
+        assert ( other.start.pseudoDistanceToLine(start, end) == 0 && 
+                 "Trying to determine intersection coefficient of non-intersecting parallel lines");
+        out_denom = 1;  //result can only be either 0 or 1, so the denominator is always 1
+        if ((start == other.end)|| (start == other.start)) 
+            out_num = 0;
+        else if ((end   == other.end)|| (end   == other.start)) 
+            out_num = 1;
+        else 
+            assert(false && "No intersection coefficient exists for two line segments overlapping in more than a single point");
+
+        return;
+    }
     //TODO: handle edge case that two line segments overlap
     out_num = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
     out_denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
@@ -169,13 +182,13 @@ Vertex LineSegment::getRoundedIntersection(const LineSegment &other) const
     return getRoundedIntersectionPoint( A, B);
  }
 
-
+/*
 double LineSegment::getIntersectionCoefficient( const LineSegment &other) const
 {
     BigInt num, denom;
     getIntersectionCoefficient(other, num, denom);
     return num.toDouble()/denom.toDouble();
-}
+}*/
 
 
 bool LineSegment::operator<(const LineSegment &other) const
@@ -307,17 +320,17 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
         {
             static int num_ints = 0;
             num_ints++;
-            std::cout << num_ints << " testing for intersections between " << *seg1 << " and " << *seg2 << std::endl;
+            //std::cout << num_ints << " testing for intersections between " << *seg1 << " and " << *seg2 << std::endl;
             if (seg2 == seg1)  { (seg2++); continue; }
             
             if (seg1->overlapsWith(*seg2))  //overlapping line segments would lead to an infinite number of intersections, so this case must be handled individually
             {
-                std::cout << "overlap detected " << std::endl;
+                //std::cout << "overlap detected " << std::endl;
                 resolveOverlap(*seg1, *seg2);   //resolves the overlap, but may invalidate either segment. Thus, as a next step, invalidated segments need to be deleted
                 if (!(bool)*seg2)
                 {
                     list<LineSegment>::iterator toDelete = seg2++;
-                    std::cout << "removing second segment" << std::endl;
+                    //std::cout << "removing second segment" << std::endl;
                     segments.erase(toDelete);
                     if (seg2 == segments.end()) break;
                     if (seg2 == seg1) continue;
@@ -328,7 +341,7 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
                 {
                     list<LineSegment>::iterator toDelete = seg1++;
                     seg1_needs_increment = false;
-                    std::cout << "removing first segment" << std::endl;
+                    //std::cout << "removing first segment" << std::endl;
                     segments.erase(toDelete);
                     break;
                 }
@@ -337,33 +350,33 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
             bool seg2_needs_increment = true;
             if (seg1->intersects(*seg2) && ( !seg1->isParallelTo(*seg2) ))
             {
-                std::cout << "Intersection " << num_ints << " between " << (*seg1) << " and " << (*seg2) << std::endl;
+                //std::cout << "Intersection " << num_ints << " between " << (*seg1) << " and " << (*seg2) << std::endl;
                 Vertex intersect = seg1->getRoundedIntersection(*seg2);
                 if ((intersect != seg2->start) && (intersect != seg2->end))
                 {
-                    std::cout << "\tSplitting " << *seg2 << " at " << intersect << endl;
+                    //std::cout << "\tSplitting " << *seg2 << " at " << intersect << endl;
                     segments.push_back( LineSegment(seg2->start, intersect) );
-                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
+                    //std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     segments.push_back( LineSegment(intersect, seg2->end) );
-                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
+                    //std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     list<LineSegment>::iterator to_del = seg2;
                     seg2++;
                     seg2_needs_increment = false;
-                    std::cout << "\t-> removing segment " << *to_del << std::endl;
+                    //std::cout << "\t-> removing segment " << *to_del << std::endl;
                     segments.erase(to_del);
                 }
                 
                 if ((intersect != seg1->start) && (intersect != seg1->end))
                 {
-                    std::cout << "\tSplitting " << *seg1 << " at " << intersect << endl;
+                    //std::cout << "\tSplitting " << *seg1 << " at " << intersect << endl;
                     segments.push_back( LineSegment(seg1->start, intersect) );
-                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
+                    //std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     segments.push_back( LineSegment(intersect, seg1->end) );
-                    std::cout << "\t-> adding segment " << segments.back() << std::endl;
+                    //std::cout << "\t-> adding segment " << segments.back() << std::endl;
                     list<LineSegment>::iterator to_del = seg1;
                     seg1++;
                     seg1_needs_increment = false;
-                    std::cout << "\t-> removing segment " << *to_del << std::endl;
+                    //std::cout << "\t-> removing segment " << *to_del << std::endl;
                     segments.erase(to_del);
                     break; // old seg1 value is no longer valid --> break 'while(seg2 ...)' loop
                 }
@@ -529,8 +542,6 @@ void findIntersections(const list<Vertex> &path, list<LineSegment> &intersection
 
 
 
-#endif
-
 // ====================================================================
 
 AABoundingBox::AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
@@ -576,7 +587,5 @@ BigInt AABoundingBox::height() const { return bottom - top;}
 
 //=======================================================================
 
-
-
-
+#endif
 

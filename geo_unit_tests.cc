@@ -12,7 +12,7 @@
 #include <stack>
 #include "fraction.h"
 
-typedef Fraction<int128_t> BigFrac;
+typedef Fraction<BigInt> BigFrac;
 #define TEST(X) { cout << ((X)?"\033[22;32mpassed":"\033[22;31mfailed") << "\033[1;30m \"" << #X <<"\" ("<< "line " << __LINE__ << ")" << endl;}
 
 BigInt getRandom()
@@ -77,6 +77,19 @@ Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Verte
     return start;
 }
 
+/*
+    Returns the polygons that give the outline of the connected graph 'graph'
+    Basic idea of the algorithm:
+        1. Find the minimum vertex (lexicographically). This one is guaranteed to be part of the outline
+        2. Find its one neighboring vertex (from the graph) for which all
+           neighboring vertices are on the right side of the edge between the two vertices.
+           This vertex is guaranteed to be on the outline as well
+        3. From that edge follow the a outline, by turning as far left as possible at each vertex. Whenever
+           a vertex is passed twice while following that outline, the vertex chain between the two
+           occurrences is extracted as a separate polygon
+        4. The algorithm terminates when the starting edge (not just the starting vertex) is visited again.
+        
+*/
 list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
 {
     list<VertexChain> res;
@@ -88,7 +101,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
         assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
     }
 
-    std::cout << "minimum vertex is " << initial_start << std::endl;
+    //std::cout << "minimum vertex is " << initial_start << std::endl;
 
     assert( graph.count(initial_start) && (graph[initial_start].size() > 0));
     Vertex initial_end = *graph[initial_start].begin();
@@ -97,7 +110,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
         BigInt dist = it->pseudoDistanceToLine(initial_start, initial_end);
         if (dist  < 0) initial_end = *it;
     }
-    std::cout << "leftmost neighbor is " << initial_end << std::endl;
+    //std::cout << "leftmost neighbor is " << initial_end << std::endl;
 
     assert (initial_end > initial_start);
     
@@ -113,13 +126,13 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     do
     {
         Vertex cont = getLeftMostContinuation(graph[end], start, end);
-        std::cout << "continue at" <<  cont << std::endl;
+        //std::cout << "continue at" <<  cont << std::endl;
         start = end;
         end = cont;
         
         if (alreadyPassed.count(end) > 0)
         {
-            std::cout << "already passed this vertex, backtracking..." << std::endl;
+            //std::cout << "already passed this vertex, backtracking..." << std::endl;
             list<Vertex> polygon;
             polygon.push_front( end);
             while (chain.top() != end)
@@ -127,7 +140,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
                 //'front' to maintain orientation, since the vertices are removed from the stack in reverse order
                 polygon.push_front(chain.top());
                 alreadyPassed.erase(chain.top());
-                std::cout << "\t" << chain.top() << std::endl;
+                //std::cout << "\t" << chain.top() << std::endl;
                 chain.pop();
             }
             assert(polygon.front() != polygon.back());
@@ -160,7 +173,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
 
 int main()
 {
-
+#if 0
     Vertex a(1,0);
     Vertex b(0,1);
     
@@ -231,9 +244,9 @@ int main()
         testOverlapResolution(A, LineSegment(Vertex(3,3), Vertex(1,1)), A, LineSegment(Vertex(3,3), Vertex(2,2)));
         
     }
-
+    #endif
     VertexChain p;
-    p.append(Vertex(0,1));
+    /*p.append(Vertex(0,1));
     p.append(Vertex(1,0));
     p.append(Vertex(2,0));
     p.append(Vertex(2,4));
@@ -241,7 +254,14 @@ int main()
     p.append(Vertex(0,3));
     p.append(Vertex(3,2));  //was 1,2
     p.append(Vertex(0,1));
+    */
+    srand(20);
+    for (int i = 0; i < 80; i++)
+        p.append(Vertex(rand() % 200, rand() % 200));
+    p.append(p.front()); //close polygon
     
+    //for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
+        //std::cout << it->x << ", " << it->y << std::endl;
     //int numVertices = p.vertices().size() - (p.front() == p.back() ? 1 : 0);
     list<LineSegment> segs;
     const list<Vertex> &verts = p.vertices();
@@ -253,27 +273,34 @@ int main()
     }
     
     moveIntersectionsToIntegerCoordinates(segs);
-    std::cout << "== finished preparations == " << std::endl;
     
     TEST( intersectionsOnlyShareEndpoint(segs) );
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
-
-    BOOST_FOREACH( LineSegment s, segs)
-        std::cout << s << std::endl;;    
+    
     int numEdges = 0;
     for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
         for(set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
             numEdges += it->second.size();
     std::cout << "Connectivity graph consists of " << graph.size() << " vertices and " << numEdges << " edges." << std::endl;
-
-    list<VertexChain> polygons = getPolygons(graph);
     
+    list<VertexChain> polygons = getPolygons(graph);
+
+    std::cout << "generated " << polygons.size() << " polygons" << endl;
+    
+    //VertexChain 2nd;
+    //if (polygons.size() == 1)
+    //polygons.pop_front();
+    //for (list<Vertex>::const_iterator it = polygons.front().vertices().begin(); it != polygons.front().vertices().end(); it++)
+    //    std::cout << it->x << ", " << it->y << std::endl;
+
+
+    /*
     for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
     {
         for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
             cout << *v << endl;
         cout << "=====" << endl;
-    }
+    }*/
     //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
     //          << " line segments from " << numVertices << " vertices" << std::endl;
 

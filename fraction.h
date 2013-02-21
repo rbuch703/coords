@@ -3,6 +3,7 @@
 #define FRACTION_H
 
 #include <iostream>
+#include <assert.h>
 
 template<typename int_type>
 class Fraction

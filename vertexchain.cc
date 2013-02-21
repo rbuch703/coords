@@ -106,8 +106,8 @@ void VertexChain::simplifySection(list<Vertex>::iterator segment_first, list<Ver
     for (it++; it != segment_last; it++)
     {
         double dist_sq = (A == B) ? 
-            (*it-A).squaredLength().toDouble() : 
-            it->squaredDistanceToLine(A, B);
+            asDouble ((*it-A).squaredLength()) : 
+            asDouble ( it->squaredDistanceToLine(A, B));
         if (dist_sq > max_dist_sq) { it_max = it; max_dist_sq = dist_sq;}
     }
     if (max_dist_sq == 0) return;

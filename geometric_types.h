@@ -63,21 +63,24 @@ struct LineSegment
     
     explicit operator bool() const;
     
-    //these are purely logical comparison operator with no intended geometric meaning
+    //These are purely logical comparison operators used in conjunction with container types.
+    //They have no intended geometric meaning
     bool operator< (const LineSegment &other) const;
     bool operator==(const LineSegment &other) const;
     Vertex start, end;
 };
 
+inline double asDouble(int64_t a) { return a;}
+
 inline std::ostream& operator <<(std::ostream& os, const LineSegment &edge)
 {
-    os << "(" << edge.start.x.toDouble() << ", " << edge.start.y.toDouble() << ") - (";
-    os        << edge.end.x.toDouble()   << ", " << edge.end.y.toDouble() << ")";
+    os << "(" << asDouble(edge.start.x) << ", " << asDouble(edge.start.y) << ") - (";
+    os        << asDouble(edge.end.x)   << ", " << asDouble(edge.end.y) << ")";
     //os << edge.start << " - " << edge.end;
     return os;
 }
 
-
+/*
 struct AABoundingBox
 {
     AABoundingBox(const Vertex v);
@@ -93,7 +96,7 @@ struct AABoundingBox
 
     BigInt top, left, bottom, right;
 };
-
+*/
 
 
 std::ostream& operator <<(std::ostream& os, const Vertex v);
