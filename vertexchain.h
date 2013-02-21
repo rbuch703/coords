@@ -8,8 +8,9 @@ class VertexChain
 {
 public:
     VertexChain() {};
-    VertexChain(const VertexChain & other): m_vertices(other.m_vertices) { }
-    VertexChain( const list<OSMVertex> &vertices);
+    VertexChain(const VertexChain &other): m_vertices(other.m_vertices) { }
+    VertexChain(const list<Vertex> &vertices): m_vertices(vertices) { }
+    VertexChain(const list<OSMVertex> &vertices);
 
     VertexChain(const int32_t *vertices, int64_t num_vertices);
     
@@ -41,6 +42,6 @@ private:
     std::list<Vertex> m_vertices;
 };
 
-std::ostream& operator <<(std::ostream& os, const VertexChain &seg);
+//std::ostream& operator <<(std::ostream& os, const VertexChain &seg);
 
 #endif

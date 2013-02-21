@@ -44,7 +44,8 @@ BigInt Vertex::pseudoDistanceToLine(const Vertex &start, const Vertex &end) cons
 BigInt Vertex::squaredLength() const { return (x*x)+(y*y);}
 bool Vertex::operator==(const Vertex &other) const { return x==other.x && y == other.y;}
 bool Vertex::operator!=(const Vertex &other) const { return x!=other.x || y != other.y;}
-bool Vertex::operator< (const Vertex &other) const { return (x< other.x) || ((x == other.x) && (y < other.y));}
+bool Vertex::operator< (const Vertex &other) const { return (x < other.x) || ((x == other.x) && (y < other.y));}
+bool Vertex::operator> (const Vertex &other) const { return (x > other.x) || ((x == other.x) && (y > other.y));}
 
 Vertex Vertex::operator+(const Vertex &a) const { return Vertex(x+a.x, y+a.y);}
 Vertex Vertex::operator-(const Vertex &a) const { return Vertex(x-a.x, y-a.y);}
@@ -541,15 +542,15 @@ AABoundingBox & AABoundingBox::operator+=(const Vertex v) {
     if (v.y > bottom) bottom = v.y;
     return *this;
 }
-
+/*
 static bool isNormalized( const AABoundingBox &box)
 {
     return box.right >= box.left && box.bottom >= box.top;
-}
+}*/
 
 AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
 {
-    assert ( isNormalized(*this) && isNormalized(other));
+//    assert ( isNormalized(*this) && isNormalized(other));
     BigInt new_left = max( left, other.left);
     BigInt new_right= min( right, other.right);
     assert(new_left <= new_right);
@@ -565,7 +566,7 @@ AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
 
 bool AABoundingBox::overlapsWith(const AABoundingBox &other) const
 {  
-    assert ( isNormalized(*this) && isNormalized(other));
+//    assert ( isNormalized(*this) && isNormalized(other));
     return (max( left, other.left) <= min( right, other.right)) && 
            (max( top, other.top)   <= min( bottom, other.bottom));
 }

@@ -30,6 +30,7 @@ struct Vertex
     bool    operator==(const Vertex &other) const;
     bool    operator!=(const Vertex &other) const;
     bool    operator< (const Vertex &other) const;
+    bool    operator> (const Vertex &other) const;
     Vertex  operator+(const Vertex &a) const;
     Vertex  operator-(const Vertex &a) const;
 public:    

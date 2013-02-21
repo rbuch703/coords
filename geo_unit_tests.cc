@@ -9,6 +9,7 @@
 #include <iostream>
 
 #include <boost/foreach.hpp>
+#include <stack>
 #include "fraction.h"
 
 typedef Fraction<int128_t> BigFrac;
@@ -31,6 +32,130 @@ void testOverlapResolution( LineSegment A, LineSegment B, LineSegment res_A, Lin
 {
     resolveOverlap(A, B);
     TEST( A == res_A && B == res_B);
+}
+
+Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Vertex end)
+{
+    bool hasMinLeft = false;
+    bool hasMinRight = false;
+    
+    Vertex minLeft, minRight;
+    
+    for (set<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
+    {
+        BigInt dist = it->pseudoDistanceToLine(start, end);
+        if (dist < 0) //lies left of line (start-end)
+        {
+            if (!hasMinLeft) 
+            {
+                hasMinLeft = true;
+                minLeft = *it;
+                continue;
+            }
+            if (it->pseudoDistanceToLine(end, minLeft) < 0)
+                minLeft = *it;
+        } else if (dist > 0)    //lies right of line (start-end)
+        {
+            if (!hasMinRight)
+            {
+                hasMinRight = true;
+                minRight = *it;
+                continue;
+            }
+            if (it->pseudoDistanceToLine(end, minRight) < 0)
+                minRight = *it;
+        } else
+        {
+            if (*it == start) continue;
+            assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
+        }
+    }
+    if (hasMinLeft) return minLeft;
+    if (hasMinRight) return minRight;
+    
+    assert( vertices.count(start) == 1);
+    return start;
+}
+
+list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
+{
+    list<VertexChain> res;
+
+    Vertex initial_start = graph.begin()->first;
+    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
+    {
+        if (it->first < initial_start) initial_start = it->first;
+        assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
+    }
+
+    std::cout << "minimum vertex is " << initial_start << std::endl;
+
+    assert( graph.count(initial_start) && (graph[initial_start].size() > 0));
+    Vertex initial_end = *graph[initial_start].begin();
+    for ( set<Vertex>::const_iterator it = graph[initial_start].begin(); it != graph[initial_start].end(); it++)
+    {
+        BigInt dist = it->pseudoDistanceToLine(initial_start, initial_end);
+        if (dist  < 0) initial_end = *it;
+    }
+    std::cout << "leftmost neighbor is " << initial_end << std::endl;
+
+    assert (initial_end > initial_start);
+    
+    Vertex start = initial_start;
+    Vertex end = initial_end;
+    set<Vertex> alreadyPassed;
+    alreadyPassed.insert(start);
+    alreadyPassed.insert(end);
+    stack<Vertex> chain;
+    chain.push(start);
+    chain.push(end);
+    
+    do
+    {
+        Vertex cont = getLeftMostContinuation(graph[end], start, end);
+        std::cout << "continue at" <<  cont << std::endl;
+        start = end;
+        end = cont;
+        
+        if (alreadyPassed.count(end) > 0)
+        {
+            std::cout << "already passed this vertex, backtracking..." << std::endl;
+            list<Vertex> polygon;
+            polygon.push_front( end);
+            while (chain.top() != end)
+            {
+                //'front' to maintain orientation, since the vertices are removed from the stack in reverse order
+                polygon.push_front(chain.top());
+                alreadyPassed.erase(chain.top());
+                std::cout << "\t" << chain.top() << std::endl;
+                chain.pop();
+            }
+            assert(polygon.front() != polygon.back());
+            polygon.push_front(end);
+            assert(polygon.front() == polygon.back());
+            
+            res.push_back(VertexChain(polygon));
+        } else
+        {
+            chain.push(end);
+            alreadyPassed.insert(end);
+        }
+        
+    } while (start != initial_start || end != initial_end);
+    
+#ifndef NDEBUG
+    assert (alreadyPassed.erase(start) == 1);
+    assert (alreadyPassed.erase(end) == 1);
+    assert (alreadyPassed.size() == 0);
+    
+    assert (chain.top() == end);
+    chain.pop();
+    assert (chain.top() == start);
+    chain.pop();
+    assert(chain.size() == 0);
+#endif
+    
+    return res;
 }
 
 int main()
@@ -129,25 +254,29 @@ int main()
     
     moveIntersectionsToIntegerCoordinates(segs);
     std::cout << "== finished preparations == " << std::endl;
-    BOOST_FOREACH( LineSegment seg, segs)
-        std::cout << "# " << seg << std::endl;
     
     TEST( intersectionsOnlyShareEndpoint(segs) );
-    map<LineSegment, list<LineSegment>> intersections = findIntersectionsBruteForce(segs);
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
 
+    BOOST_FOREACH( LineSegment s, segs)
+        std::cout << s << std::endl;;    
     int numEdges = 0;
     for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
-    {
         for(set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
-        {
-            std::cout << "\t" << it->first << ", " << *it2 << std::endl;
-        }
-        numEdges += it->second.size();
-    }
+            numEdges += it->second.size();
     std::cout << "Connectivity graph consists of " << graph.size() << " vertices and " << numEdges << " edges." << std::endl;
+
+    list<VertexChain> polygons = getPolygons(graph);
+    
+    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    {
+        for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
+            cout << *v << endl;
+        cout << "=====" << endl;
+    }
     //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
     //          << " line segments from " << numVertices << " vertices" << std::endl;
+
 }
 
 

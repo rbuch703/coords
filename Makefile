@@ -11,7 +11,7 @@ CONV_OBJ = $(CONV_SRC:.cc=.o)
 SIMP_OBJ = $(SIMP_SRC:.cc=.o)
 GEO_OBJ  = $(GEO_SRC:.cc=.o)
 
-FLAGS = -g -Wall -Wextra  #-fprofile-arcs -ftest-coverage #-O2
+FLAGS = -g -Wall -Wextra #-DNDEBUG #-fprofile-arcs -ftest-coverage # -O2
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = -fprofile-arcs#--as-needed
@@ -22,7 +22,7 @@ all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test
 
 gl_test: $(GL_TEST_SRC)
 	@echo "[C  ]" $@
-	@gcc $(CFLAGS) $(LD_FLAGS) -lGL -lglfw -lm $(GL_TEST_SRC) -o $@
+	@gcc $(GL_TEST_SRC) $(CFLAGS) $(LD_FLAGS) -lGL -lglfw -lm -o $@
 
 conv_osmxml: $(CONV_XML_OBJ) 
 	@echo [LD ] $@
