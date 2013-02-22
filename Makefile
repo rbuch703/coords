@@ -16,7 +16,9 @@ GEO_OBJ  = $(GEO_SRC:.cc=.o)
 # already uses all bits of an int64_t, so, more complex algorithms could easily cause an - otherwise undetected -
 # integer overflow
 # WARNING:the gcc option -O2 appears to negate -ftrapv ! 
-FLAGS = -ftrapv -g -Wall -Wextra #-DNDEBUG -O2 #-fprofile-arcs -ftest-coverage # 
+FLAGS = -g -Wall -Wextra -DNDEBUG -O2
+#FLAGS = -ftrapv -g -Wall -Wextra 
+#FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = -fprofile-arcs#--as-needed
@@ -53,6 +55,8 @@ clean:
 	@echo [CLEAN]
 	@rm -rf *.o
 	@rm -rf *~
+	@rm -rf *gcda
+	@rm -rf *gcno
 	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests gl_test
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC)

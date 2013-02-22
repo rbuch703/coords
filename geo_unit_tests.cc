@@ -40,16 +40,20 @@ Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Verte
     bool hasMinRight = false;
     
     Vertex minLeft, minRight;
-    
+    //cout << "finding continuation for " << start << " - " << end << endl;
     for (set<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
     {
+        //cout << "\t testing " << *it << endl;
         BigInt dist = it->pseudoDistanceToLine(start, end);
+        //cout << "\t\t pseudodistance is " << dist << endl;
         if (dist < 0) //lies left of line (start-end)
         {
+            //cout << "\t\t left " << endl;
             if (!hasMinLeft) 
             {
                 hasMinLeft = true;
                 minLeft = *it;
+                //cout << "\t\t is new minleft" << endl;
                 continue;
             }
             if (it->pseudoDistanceToLine(end, minLeft) < 0)
@@ -64,10 +68,13 @@ Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Verte
             }
             if (it->pseudoDistanceToLine(end, minRight) < 0)
                 minRight = *it;
-        } else
+        } else  //dist == 0
         {
-            if (*it == start) continue;
+            if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
             assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
+            assert(!hasMinRight || minRight.pseudoDistanceToLine(end, *it) != 0); //there should only be continuation straight ahead
+            hasMinRight = true;
+            minRight = *it;
         }
     }
     if (hasMinLeft) return minLeft;
@@ -101,7 +108,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
         assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
     }
 
-    //std::cout << "minimum vertex is " << initial_start << std::endl;
+    std::cout << "minimum vertex is " << initial_start << std::endl;
 
     assert( graph.count(initial_start) && (graph[initial_start].size() > 0));
     Vertex initial_end = *graph[initial_start].begin();
@@ -110,7 +117,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
         BigInt dist = it->pseudoDistanceToLine(initial_start, initial_end);
         if (dist  < 0) initial_end = *it;
     }
-    //std::cout << "leftmost neighbor is " << initial_end << std::endl;
+    std::cout << "leftmost neighbor is " << initial_end << std::endl;
 
     assert (initial_end > initial_start);
     
@@ -171,7 +178,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     return res;
 }
 
-int main(int argc, char** argv)
+int main(int, char** )
 {
 #if 0
     Vertex a(1,0);
@@ -261,9 +268,10 @@ int main(int argc, char** argv)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
     
-    //for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
-        //std::cout << it->x << ", " << it->y << std::endl;
-    //int numVertices = p.vertices().size() - (p.front() == p.back() ? 1 : 0);
+    /*for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
+        std::cout << *it << std::endl;
+
+    cout << "========" << endl;*/
     list<LineSegment> segs;
     const list<Vertex> &verts = p.vertices();
     
@@ -277,34 +285,28 @@ int main(int argc, char** argv)
     
     TEST( intersectionsOnlyShareEndpoint(segs) );
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
-    
     int numEdges = 0;
     for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
     {
-     //   for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
-     //       cout << it->first << "," << *it2 << endl;
+/*           for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
+                cout << "#\t" << it->first << "," << *it2 << endl;
+                */
         numEdges += it->second.size();
     }
     std::cout << "Connectivity graph consists of " << graph.size() << " vertices and " << numEdges << " edges." << std::endl;
-    
+
+    //return 0;
     list<VertexChain> polygons = getPolygons(graph);
 
     std::cout << "generated " << polygons.size() << " polygons" << endl;
     
-    //VertexChain 2nd;
-    //if (polygons.size() == 1)
-    //polygons.pop_front();
-    //for (list<Vertex>::const_iterator it = polygons.front().vertices().begin(); it != polygons.front().vertices().end(); it++)
-    //    std::cout << it->x << ", " << it->y << std::endl;
-
-
-    
-    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    // print final polygons    
+    /*for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
     {
         for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
             cout << *v << endl;
         cout << "=====" << endl;
-    }
+    }*/
     //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
     //          << " line segments from " << numVertices << " vertices" << std::endl;
 

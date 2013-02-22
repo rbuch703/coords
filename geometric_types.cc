@@ -250,8 +250,8 @@ bool LineSegment::overlapsWith(const LineSegment &other) const
 
 LineSegment::operator bool() const
 {
-    static const Vertex zero(0,0);
-    return start != zero || end != zero;
+    //static const Vertex zero(0,0);
+    return (start.x != 0 || start.y != 0 || end.x != 0 || end.y != 0);;
 }
 /** ============================================================================= */
 
@@ -502,15 +502,20 @@ bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments)
     {
         list<LineSegment>::const_iterator seg2 = seg1;
         for (seg2++; seg2 != segments.end(); seg2++)
+        {
+            //cout << "testing edges " << *seg1 << " and " << *seg2;
             if (seg1->intersects(*seg2))
             {
+                //cout << "intersect" << endl;
                 Vertex v = seg1->getRoundedIntersection(*seg2);
                 if (( v != seg1->start && v != seg1->end) || ( v != seg2->start && v != seg2->end)) 
                 {
-                    cout << "intersecting edges at " << *seg1 << " and " << *seg2 << endl;
+                    //cout << "intersecting edges at " << *seg1 << " and " << *seg2 << endl;
                     return false;
                 }
             }
+            //cout << endl;
+        }
     }
     return true;
 }
