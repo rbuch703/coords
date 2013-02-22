@@ -67,6 +67,7 @@ struct LineSegment
     //They have no intended geometric meaning
     bool operator< (const LineSegment &other) const;
     bool operator==(const LineSegment &other) const;
+    bool operator!=(const LineSegment &other) const;
     Vertex start, end;
 };
 
@@ -80,7 +81,7 @@ inline std::ostream& operator <<(std::ostream& os, const LineSegment &edge)
     return os;
 }
 
-/*
+
 struct AABoundingBox
 {
     AABoundingBox(const Vertex v);
@@ -96,7 +97,7 @@ struct AABoundingBox
 
     BigInt top, left, bottom, right;
 };
-*/
+
 
 
 std::ostream& operator <<(std::ostream& os, const Vertex v);
@@ -106,5 +107,6 @@ map<LineSegment, list<LineSegment>> findIntersectionsBruteForce(const list<LineS
 map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments );
 bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments);
 void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments);
+void moveIntersectionsToIntegerCoordinates2(list<LineSegment> &segments);
 
 #endif

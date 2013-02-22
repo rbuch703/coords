@@ -171,7 +171,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     return res;
 }
 
-int main()
+int main(int argc, char** argv)
 {
 #if 0
     Vertex a(1,0);
@@ -245,8 +245,8 @@ int main()
         
     }
     #endif
-    VertexChain p;
-    /*p.append(Vertex(0,1));
+    VertexChain p; /*
+    p.append(Vertex(0,1));
     p.append(Vertex(1,0));
     p.append(Vertex(2,0));
     p.append(Vertex(2,4));
@@ -255,10 +255,11 @@ int main()
     p.append(Vertex(3,2));  //was 1,2
     p.append(Vertex(0,1));
     */
-    srand(20);
-    for (int i = 0; i < 80; i++)
+    
+    srand(24);
+    for (int i = 0; i < 100; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
-    p.append(p.front()); //close polygon
+    p.append(p.front()); //close polygon*/
     
     //for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
         //std::cout << it->x << ", " << it->y << std::endl;
@@ -279,8 +280,11 @@ int main()
     
     int numEdges = 0;
     for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
-        for(set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
-            numEdges += it->second.size();
+    {
+     //   for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
+     //       cout << it->first << "," << *it2 << endl;
+        numEdges += it->second.size();
+    }
     std::cout << "Connectivity graph consists of " << graph.size() << " vertices and " << numEdges << " edges." << std::endl;
     
     list<VertexChain> polygons = getPolygons(graph);
@@ -294,13 +298,13 @@ int main()
     //    std::cout << it->x << ", " << it->y << std::endl;
 
 
-    /*
+    
     for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
     {
         for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
             cout << *v << endl;
         cout << "=====" << endl;
-    }*/
+    }
     //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
     //          << " line segments from " << numVertices << " vertices" << std::endl;
 
