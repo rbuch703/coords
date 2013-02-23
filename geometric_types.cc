@@ -351,23 +351,27 @@ void handleIntersection(LineSegment &seg1, LineSegment &seg2, LineSegment &seg1_
     }
 }
 
-/* This method modifies the set of line segments so that all intersections occur at integer coordinates.
-   
-   To that end, intersecting segments are split into two segments at the intersection
-   point (start-intersect, intersect-end) and the intersection point is moved to the nearest integer
-   coordinate. As a side-effect, intersections now occur only at line segment end points.
-*/
-void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
+
+/*
+    Tests segments in 'segments' against each other. Whenever a test results in an overlap or an intersection,
+    this is resolved by shortening a segment (for overlaps) or splitting segments at the intersection point
+    and moving that point to the nearest integer coordinates (for intersections)
+    
+    Whenever a segment is modified or added in the process, it is transferred to newSegments.
+    Thus, after this method has been executed, the segments remaining in 'segments' have all tested against each other
+    and do not intersect or overlap each other. The segments in 'newSegments' have not been tested in any way
+ */
+static void testSegments(list<LineSegment> &segments, list<LineSegment> &newSegments)
 {
     list<LineSegment>::iterator seg1 = segments.begin();
     while (seg1 != segments.end())
     {
-        list<LineSegment>::iterator seg2 = segments.begin(); //must not start at (seg1)+1, because new segments may be added in the process, and these need to be checked against all other segments
-               
+        list<LineSegment>::iterator seg2 = seg1;
+        seg2++;
         bool seg1_needs_increment = true;
-        while (seg2!= segments.end())
+        while (seg2 != segments.end())
         {
-            if (seg2 == seg1)  { (seg2++); continue; }
+            assert (seg2 != seg1);
             //std::cout << "testing ["  << distance(segments.begin(), seg1) << "] " << *seg1 << ", [" 
             //                          << distance(segments.begin(), seg2) << "] " << *seg2 <<  endl;
         
@@ -383,22 +387,22 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
             if (seg2_aux)      cout << "\t added seg2_aux " << seg2_aux << endl;
             if (! (bool)*seg2) cout << "\t removing seg2 " << *seg2 << endl;
             */
-            if (seg2_aux) segments.push_back(seg2_aux); //if an auxiliary to seg2 exists (=there was an intersection), add it to the list of segments
+            if (seg2_aux) newSegments.push_back(seg2_aux); //if an auxiliary to seg2 exists (=there was an intersection), add it to the list of segments
             if (!*seg2) assert (seg2_modified);
             if (seg2_modified)
             {   
-                if ( (bool)*seg2) segments.push_back(*seg2); //needs to be checked against all other segments --> put to end of the list
-                seg2 = segments.erase(seg2); 
+                if ( (bool)*seg2) newSegments.push_back(*seg2); //needs to be checked against all other segments --> put to end of the list
+                seg2 = segments.erase(seg2);
                 
             } else seg2++;
             
-            if (seg1_aux) segments.push_back(seg1_aux);
+            if (seg1_aux) newSegments.push_back(seg1_aux);
             if (!*seg1) assert (seg1_modified);
             if (seg1_modified)
             {
-                if (!(bool)*seg1) seg1 = segments.erase(seg1);
+                if ((bool)*seg1) newSegments.push_back(*seg1);
+                seg1 = segments.erase(seg1);
                 //if seg1 was deleted in the previous step: iterator has already been incremented by this deletion
-                //if seg1 was not deleted (but has been modified) --> needs to be checked against all other segments again --> next iteration without increment of iterator
                 seg1_needs_increment = false;    
                 break;
             }
@@ -407,7 +411,75 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
         if (seg1_needs_increment)
             seg1++;
     }
+}
 
+static void crossTestSegments(list<LineSegment> &edges1, list<LineSegment> &edges2, list<LineSegment> &edgesOut)
+{
+    list<LineSegment>::iterator edge1 = edges1.begin();
+    while (edge1 != edges1.end())
+    {
+        list<LineSegment>::iterator edge2 = edges2.begin();
+        bool edge1_needs_increment = true;
+        while (edge2 != edges2.end())
+        {
+            LineSegment edge1_aux, edge2_aux;
+            bool edge1_modified, edge2_modified;
+            handleIntersection (*edge1, *edge2, edge1_aux, edge2_aux, edge1_modified, edge2_modified);
+
+            if (edge2_aux) edgesOut.push_back(edge2_aux); //if an auxiliary to seg2 exists (=there was an intersection), add it to the list of segments
+            if (!*edge2) assert (edge2_modified);
+            if (edge2_modified)
+            {   
+                if ( (bool)*edge2) edgesOut.push_back(*edge2); //needs to be checked against all other segments --> put to end of the list
+                edge2 = edges2.erase(edge2);   
+            } else edge2++;
+            
+            if (edge1_aux) edgesOut.push_back(edge1_aux);
+            if (!*edge1) assert (edge1_modified);
+            if (edge1_modified)
+            {
+                if ((bool)*edge1) edgesOut.push_back(*edge1);
+                edge1 = edges1.erase(edge1);
+                //if edge1 was deleted in the previous step: iterator has already been incremented by this deletion
+                edge1_needs_increment = false;    
+                break;
+            }
+        }
+        
+        if (edge1_needs_increment)
+            edge1++;
+    }
+}
+
+/* This method modifies the set of line segments so that all intersections occur at integer coordinates.
+   
+   To that end, intersecting segments are split into two segments at the intersection
+   point (start-intersect, intersect-end) and the intersection point is moved to the nearest integer
+   coordinate. As a side-effect, intersections now occur only at line segment end points.
+*/
+void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
+{
+    list<LineSegment> untested, untested2;
+    testSegments(segments, /*out*/untested);
+    do
+    {
+        //at this point, no edge in 'segments' intersects any other edge in 'segments', but those in 'untested' do
+        cout << "first test, segments: " << segments.size() << ", untested: " << untested.size() << endl;   
+        testSegments(untested, /*out*/untested2);
+        //now no edge in 'untested' intersects any other edge in 'untested', but those in 'untested2' do
+        
+        crossTestSegments(segments, untested, /*out*/untested2);
+        //now no edge in 'segments' or 'untested' intersects with any other edge from the two containers
+        
+        segments.insert(segments.end(), untested.begin(), untested.end());
+        untested.clear();
+        swap(untested, untested2);
+        /*no edge in 'segments' intersects any other edge in that container; 
+         *edges in 'untested' have not yet been tested
+         *untested2 is empty */
+        assert(untested2.size() == 0);
+        
+    } while (untested.begin() != untested.end() );
 }
 
 struct QuadTreeNode
@@ -450,12 +522,14 @@ void moveIntersectionsRec(QuadTreeNode &node, AABoundingBox box, set<LineSegment
         addToQuadrant(mid_x, mid_y, seg, tl, tr, bl, br, here);
    }
    
-   for (list<LineSegment>::const_iterator it = here.begin(); it != here.end(); it++)
+   for (list<LineSegment>::iterator seg1 = here.begin(); seg1 != here.end(); seg1++)
    {
-        list<LineSegment>::const_iterator it2 = it;
-        for (it2++; it2 != here.end(); it2++)
+        list<LineSegment>::iterator seg2 = seg1;
+        for (seg2++; seg2 != here.end(); seg2++)
         {
-            
+            LineSegment seg1_aux, seg2_aux;
+            bool seg1_modified, seg2_modified;
+            handleIntersection (*seg1, *seg2, seg1_aux, seg2_aux, seg1_modified, seg2_modified);
         }
    }
    cout << "tl:" << tl.size() << ", tr:" << tr.size() << ", bl:" << bl.size() << ", br:" << br.size() 

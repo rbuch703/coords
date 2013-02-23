@@ -268,10 +268,10 @@ int main(int, char** )
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
     
-    /*for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
+    for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
         std::cout << *it << std::endl;
 
-    cout << "========" << endl;*/
+    cout << "========" << endl;
     list<LineSegment> segs;
     const list<Vertex> &verts = p.vertices();
     
@@ -301,12 +301,12 @@ int main(int, char** )
     std::cout << "generated " << polygons.size() << " polygons" << endl;
     
     // print final polygons    
-    /*for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
     {
         for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
             cout << *v << endl;
         cout << "=====" << endl;
-    }*/
+    }
     //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
     //          << " line segments from " << numVertices << " vertices" << std::endl;
 
