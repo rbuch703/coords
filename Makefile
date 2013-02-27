@@ -45,11 +45,11 @@ simplifier: $(SIMP_OBJ)
 
 geo_unit_tests: $(GEO_OBJ)
 	@echo [LD ] $@
-	@g++ $(GEO_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
+	@g++ $(GEO_OBJ) $(CCFLAGS) $(LD_FLAGS) `pkg-config --libs cairo` -lgmp -lgmpxx -o $@
 
 %.o: %.cc
 	@echo [C++] $<
-	@g++ $(CCFLAGS) $< -c -o $@
+	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
 
 clean:
 	@echo [CLEAN]

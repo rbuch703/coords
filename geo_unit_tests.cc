@@ -178,6 +178,69 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     return res;
 }
 
+#include <cairo.h>
+#include <cairo-pdf.h>
+
+#define M_PI 3.14159265358979323846
+
+void renderGraph(cairo_t *cr, map<Vertex, set<Vertex>> &graph)
+{
+    
+    cairo_set_line_width (cr, 0.1);
+    cairo_set_source_rgb (cr, 0, 0, 0);
+    
+    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
+    {
+        for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
+        {
+            cairo_move_to (cr, it->first.x, it->first.y);
+            cairo_line_to (cr, it2->x, it2->y);
+            cairo_stroke(cr);
+        }
+    }
+
+    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
+    {
+        cairo_arc(cr, it->first.x, it->first.y, 0.2, 0, 2 * M_PI);
+        cairo_set_source_rgb (cr, 1, 0, 0);        
+        cairo_fill (cr);
+        cairo_stroke(cr);
+
+    }    
+    
+    cairo_rectangle (cr, 0.25, 0.25, 0.5, 0.5);
+    cairo_stroke (cr); 
+
+}
+
+void renderPolygons(cairo_t *cr, list<VertexChain> &polygons)
+{
+    cairo_set_source_rgb(cr, 0,0,1);
+    cairo_set_line_width(cr, 0.5);
+    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    {
+        cairo_move_to( cr, it->vertices().front().x, it->vertices().front().y);
+        for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
+        {
+            cairo_line_to( cr, v->x, v->y);
+        }
+        cairo_stroke(cr);
+        //cout << "=====" << endl;
+    }
+
+}
+
+void renderPolygon(cairo_t *cr, const list<Vertex> &vertices)
+{
+    cairo_set_source_rgb(cr, 1, 0.7, 0.7);
+    cairo_set_line_width(cr, 0.2);
+    cairo_move_to(cr, vertices.front().x, vertices.front().y);
+
+    for (list<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
+        cairo_line_to(cr, it->x, it->y);
+
+    cairo_stroke( cr );
+}
 int main(int, char** )
 {
 #if 0
@@ -262,16 +325,25 @@ int main(int, char** )
     p.append(Vertex(3,2));  //was 1,2
     p.append(Vertex(0,1));
     */
-    
+
+    cairo_surface_t *surface;
+    cairo_t *cr;
+    surface = cairo_pdf_surface_create ("debug.pdf", 2000, 2000);
+    cr = cairo_create (surface);
+    cairo_scale (cr, 10, 10);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL);
+        
     srand(24);
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 20; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
     
+    renderPolygon(cr, p.vertices() );
+
+    /*
     for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
         std::cout << *it << std::endl;
-
-    cout << "========" << endl;
+    cout << "========" << endl;*/
     list<LineSegment> segs;
     const list<Vertex> &verts = p.vertices();
     
@@ -301,12 +373,15 @@ int main(int, char** )
     std::cout << "generated " << polygons.size() << " polygons" << endl;
     
     // print final polygons    
-    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
-    {
-        for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
-            cout << *v << endl;
-        cout << "=====" << endl;
-    }
+    
+
+    
+    renderPolygons(cr, polygons);
+    renderGraph(cr, graph);
+
+    cairo_destroy(cr);
+    cairo_surface_finish (surface);
+    cairo_surface_destroy(surface);    
     //std::cout << "found " << numIntersections << " intersections on " << intersections.size() 
     //          << " line segments from " << numVertices << " vertices" << std::endl;
 
