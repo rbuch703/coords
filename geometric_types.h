@@ -6,8 +6,8 @@
 
 #include <ostream>
 #include <list>
-
 #include <set>
+
 #include "osm_types.h"
 
 #include "config.h"
@@ -52,12 +52,14 @@ struct LineSegment
     bool isColinearWith(const Vertex v) const;
     bool isParallelTo( const LineSegment &other) const;
     bool intersects( const LineSegment &other) const;
+    bool intersects( const LineSegment &other, BigFraction &intersect_x_out, BigFraction &intersect_y_out) const;
+    
     bool overlapsWith(const LineSegment &other) const;
     //returns the intersection of the two line segments, with each coordinate rounded *up* to the next integer
     Vertex getRoundedIntersection(const LineSegment &other) const;
     
     BigFraction getCoefficient(const Vertex v) const;
-    double getIntersectionCoefficient( const LineSegment &other) const;
+    //double getIntersectionCoefficient( const LineSegment &other) const;
     //void getIntersection(LineSegment &other, BigFraction &out_x, BigFraction &out_y) const;
     void getIntersectionCoefficient( const LineSegment &other, BigInt &out_num, BigInt &out_denom) const;
     
@@ -68,8 +70,16 @@ struct LineSegment
     bool operator< (const LineSegment &other) const;
     bool operator==(const LineSegment &other) const;
     bool operator!=(const LineSegment &other) const;
+    
+private:
+    bool intersects( const LineSegment &other, BigInt &num1, BigInt &num2) const;
+
+public:
     Vertex start, end;
 };
+
+void handleIntersection(LineSegment &seg1, LineSegment &seg2, LineSegment &seg1_aux, LineSegment &seg2_aux, 
+                        bool &seg1_modified, bool &seg2_modified);
 
 inline double asDouble(int64_t a) { return a;}
 
@@ -107,6 +117,5 @@ map<LineSegment, list<LineSegment>> findIntersectionsBruteForce(const list<LineS
 map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments );
 bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments);
 void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments);
-void moveIntersectionsToIntegerCoordinates2(list<LineSegment> &segments);
 
 #endif

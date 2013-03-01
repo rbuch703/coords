@@ -42,12 +42,24 @@ public:
         denom*=other.denom;
         return *this;
     }
+
+    Fraction& operator*=(const int_type &other)
+    {
+        num*=other;
+        return *this;
+    }
     
   
     Fraction& operator/=(const Fraction &other)
     {
         num*=other.denom;
         denom*=other.num;
+        return *this;
+    }
+
+    Fraction& operator/=(const int_type &other)
+    {
+        denom*=other;
         return *this;
     }
    
@@ -96,6 +108,9 @@ public:
     Fraction operator-(const Fraction &other) const { Fraction res = *this; return res-=other; }
     Fraction operator*(const Fraction &other) const { Fraction res = *this; return res*=other; }
     Fraction operator/(const Fraction &other) const { Fraction res = *this; return res/=other; }
+
+    Fraction operator*(const int_type &other) const { Fraction res = *this; return res*=other; }
+    Fraction operator/(const int_type &other) const { Fraction res = *this; return res/=other; }
     
     int_type get_num()   const { return num; }
     int_type get_denom() const { return denom; }

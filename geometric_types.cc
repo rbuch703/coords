@@ -10,8 +10,6 @@
 #include <stdlib.h> //for llabs
 #include <math.h>
 
-
-
 Vertex::Vertex() :x(0), y(0) {}
 Vertex::Vertex(BigInt v_x, BigInt v_y): x(v_x), y(v_y) {}
 
@@ -80,8 +78,26 @@ bool LineSegment::isColinearWith(const Vertex v) const
     return  (( v.x-start.x)*(end.y - start.y) == ( v.y-start.y)*(end.x - start.x));
 }
 
-// in accordance with the semantics of line segments, intersects() also returns 'true' is the segments only share a single point
 bool LineSegment::intersects( const LineSegment &other) const
+{
+    BigInt dummy;
+    return intersects(other, dummy, dummy);
+}
+
+bool LineSegment::intersects( const LineSegment &other, BigFraction &intersect_x_out, BigFraction &intersect_y_out) const
+{
+    BigInt num1, denom;
+    if (! intersects(other, num1, denom)) return false;
+    
+    BigFraction alpha(num1, denom);
+    intersect_x_out = alpha * (end.x - start.x) + start.x;
+    intersect_y_out = alpha * (end.y - start.y) + start.y;
+    return true;
+}
+
+
+// in accordance with the semantics of line segments, intersects() also returns 'true' if the segments only share a single point
+bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt &denom_out) const
 {
     if (isParallelTo(other))
     {
@@ -100,6 +116,7 @@ bool LineSegment::intersects( const LineSegment &other) const
         
     } else
     {
+        #warning: FIXME: likely to be a hotspot, compute terms shared between the three expressions only once
         BigInt num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
         BigInt num2 = (      end.x-      start.x)*(start.y-other.start.y) - (      end.y-      start.y)*(start.x-other.start.x);
         BigInt denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
@@ -115,6 +132,8 @@ bool LineSegment::intersects( const LineSegment &other) const
         if (( num1 < 0 || num2 < 0) && denom > 0) return false; 
         if (( num1 > 0 || num2 > 0) && denom < 0) return false; // coefficient would be negative
         
+        num1_out = num1;
+        denom_out= denom;
         return true; // not negative and not bigger than/equal to one --> segments intersect
     }
     
@@ -132,7 +151,10 @@ void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &
         else if ((end   == other.end)|| (end   == other.start)) 
             out_num = 1;
         else 
+        {
             assert(false && "No intersection coefficient exists for two line segments overlapping in more than a single point");
+            out_denom = -1;
+        }
 
         return;
     }
@@ -451,6 +473,10 @@ static void crossTestSegments(list<LineSegment> &edges1, list<LineSegment> &edge
     }
 }
 
+
+/*FIXME: instead of move around segments (which involves deleting and creating list node to hold these segments), 
+ * use list::splice() to directly move the list nodes containing the segments */
+
 /* This method modifies the set of line segments so that all intersections occur at integer coordinates.
    
    To that end, intersecting segments are split into two segments at the intersection
@@ -464,7 +490,7 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
     do
     {
         //at this point, no edge in 'segments' intersects any other edge in 'segments', but those in 'untested' do
-        cout << "first test, segments: " << segments.size() << ", untested: " << untested.size() << endl;   
+        cout << "segments: " << segments.size() << ", untested: " << untested.size() << endl;   
         testSegments(untested, /*out*/untested2);
         //now no edge in 'untested' intersects any other edge in 'untested', but those in 'untested2' do
         
@@ -482,48 +508,68 @@ void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments)
     } while (untested.begin() != untested.end() );
 }
 
-struct QuadTreeNode
-{
-    QuadTreeNode(): tl(NULL), tr(NULL), bl(NULL), br(NULL) {}
-    QuadTreeNode *tl, *tr, *bl, *br;
-    list<LineSegment> segments;
-};
 
-void addToQuadrant(BigInt mid_x, BigInt mid_y, LineSegment seg, list<LineSegment> &tl,
-                   list<LineSegment> &tr, list<LineSegment> &bl, list<LineSegment> &br,
-                   list<LineSegment> &here)
-{
-    if (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y < mid_y && seg.end.y < mid_y)
-        tl.push_front(seg);
-    else if (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y > mid_y && seg.end.y > mid_y)
-        bl.push_front(seg);
-    else if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y < mid_y && seg.end.y < mid_y)
-        tr.push_front(seg);
-    else if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y > mid_y && seg.end.y > mid_y)
-        br.push_front(seg);
-    else
-        here.push_back(seg);    //crosses more than one quadrant
-}
 
-void moveIntersectionsRec(QuadTreeNode &node, AABoundingBox box, set<LineSegment> &segs, int depth = 0)
+
+/* approach:
+    filter 'untested' (move all segments that fit into a single quadrant into the corresponding quadrant container)
+    while "untested" is not empty:
+        test all 'untested' against each other --> 'untested' (all cross-tested); 'untested2' (newly created segments)
+        cross-test all 'untested' against all 'segments' --> 'untested (cross-tested and tested against 'segments); added to untested2 (newly created segments)
+        cross-test all 'untested' against all segments of sub-containers --> 'untested' (all fully tested); added to 'untested2' (newly created segments)
+        filter 'untested2'
+        add all 'untested' to 'segments'
+        move all 'untested2' to 'untested'
+        
+    call recursively for all four quadrants
+ */
+ 
+//void crossTestIntersectionsRec(list<LineSegment> src, 
+#if 0
+void moveIntersectionsRec(QuadTreeNode &node, AABoundingBox box, int depth = 0)
 {
+    std::string strSpaces;
     for (int d = depth; d; d--)
-        cout << " ";
-    cout << "(" << box.left << ", " << box.top << ") - (" << box.right << ", " << box.bottom << ")" << endl;
+        strSpaces+= "  ";
+    cout << strSpaces << "(" << box.left << ", " << box.top << ") - (" << box.right << ", " << box.bottom << "); " <<node.untested.size() << " segments" <<  endl;
 
     BigInt mid_x = (box.right + box.left) / 2;
     BigInt mid_y = (box.top + box.bottom) / 2;
     
-    list<LineSegment> here, tl, tr, bl, br;
-    while (node.segments.begin() != node.segments.end())
-    {
-        LineSegment seg = node.segments.front();
-        node.segments.pop_front();
-        addToQuadrant(mid_x, mid_y, seg, tl, tr, bl, br, here);
-   }
+    list<LineSegment> untested2;//, tl, tr, bl, br;
+    assert (!node.tl && !node.tr && !node.bl && !node.br);
+    node.tl = new QuadTreeNode();
+    node.tr = new QuadTreeNode();
+    node.bl = new QuadTreeNode();
+    node.br = new QuadTreeNode();
+    
+    
+    //first step: move those segments to lower recursion levels that fit conpletely in one quadrant
+    node.distributeSegments( node.untested, mid_x, mid_y );
+    
+    cout << strSpaces << "#" << node.untested.size() << "/ " << node.tl->untested.size() << "/ " 
+         << node.tr->untested.size() << "/ " << node.bl->untested.size() << "/ " << node.br->untested.size() <<  endl;
    
-   for (list<LineSegment>::iterator seg1 = here.begin(); seg1 != here.end(); seg1++)
-   {
+    //second step: determine intersections between top-level segments
+
+    while (node.untested.begin() != node.untested.end())
+    {
+        testSegments( node.untested, untested2);
+        crossTestSegments(node.segments, node.untested, /*out*/  untested2);
+        node.distributeSegments( untested2, mid_x, mid_y);
+        node.segments.splice(node.segments.begin(), node.untested, node.untested.begin(), node.untested.end());
+        node.untested.clear();
+        swap(node.untested, untested2);
+        assert(untested2.size() == 0);
+        cout << strSpaces << "#segs: " << node.segments.size() << ", untested: " << node.untested.size() << " sub-quads: " << node.tl->untested.size() << "/ " 
+             << node.tr->untested.size() << "/ " << node.bl->untested.size() << "/ " << node.br->untested.size() <<  endl;
+    }
+     
+     
+    return;
+    
+/*    for (list<LineSegment>::iterator seg1 = here.begin(); seg1 != here.end(); seg1++)
+    {
         list<LineSegment>::iterator seg2 = seg1;
         for (seg2++; seg2 != here.end(); seg2++)
         {
@@ -531,28 +577,28 @@ void moveIntersectionsRec(QuadTreeNode &node, AABoundingBox box, set<LineSegment
             bool seg1_modified, seg2_modified;
             handleIntersection (*seg1, *seg2, seg1_aux, seg2_aux, seg1_modified, seg2_modified);
         }
-   }
-   cout << "tl:" << tl.size() << ", tr:" << tr.size() << ", bl:" << bl.size() << ", br:" << br.size() 
-        << ", here:" << here.size() << endl;
+    }
+    cout << "tl:" << tl.size() << ", tr:" << tr.size() << ", bl:" << bl.size() << ", br:" << br.size() 
+        << ", here:" << here.size() << endl;*/
 }
 
 void moveIntersectionsToIntegerCoordinates2(list<LineSegment> &segments)
 {
     AABoundingBox box (segments.begin()->start);
-    set<LineSegment> segs;
+    //list<LineSegment> segs;
     QuadTreeNode root;
     for (list<LineSegment>::const_iterator it = segments.begin(); it != segments.end(); it++)
     {
         box += it->start;
         box += it->end;
-
     }
     //segs.insert( *it );    
-    root.segments.insert(root.segments.begin(), segments.begin(), segments.end());
+    root.untested.insert(root.untested.begin(), segments.begin(), segments.end());
     
-    moveIntersectionsRec( root, box, segs, 0);
+    moveIntersectionsRec( root, box, 0);
    
 }
+#endif
 
 map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments )
 {
@@ -584,7 +630,7 @@ bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments)
                 Vertex v = seg1->getRoundedIntersection(*seg2);
                 if (( v != seg1->start && v != seg1->end) || ( v != seg2->start && v != seg2->end)) 
                 {
-                    //cout << "intersecting edges at " << *seg1 << " and " << *seg2 << endl;
+                    cout << "intersecting edges " << *seg1 << " and " << *seg2 << " at " << v << endl;
                     return false;
                 }
             }

@@ -2,7 +2,7 @@
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc validatingbigint.cc int128.cc
-GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128.cc #validatingbigint.cc 
+GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128.cc quadtree.cc #validatingbigint.cc 
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
 
 
