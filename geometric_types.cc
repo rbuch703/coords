@@ -116,17 +116,30 @@ bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt
         
     } else
     {
-        #warning: FIXME: likely to be a hotspot, compute terms shared between the three expressions only once
-        BigInt num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
+      /*BigInt num1 = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
         BigInt num2 = (      end.x-      start.x)*(start.y-other.start.y) - (      end.y-      start.y)*(start.x-other.start.x);
-        BigInt denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
+        BigInt denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);*/
+
+        /*optimization: pre-computed all multiple-used differences */
+        BigInt odx = other.end.x-other.start.x;
+        BigInt ody = other.end.y-other.start.y;
+        BigInt tdx =       end.x-      start.x;
+        BigInt tdy =       end.y-      start.y;
+        BigInt dsx = start.x    -other.start.x;
+        BigInt dsy = start.y    -other.start.y;
+
+        BigInt num1 = odx * dsy - ody * dsx;
+        BigInt num2 = tdx * dsy - tdy * dsx;
+        BigInt denom= ody * tdx - odx * tdy;
+        
 
         assert(denom != 0); //should only be zero if the lines are parallel, but this case has already been handled above
 
         //for the line segments to intersect, num1/denom and num2/denom both have to be inside the range [0, 1];
         
         //if the absolute of at least one coefficient would be bigger than one 
-        if (abs(num1) >abs(denom) || abs(num2) > abs(denom)) return false; 
+        BigInt adenom = abs(denom);
+        if (abs(num1) >adenom || abs(num2) > adenom) return false; 
         
         // at least one coefficient would be negative
         if (( num1 < 0 || num2 < 0) && denom > 0) return false; 
