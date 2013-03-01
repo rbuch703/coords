@@ -95,19 +95,24 @@ inline std::ostream& operator <<(std::ostream& os, const LineSegment &edge)
 struct AABoundingBox
 {
     AABoundingBox(const Vertex v);
-    AABoundingBox(BigInt t, BigInt l, BigInt b, BigInt r);
+    AABoundingBox(Vertex tl_, Vertex br_);
 
     AABoundingBox & operator+=(const Vertex v);
        
     AABoundingBox getOverlap(const AABoundingBox &other) const;
     bool overlapsWith(const AABoundingBox &other) const;
     
-    BigInt width() const;
+    BigInt left()   const { return tl.x; }
+    BigInt right()  const { return br.x; }
+    BigInt top()    const { return tl.y; }
+    BigInt bottom() const { return br.y; }
+    BigInt width()  const;
     BigInt height() const;
 
-    BigInt top, left, bottom, right;
+    Vertex tl,br;
 };
 
+std::ostream& operator <<(std::ostream& os, const AABoundingBox v);
 
 
 std::ostream& operator <<(std::ostream& os, const Vertex v);

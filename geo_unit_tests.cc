@@ -179,6 +179,8 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     return res;
 }
 
+#define CAIRO_DEBUG_OUTPUT
+
 #ifdef CAIRO_DEBUG_OUTPUT
 #include <cairo.h>
 #include <cairo-pdf.h>
@@ -339,9 +341,9 @@ int main(int, char** )
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL);
 #endif 
 
-    #warning high density of lines (eg. 2000 in a 200x200 grid) triggers additional bugs in getPolygons()
+    //TODO: perform multiple polygon simplifications for medium-sized polygons (~500 vertices) under changing random seeds
     srand(24);
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 2000; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
 
@@ -365,7 +367,6 @@ int main(int, char** )
     moveIntersectionsToIntegerCoordinates3(segs);
     //return 0;
 
-    #warning: this test fails for 200 vertices
     //TEST( intersectionsOnlyShareEndpoint(segs) );
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
     int numEdges = 0;
@@ -387,11 +388,11 @@ int main(int, char** )
     
 
     
-    //renderPolygons(cr, polygons);
-    //renderGraph(cr, graph);
 #ifdef CAIRO_DEBUG_OUTPUT
+    renderPolygons(cr, polygons);
+    renderGraph(cr, graph);
     cairo_set_source_rgb(cr, 1, 0, 0);
-    cairo_arc (cr, 105, 152, 5, 0, 2*M_PI);
+    cairo_arc (cr, 46, 38, 2, 0, 2*M_PI);
     cairo_stroke(cr);
 
     cairo_destroy(cr);

@@ -774,30 +774,37 @@ void findIntersections(const list<Vertex> &path, list<LineSegment> &intersection
 
 // ====================================================================
 
-AABoundingBox::AABoundingBox(const Vertex v) { left = right= v.x; top=bottom=v.y;}
-AABoundingBox::AABoundingBox(BigInt t, BigInt l, BigInt b, BigInt r): top(t), left(l), bottom(b), right(r) { }
+AABoundingBox::AABoundingBox(const Vertex v) { tl.x = br.x = v.x; tl.y = br.y =v.y;}
+AABoundingBox::AABoundingBox(Vertex tl_, Vertex br_): tl(tl_), br(br_) { assert(tl.x < br.x); assert(tl.y < br.y); }
 AABoundingBox & AABoundingBox::operator+=(const Vertex v) {
-    if (v.x < left) left = v.x;
-    if (v.x > right) right = v.x;
-    if (v.y < top) top = v.y;
-    if (v.y > bottom) bottom = v.y;
+    if (v.x < tl.x) tl.x = v.x;
+    if (v.x > br.x) br.x = v.x;
+    if (v.y < tl.y) tl.y = v.y;
+    if (v.y > br.y) br.y = v.y;
     return *this;
 }
 
+std::ostream& operator <<(std::ostream& os, const AABoundingBox box)
+{
+    os << box.tl << " - " << box.br;
+    return os;
+}
+
+
 static bool isNormalized( const AABoundingBox &box)
 {
-    return box.right >= box.left && box.bottom >= box.top;
+    return box.tl.x < box.br.x && box.tl.y < box.br.y;
 }
 
 AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
 {
     assert ( isNormalized(*this) && isNormalized(other));
-    BigInt new_left = max( left, other.left);
-    BigInt new_right= min( right, other.right);
+    BigInt new_left = max( tl.x, other.tl.x);
+    BigInt new_right= min( br.x, other.br.x);
     assert(new_left <= new_right);
     
-    BigInt new_top  = max( top, other.top);
-    BigInt new_bottom=min( bottom, other.bottom);
+    BigInt new_top  = max( tl.y, other.tl.y);
+    BigInt new_bottom=min( br.y, other.br.y);
     assert(new_top <= new_bottom);
     
     AABoundingBox box(Vertex(new_left, new_top));
@@ -808,12 +815,14 @@ AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
 bool AABoundingBox::overlapsWith(const AABoundingBox &other) const
 {  
 //    assert ( isNormalized(*this) && isNormalized(other));
-    return (max( left, other.left) <= min( right, other.right)) && 
-           (max( top, other.top)   <= min( bottom, other.bottom));
+    return (max( tl.x, other.tl.x) <= min( br.x, other.br.x)) && 
+           (max( tl.y, other.tl.y) <= min( br.y, other.br.y));
 }
 
-BigInt AABoundingBox::width()  const { return right - left;}
-BigInt AABoundingBox::height() const { return bottom - top;}
+
+
+BigInt AABoundingBox::width()  const { return br.x - tl.x;}
+BigInt AABoundingBox::height() const { return br.y - tl.y;}
 
 //=======================================================================
 

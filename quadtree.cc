@@ -29,16 +29,17 @@ void moveIntersectionsToIntegerCoordinates3(list<LineSegment> &segments)
     }
 
     QuadTreeNode root(box);// = new QuadTreeNode(box);
-    
+    //static int num = 0;
     while (segments.begin() != segments.end())
     {
         LineSegment seg = segments.front();
         segments.pop_front();
+        //cout << "inserting segment " << ++num << ": " << seg << endl;
         root.insertIntoHierarchy(seg, segments);
     }
-    
+    assert(segments.size() == 0);
+    root.printHierarchy();
     root.exportSegments(segments);
-    //root.printHierarchy();
 }
 
 void QuadTreeNode::exportSegments(list<LineSegment> &segments_out)
@@ -52,9 +53,15 @@ void QuadTreeNode::exportSegments(list<LineSegment> &segments_out)
 
 void QuadTreeNode::printHierarchy(int depth)
 {
-    for (int i = 0; i < depth; i++) cout << "  ";
+    string s = "";
+    for (int i = 0; i < depth; i++) s+= "  ";
     
-    cout << "size: " << segments.size() << endl;
+    cout << s << "QuadTreeNode " << box << ", size: " << segments.size() << endl;
+    
+    for (list<LineSegment>::const_iterator it = segments.begin(); it != segments.end(); it++)
+    {
+        cout << s << "  " << *it << endl;
+    }
     if (tl) tl->printHierarchy(depth+1);
     if (tr) tr->printHierarchy(depth+1);
     if (bl) bl->printHierarchy(depth+1);
@@ -65,8 +72,8 @@ void QuadTreeNode::printHierarchy(int depth)
 
 QuadTreeNode::QuadTreeNode(AABoundingBox _box): tl(NULL), tr(NULL), bl(NULL), br(NULL), box(_box)
 {   
-    mid_x = (box.left + box.right) / 2;
-    mid_y = (box.top + box.bottom) / 2;
+    mid_x = (box.tl.x + box.br.x) / 2;
+    mid_y = (box.tl.y + box.br.y) / 2;
 }
 
 QuadTreeNode::~QuadTreeNode()
@@ -79,10 +86,11 @@ QuadTreeNode::~QuadTreeNode()
 
 bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments)
 {
-   for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); edge2++)
+   for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); )
    {
         LineSegment edge1_aux, edge2_aux;
         bool edge1_modified, edge2_modified;
+        //LineSegment oldEdge2 = *edge2;
         handleIntersection (edge1, *edge2, edge1_aux, edge2_aux, edge1_modified, edge2_modified);
 
         if (edge1_aux) createdSegments.push_back(edge1_aux);    //newly created segments need to be checked against the whole hierarchy as well
@@ -91,8 +99,9 @@ bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> 
         if (edge2_modified)
         {
             if ((bool) *edge2) createdSegments.push_back(*edge2);
+            //cout << "removing edge " << oldEdge2 << endl;
             edge2 = segments.erase(edge2);
-        }
+        } else edge2++;
         
         if (edge1_modified)
         {
@@ -117,11 +126,31 @@ bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> 
 bool QuadTreeNode::addToQuadrant(LineSegment seg)
 {
     assert (tl && tr && bl && br);
+
+    if      (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { 
+        //cout << "adding edge " << seg << " to QuadTreeNode " << tl->box << endl;
+        tl->segments.push_front(seg); 
+        return true; 
+    }
     
-    if      (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { tl->segments.push_front(seg); return true; }
-    else if (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y > mid_y && seg.end.y > mid_y) { bl->segments.push_front(seg); return true; }
-    else if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { tr->segments.push_front(seg); return true; }
-    else if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y > mid_y && seg.end.y > mid_y) { br->segments.push_front(seg); return true; }
+    if (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y > mid_y && seg.end.y > mid_y) { 
+        //cout << "adding edge " << seg << " to QuadTreeNode " << bl->box << endl;
+        bl->segments.push_front(seg); 
+        return true; 
+    }
+    
+    if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { 
+        //cout << "adding edge " << seg << " to QuadTreeNode " << tr->box << endl;
+        tr->segments.push_front(seg); 
+        return true; 
+    }
+    
+    if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y > mid_y && seg.end.y > mid_y) 
+    { 
+        //cout << "adding edge " << seg << " to QuadTreeNode " << br->box << endl;
+        br->segments.push_front(seg); 
+        return true; 
+    }
     
     return false;   //does not fit into any quadrant
 }
@@ -129,12 +158,14 @@ bool QuadTreeNode::addToQuadrant(LineSegment seg)
 void QuadTreeNode::subdivide()
 {
     assert (!tl && !tr && !bl && !br);
-    tl = new QuadTreeNode( AABoundingBox(box.top, box.left, mid_y, mid_x    ));
-    tr = new QuadTreeNode( AABoundingBox(box.top, mid_x,    mid_y, box.right));
+    Vertex center(mid_x, mid_y);
+    tl = new QuadTreeNode( AABoundingBox(Vertex( box.tl.x, box.tl.y), Vertex( mid_x,    mid_y    ) ) );
+    tr = new QuadTreeNode( AABoundingBox(Vertex( mid_x,    box.tl.y), Vertex( box.br.x, mid_y    ) ) );
             
-    bl = new QuadTreeNode( AABoundingBox(mid_y, box.left, box.bottom, mid_x    ));
-    br = new QuadTreeNode( AABoundingBox(mid_y, mid_x,    box.bottom, box.right));
+    bl = new QuadTreeNode( AABoundingBox(Vertex( box.tl.x, mid_y   ), Vertex( mid_x,    box.br.y ) ) );
+    br = new QuadTreeNode( AABoundingBox(Vertex( mid_x,    mid_y   ), Vertex( box.br.x, box.br.y ) ) );
     
+
     for (list<LineSegment>::iterator edge = segments.begin(); edge != segments.end(); )
     {
         if (addToQuadrant(*edge))
@@ -144,33 +175,12 @@ void QuadTreeNode::subdivide()
     }
 }
 
-/*bool intersect(LineSegment box_edge, LineSegment edge)
-{
-
-    BigInt num1 = (A.end.x - A.start.x) * (B.start.y-A.start.y) - (A.end.y-A.start.y)*(B.start.x-A.start.x);
-    BigInt denom1=(A.end.y - A.start.y) * (B.end.x  -B.start.x) - (A.end.x-A.start.x)*(B.end.y  -B.start.y);
-
-    BigInt num2 = (B.end.x - B.start.x) * (A.start.y-B.start.y) - (B.end.y-B.start.y)*(A.start.x-B.start.x);
-    BigInt num2a= (B.end.x - B.start.x) * (B.start.y-A.start.y) - (B.end.y-B.start.y)*(B.start.x-A.start.x);
-    BigInt denom2=(B.end.y - B.start.y) * (A.end.x  -A.start.x) - (B.end.x-B.start.x)*(A.end.y  -A.start.y);
-
-    assert (denom1 == -denom2); //if true, one denominator computation can be removed
-    assert (num2 == - num2a);   //if true, we could use num2a, which shares some terms with num1
-}*/
-
-/*struct FVertex
-{
-    FVertex(BigFration _x, BigFraction _y): x(_x), y(_y) { }
-    BigFraction x,y;
-}*/
-
-//#error rewrite this, code is incorrect (is bases on intersections of lines, which may not coincide with intersections of the corresponding line segments)
 int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &bl, bool &br) const
 {
-    static int covers = 0;
-    covers++;
-    BigInt mid_x = (box.right + box.left) / 2;
-    BigInt mid_y = (box.top + box.bottom) / 2;
+/*    static int covers = 0;
+    covers++;*/
+    BigInt mid_x = (box.tl.x + box.br.x) / 2;
+    BigInt mid_y = (box.tl.y + box.br.y) / 2;
     
     tl = tr = bl = br = false;
 
@@ -203,14 +213,14 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
         BigInt min_x = edge.start.x < edge.end.x ? edge.start.x : edge.end.x;
         BigInt max_x = edge.start.x > edge.end.x ? edge.start.x : edge.end.x;
 
-        bool left =  (min_x <= mid_x) && (max_x >= box.left); 
-        bool right = (max_x >= mid_x) && (min_x <= box.right);
+        bool left =  (min_x <= mid_x) && (max_x >= box.tl.x); 
+        bool right = (max_x >= mid_x) && (min_x <= box.br.x);
         
         BigInt min_y = edge.start.y < edge.end.y ? edge.start.y : edge.end.y;
         BigInt max_y = edge.start.y > edge.end.y ? edge.start.y : edge.end.y;
         
-        bool top =   (min_y <= mid_y) && (max_y >= box.top);
-        bool bottom= (max_y >= mid_y) && (min_y <= box.bottom);
+        bool top =   (min_y <= mid_y) && (max_y >= box.tl.y);
+        bool bottom= (max_y >= mid_y) && (min_y <= box.br.y);
         
         tl = top & left;
         tr = top & right;
@@ -240,7 +250,7 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
      */
      
      // start vertex is inside 'box'
-     if (edge.start.x >= box.left && edge.start.x <= box.right && edge.start.y >= box.top && edge.start.y <= box.bottom)
+     if (edge.start.x >= box.tl.x && edge.start.x <= box.br.x && edge.start.y >= box.tl.y && edge.start.y <= box.br.y)
      {
         bool left  = edge.start.x <= mid_x;
         bool right = edge.start.x >= mid_x; //through the equality ("="), 'left' and 'right' as well as 'top' and 
@@ -257,9 +267,9 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
      {
         assert (edge.start.x < edge.end.x);
         BigFraction x, y;
-        if (edge.intersects( LineSegment(box.left, box.top, box.left, box.bottom),x,y)) //test against left box edge
+        if (edge.intersects( LineSegment(Vertex(box.left(), box.top()), Vertex(box.left(), box.bottom()) ),x,y)) //test against left box edge
         {
-            assert(x == box.left);
+            assert(x == box.left());
             tl = (y <= mid_y);
             bl = (y >= mid_y);
         } else //'edge' starts left of the box and does not intersect its left edge 
@@ -269,18 +279,18 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
             if (edge.start.y < edge.end.y) // 'edge' goes from top-left to bottom-right --> can only intersect *top* edge on the left
             {
                 BigFraction x,y;
-                if (!edge.intersects( LineSegment(box.left, box.top, box.right, box.top), x, y)) 
+                if (!edge.intersects( LineSegment( Vertex(box.left(), box.top()), Vertex(box.right(), box.top()) ), x, y)) 
                     return 0; //does not pass 'box'
-                assert (y == box.top);
+                assert (y == box.top());
                 tl = (x <= mid_x);
                 tr = (x >= mid_x);
             }
             else    //'edge' goes from bottom-left to top-right --> can only intersect bottom edge on the left
             {
                 BigFraction x,y;
-                if (!edge.intersects( LineSegment(box.left, box.bottom, box.right, box.bottom),x,y)) 
+                if (!edge.intersects( LineSegment( Vertex( box.left(), box.bottom()), Vertex(box.right(), box.bottom())),x,y)) 
                     return 0; //does not pass box
-                assert (y == box.bottom);
+                assert (y == box.bottom());
                 bl = (x <= mid_x);
                 br = (x >= mid_x);
             }
@@ -289,7 +299,7 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
      assert (tl | tr | bl | br);
 
      // end vertex is inside 'box'
-     if (edge.end.x >= box.left && edge.end.x <= box.right && edge.end.y >= box.top && edge.end.y <= box.bottom)
+     if (edge.end.x >= box.left() && edge.end.x <= box.right() && edge.end.y >= box.top() && edge.end.y <= box.bottom())
      {
         bool left  = edge.end.x <= mid_x;
         bool right = edge.end.x >= mid_x; //through the equality ("="), 'left' and 'right' as well as 'top' and 
@@ -306,9 +316,9 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
      { //end vertex is outside the box, need to check were 'edge' left the box (if it passes it at all)
         assert (edge.start.x < edge.end.x);        
         BigFraction x, y;
-        if (edge.intersects( LineSegment(box.right, box.top, box.right, box.bottom),x,y)) //test against right box edge
+        if (edge.intersects( LineSegment( Vertex( box.right(), box.top()), Vertex(box.right(), box.bottom() ) ),x,y)) //test against right box edge
         {
-            assert(x == box.right);
+            assert(x == box.right());
             tr |= (y <= mid_y);
             br |= (y >= mid_y);
         } else //'edge' ends right of the box, but does not intersect its right edge.
@@ -318,18 +328,18 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
             if (edge.end.y < edge.start.y ) // 'edge' goes from bottom-left to top-right --> can only intersect *top* edge on the right
             {
                 BigFraction x,y;
-                if (!edge.intersects( LineSegment(box.left, box.top, box.right, box.top), x, y))
+                if (!edge.intersects( LineSegment( Vertex(box.left(), box.top()), Vertex(box.right(), box.top()) ), x, y))
                     return 0; //does not pass 'box'
-                assert (y == box.top);
+                assert (y == box.top());
                 tl |= (x <= mid_x);
                 tr |= (x >= mid_x);
             }
             else    //'edge' goes from top-left to bottom-right--> can only intersect bottom edge on the right
             {
                 BigFraction x,y;
-                if (!edge.intersects( LineSegment(box.left, box.bottom, box.right, box.bottom),x,y) )
+                if (!edge.intersects( LineSegment(Vertex(box.left(), box.bottom()), Vertex(box.right(), box.bottom())),x,y) )
                     return 0; //does not pass box
-                assert (y == box.bottom);
+                assert (y == box.bottom());
                 bl |= (x <= mid_x);
                 br |= (x >= mid_x);
             }
@@ -380,10 +390,19 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
  */
 void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &createdSegments)
 {
-    for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); edge2++)
+/*    static int num = 0;
+    num++;*/
+    
+    /*if ((box.left() == 37) && (box.top() == 36) && (box.right() == 50) && (box.bottom() == 49))
+        for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); edge2++)
+            cout << "  edges at box: " << box << ": " << *edge2 << endl;
+    */
+    for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); )
     {
+    //( 37, 36) - ( 50, 49)
         LineSegment edge1_aux, edge2_aux;
         bool edge1_modified, edge2_modified;
+        //LineSegment oldEdge2 = *edge2;
         handleIntersection (edge1, *edge2, edge1_aux, edge2_aux, edge1_modified, edge2_modified);
 
         if (edge1_aux) createdSegments.push_back(edge1_aux);    //newly created segments need to be checked against the whole hierarchy as well
@@ -392,8 +411,9 @@ void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &cr
         if (edge2_modified)
         {
             if ((bool) *edge2) createdSegments.push_back(*edge2);
+            //cout << "removing edge " << oldEdge2 << endl;
             edge2 = segments.erase(edge2);
-        }
+        } else edge2++;
         
         if (edge1_modified)
         {
@@ -407,6 +427,7 @@ void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &cr
     {
         assert (!tr && !bl && !br);
         segments.push_back(edge1);
+        //cout << "adding edge #"<< num << "; " << edge1 << " to QuadTreeNode " << box << endl;
         if ( box.width() >= 2 && box.height() >= 2 && segments.size() > SUBDIVISION_THRESHOLD)
             subdivide();
         return;
@@ -426,7 +447,7 @@ void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &cr
     }
     
     /* if this point is reached, 'edge' does not intersect any edge on this QuadTreeNode, and this node 
-     * has children. But edge still needs to be but here, because it would pass through more than one child node
+     * has children. But edge still needs to be here, because it would pass through more than one child node
      * Before it can be added to 'segments', however, we need to verify that 'edge' does not intersect with any
      * edge from any child node */
      
@@ -436,6 +457,8 @@ void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &cr
      if ( br->intersectedByRecursive( edge1, createdSegments)) return;
      
     segments.push_back(edge1);
+    //cout << "adding edge " << edge1 << " to QuadTreeNode " << box << endl;
     //no need to check if this node should be subdivided, this point is only reached if the node is already subdivided
     assert (tl && tr && bl && br);
 } 
+
