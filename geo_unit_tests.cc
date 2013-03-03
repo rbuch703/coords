@@ -343,7 +343,7 @@ int main(int, char** )
 
     //TODO: perform multiple polygon simplifications for medium-sized polygons (~500 vertices) under changing random seeds
     srand(24);
-    for (int i = 0; i < 2000; i++)
+    for (int i = 0; i < 200; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
 

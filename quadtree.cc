@@ -38,7 +38,7 @@ void moveIntersectionsToIntegerCoordinates3(list<LineSegment> &segments)
         root.insertIntoHierarchy(seg, segments);
     }
     assert(segments.size() == 0);
-    root.printHierarchy();
+    //root.printHierarchy();
     root.exportSegments(segments);
 }
 

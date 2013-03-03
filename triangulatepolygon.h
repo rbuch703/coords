@@ -19,131 +19,103 @@
  
 **/
 
-void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res);
+//void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res);
 
 typedef list<Vertex> OpenPolygon;
 
-struct ActiveEdge
-{
-    ActiveEdge() {} 
-    ActiveEdge(const Vertex pLeft, const Vertex pRight);
-
-    // returns whether 'this' will be less than 'other' at an x position infinitessimally to the right of xPosition
-    bool isLessThanFuture(const ActiveEdge & other, const BigFraction &xPosition) const;
-    bool isLessThan(const ActiveEdge & other, const BigFraction &xPosition) const;
-    bool isEqual(const ActiveEdge & other, const BigFraction &xPosition) const;
-    bool isLessOrEqual(const ActiveEdge & other, const BigFraction &xPosition) const;
-    bool operator<(const ActiveEdge &);
-
-    LineSegment toLineSegment() const { return LineSegment(left, right); }
-
-    void getIntersectionWith(ActiveEdge &other, BigFraction &out_x, BigFraction &out_y) const;
-    bool intersects(ActiveEdge other) const;
-    
-    explicit operator bool() { return (left != Vertex(0,0))  and (right != Vertex(0,0)); }
-    Vertex left, right;
-    /* don't need this here, we can store the mapping between active edges and their
-     * intersections in a separate map. This makes ActiveEdge a small object, that can
-     * easily be copied ( instead of using pointers to the originals); */
-    //std::list<ActiveEdge*> intersections;  
-        
-    BigFraction getYValueAt(const BigFraction &xPosition) const;
-};
-std::ostream& operator <<(std::ostream& os, const ActiveEdge &edge);
 
 /* Order is important, since events for the same 2D-Point are processed in the
  * order this enumeration is defined. With this order, it is ensured that all
  * intersections for a point are found event if some line segements also start 
  * or end at that point. */
-enum SimpEventType { SEG_START, INTERSECTION, SEG_END };
+enum EventType { START, STOP, SPLIT, MERGE, REGULAR };
 
 // ===========================================================
+
+#error CONTINUEHERE determine algorithm sweep direction, verify classification, especially for cases with identical x/y-values
+#warning handle edge case than thwo adjacent vertices share the same x/y value and thus none is a start/stop/split/merge vertex
+EventType classifyVertex(Vertex pos, Vertex pred, Vertex succ)
+{
+    //FIXME set event type based on spacial relation between the three vertices
+    assert( pos != pred && pos != succ && pred != succ);
+    if (pos < pred && pos< succ)    //is either a START or a SPLIT vertex
+    {
+    } else if (pos > pred && pos > succ) //is either a STOP or a MERGE vertex
+    {
+    } else //is a regular vertex
+    {
+        return EventType::REGULAR;
+    }
+}
 
 class SimpEvent
 {
 public:
     SimpEvent();
-    SimpEvent( SimpEventType pType, ActiveEdge pThisEdge, 
-                ActiveEdge pOtherEdge);
-    bool operator==(const SimpEvent & other) const;
-    bool operator!=(const SimpEvent & other) const;
-    bool operator <(const SimpEvent &other) const;
-    
-    SimpEventType type;
-    ActiveEdge m_thisEdge, m_otherEdge;
+    SimpEvent( Vertex pPos, EventType t ): pos(pPos), type(t) {}
 
-    // x and y coordinates for the position at which the event takes place
-    BigFraction      x, y;
+    SimpEvent( Vertex pPos, Vertex pPred, Vertex pSucc ): 
+        pos(pPos)
+    {
+        //TODO: do we need 'pred' and 'succ' after the event type has been determined?
+        type = classifyVertex(pos, pPred, pSucc);
+    }
+    
+    bool operator==(const SimpEvent & other) const {return pos == other.pos; }
+    bool operator!=(const SimpEvent & other) const {return pos != other.pos; }
+    bool operator <(const SimpEvent &other) const  {return pos <  other.pos; }
+private:
+    EventType type;
+    Vertex pos;//, pred, succ;
 };
 
-class SimpEventQueue : protected AVLTree<SimpEvent> 
+
+//:TODO replace by a heap
+class MonotonizeEventQueue : protected AVLTree<SimpEvent> 
 {
 public:
 
     int size() const { return AVLTree<SimpEvent>::size(); }
 
-    void add(const SimpEventType type, ActiveEdge thisEdge, 
-             ActiveEdge otherEdge = ActiveEdge( Vertex(0,0), Vertex(0,0)) )
+    void add( Vertex pos, Vertex pred, Vertex succ )
     {
-        insert( SimpEvent( type, thisEdge, otherEdge));
+        insert( SimpEvent( pos, pred, succ));
     }
 
     bool containsEvents() const { return size();}
     
-	SimpEvent pop() 
+	SimpEvent pop()
 	{
-	    assert (size() >0); 
+	    assert ( size() > 0 );
 	    SimpEvent item = *begin();
-	    AVLTree<SimpEvent>::remove (item); 
+	    this->remove (item);
 	    return item;
     }
     
 	SimpEvent top() 
 	{
-	    assert (size() >0); 
+	    assert ( size() >0 );
 	    return *begin();
     }
+
+    void remove(SimpEvent ev) { this->remove(ev); }
     
   
-    void remove(const SimpEventType type, ActiveEdge thisEdge, ActiveEdge otherEdge)
+    void remove(Vertex v)
     {
-        AVLTree<SimpEvent>::remove(SimpEvent(type, thisEdge, otherEdge));
-    }
-    
-    void scheduleIntersection(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos)
-    {
-        if (! a.intersects(b) ) return;
-        BigFraction x,y;
-                    
-        a.getIntersectionWith( b, /*out*/x, /*out*/y);
-        //assert ( (x != x_pos || y != y_pos) && "not implemented");
-        
-        if ( (x >= x_pos) || ( (x == x_pos) && (y >= y_pos)))
-            this->add( INTERSECTION, a, b);
-    }
-
-    void unscheduleIntersection(ActiveEdge a, ActiveEdge b, BigFraction x_pos, BigFraction y_pos)
-    {
-        if (! a.intersects( b ) ) return;
-        BigFraction x,y;
-
-        a.getIntersectionWith(b, x, y);
-        assert ( (x != x_pos || y != y_pos)  && "not implemented");
-        if ( x > x_pos || (x == x_pos && y > y_pos))
-            this->remove(INTERSECTION, a, b);
-    }
-    
+        this->remove( SimpEvent(v, REGULAR));   //arbitrary event type, remove() is based only on the Vertex
+    }    
 };
 
 // ===========================================================
 
-
-typedef AVLTreeNode<ActiveEdge> *EdgeContainer;
+#if 0
+typedef AVLTreeNode<LineSegment> *EdgeContainer;
  // protected inheritance to hide detail of AVLTree, since for a LineArrangement, AVLTree::insert must never be used
-class LineArrangement: protected AVLTree<ActiveEdge>
+class LineArrangement: protected AVLTree<LineSegment>
 {
 public:
-    EdgeContainer addEdge(const ActiveEdge &a, const BigFraction xPosition);
+    EdgeContainer addEdge(const LineSegment &a, const BigFraction xPosition);
 
     bool isConsistent(EdgeContainer node, BigFraction xPos) const
     {
@@ -157,7 +129,7 @@ public:
         return left && right;
     }
     
-    int size() const { return AVLTree<ActiveEdge>::size(); }
+    int size() const { return AVLTree<LineSegment>::size(); }
     
     bool isConsistent(BigFraction xPos) const { return !m_pRoot || isConsistent(m_pRoot, xPos); }
     
@@ -246,7 +218,7 @@ public:
 
     /*void swapEdges(ActiveEdge &e1, ActiveEdge &e2, const int64_t xPosition)*/
 };
-
+#endif
 
 #endif
 
