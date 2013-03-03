@@ -99,11 +99,22 @@ bool LineSegment::intersects( const LineSegment &other, BigFraction &intersect_x
 // in accordance with the semantics of line segments, intersects() also returns 'true' if the segments only share a single point
 bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt &denom_out) const
 {
-    if (isParallelTo(other))
+
+    BigInt odx = other.end.x-other.start.x;
+    BigInt ody = other.end.y-other.start.y;
+    BigInt tdx =       end.x-      start.x;
+    BigInt tdy =       end.y-      start.y;
+
+    BigInt denom= ody * tdx - odx * tdy;
+    bool areParallel = (denom == 0);
+
+    if (areParallel)
     {
+
         // if the two parallel line segments do not lie on the same line, they cannot intersect
-        if (! isColinearWith(other.start)) return false;
-        assert( isColinearWith(other.end) );
+        bool colinearWithStart = ( other.start.x-start.x)*(tdy) == ( other.start.y-start.y)*(tdx);
+        if (! colinearWithStart) return false;
+        assert( ( other.end.x-start.x)*(tdy) == ( other.end.y-start.y)*(tdx) );
             
         // if they do lie on the same line, they intersect if they overlap
         static const BigFraction zero(0,1); // (0/1)
@@ -121,16 +132,11 @@ bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt
         BigInt denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);*/
 
         /*optimization: pre-computed all multiple-used differences */
-        BigInt odx = other.end.x-other.start.x;
-        BigInt ody = other.end.y-other.start.y;
-        BigInt tdx =       end.x-      start.x;
-        BigInt tdy =       end.y-      start.y;
         BigInt dsx = start.x    -other.start.x;
         BigInt dsy = start.y    -other.start.y;
 
         BigInt num1 = odx * dsy - ody * dsx;
         BigInt num2 = tdx * dsy - tdy * dsx;
-        BigInt denom= ody * tdx - odx * tdy;
         
 
         assert(denom != 0); //should only be zero if the lines are parallel, but this case has already been handled above
@@ -267,9 +273,22 @@ BigFraction LineSegment::getCoefficient(const Vertex v) const
 
 bool LineSegment::overlapsWith(const LineSegment &other) const
 {
-    if (!isParallelTo(other)) return false;
-    if (!isColinearWith(other.start)) return false;
-    assert( isColinearWith(other.end)); // if parallel and one point is colinear to 'this', the other point has to be, too
+    BigInt odx = other.end.x-other.start.x;
+    BigInt ody = other.end.y-other.start.y;
+    BigInt tdx =       end.x-      start.x;
+    BigInt tdy =       end.y-      start.y;
+
+    BigInt denom= ody * tdx - odx * tdy;
+    bool areParallel = (denom == 0);
+
+
+    if (!areParallel) return false;
+    
+    bool colinearWithStart = ( other.start.x-start.x)*(tdy) == ( other.start.y-start.y)*(tdx);
+    if (! colinearWithStart) return false;
+    // if parallel and one point is colinear to 'this', the other point has to be, too
+    assert( ( other.end.x-start.x)*(tdy) == ( other.end.y-start.y)*(tdx) );
+
     static const BigFraction zero(0,1); // (0/1)
     static const BigFraction one(1,1);  // (1/1)
     
