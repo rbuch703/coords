@@ -44,7 +44,7 @@ void testOverlapResolution( LineSegment A, LineSegment B, LineSegment res_A, Lin
 
 #define M_PI 3.14159265358979323846
 
-/*
+
 void renderGraph(cairo_t *cr, map<Vertex, set<Vertex>> &graph)
 {
     
@@ -55,15 +55,15 @@ void renderGraph(cairo_t *cr, map<Vertex, set<Vertex>> &graph)
     {
         for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
         {
-            cairo_move_to (cr, it->first.x, it->first.y);
-            cairo_line_to (cr, it2->x, it2->y);
+            cairo_move_to (cr, asDouble(it->first.x), asDouble(it->first.y) );
+            cairo_line_to (cr, asDouble(it2->x), asDouble(it2->y) );
             cairo_stroke(cr);
         }
     }
 
     for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
     {
-        cairo_arc(cr, it->first.x, it->first.y, 0.2, 0, 2 * M_PI);
+        cairo_arc(cr, asDouble(it->first.x), asDouble(it->first.y), 0.2, 0, 2 * M_PI);
         cairo_set_source_rgb (cr, 1, 0, 0);        
         cairo_fill (cr);
         cairo_stroke(cr);
@@ -76,14 +76,15 @@ void renderGraph(cairo_t *cr, map<Vertex, set<Vertex>> &graph)
 
 void renderPolygons(cairo_t *cr, list<VertexChain> &polygons)
 {
-    cairo_set_source_rgb(cr, 0,0,1);
-    cairo_set_line_width(cr, 0.5);
-    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    cairo_set_line_width(cr, 10000000);
+    cairo_set_source_rgb(cr, rand()/(double)RAND_MAX,rand()/(double)RAND_MAX,1);
+    for (list<VertexChain>::iterator it = polygons.begin(); it != polygons.end(); it++)
     {
-        cairo_move_to( cr, it->vertices().front().x, it->vertices().front().y);
+        //it->simplifyArea(100000);
+        cairo_move_to( cr, asDouble(it->vertices().front().x), asDouble(it->vertices().front().y));
         for (list<Vertex>::const_iterator v = it->vertices().begin(); v != it->vertices().end(); v++)
         {
-            cairo_line_to( cr, v->x, v->y);
+            cairo_line_to( cr, asDouble(v->x), asDouble(v->y));
         }
         cairo_stroke(cr);
         //cout << "=====" << endl;
@@ -94,14 +95,14 @@ void renderPolygons(cairo_t *cr, list<VertexChain> &polygons)
 void renderPolygon(cairo_t *cr, const list<Vertex> &vertices)
 {
     cairo_set_source_rgb(cr, 1, 0.7, 0.7);
-    cairo_set_line_width(cr, 0.2);
-    cairo_move_to(cr, vertices.front().x, vertices.front().y);
+    cairo_set_line_width(cr, 1000000);
+    cairo_move_to(cr, asDouble(vertices.front().x), asDouble(vertices.front().y));
 
     for (list<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
-        cairo_line_to(cr, it->x, it->y);
+        cairo_line_to(cr, asDouble(it->x), asDouble(it->y) );
 
     cairo_stroke( cr );
-} */
+} 
 #endif
 
 
@@ -192,12 +193,27 @@ int main(int, char** )
 #ifdef CAIRO_DEBUG_OUTPUT
     cairo_surface_t *surface;
     cairo_t *cr;
-    surface = cairo_pdf_surface_create ("debug.pdf", 2000, 2000);
+    surface = cairo_pdf_surface_create ("debug.pdf", 1500, 2500);
     cr = cairo_create (surface);
-    cairo_scale (cr, 10, 10);
+    cairo_translate( cr, 500, 200);
+    cairo_scale (cr, 1/1000000.0, 1/1000000.0);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL);
 #endif 
 
+    FILE* f = fopen("out/huge.poly", "rb");
+    uint64_t numVertices;
+    fread( &numVertices, sizeof(numVertices), 1, f);
+
+    while (numVertices--)
+    {
+        int32_t v[2];
+        fread( v, 2 * sizeof(int32_t), 1, f);
+        p.append(Vertex(v[0], v[1]));
+    }
+    
+    //p.simplifyArea(100000);
+    std::cout << "has " << p.vertices().size() << " vertices left" << endl;
+    /*
     //TODO: perform multiple polygon simplifications for medium-sized polygons (~500 vertices) under changing random seeds
     srand(24);
     for (int i = 0; i < 200; i++)
@@ -212,6 +228,7 @@ int main(int, char** )
     for (list<Vertex>::const_iterator it = p.vertices().begin(); it != p.vertices().end(); it++)
         std::cout << *it << std::endl;
     cout << "========" << endl;*/
+ 
     list<LineSegment> segs;
     const list<Vertex> &verts = p.vertices();
     
@@ -239,14 +256,21 @@ int main(int, char** )
     //return 0;
     list<VertexChain> polygons = getPolygons(graph);
 
+    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    {
+        AABoundingBox box = it->getBoundingBox();
+        std::cout << "size: " << it->vertices().size() << ", box: (" << box.width() << ", " << box.height() << ") " << box << endl;
+        for (list<Vertex>::const_iterator it2 = it->vertices().begin(); it2 != it->vertices().end(); it2++)
+            std::cout << "\t" << *it2 << endl;
+    }
+
     std::cout << "generated " << polygons.size() << " polygons" << endl;
     
     // print final polygons    
-    
 
     
 #ifdef CAIRO_DEBUG_OUTPUT
-    renderPolygons(cr, polygons);
+    //renderPolygons(cr, polygons);
     renderGraph(cr, graph);
     cairo_set_source_rgb(cr, 1, 0, 0);
     cairo_arc (cr, 46, 38, 2, 0, 2*M_PI);

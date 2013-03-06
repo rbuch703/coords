@@ -212,7 +212,8 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
 list<VertexChain> toSimplePolygons(const list<Vertex> &polygon)
 {
     assert (polygon.front() == polygon.back());    
-
+    if (polygon.size() < 4) return list<VertexChain>();
+    
     list<LineSegment> segs;
     list<Vertex>::const_iterator it2 = polygon.begin();
     for (list<Vertex>::const_iterator it = it2++; it2 != polygon.end(); it++, it2++)

@@ -49,21 +49,29 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 
 void handlePolygon(string, VertexChain& segment)
 {
-    //segment.canonicalize();
+    segment.canonicalize();
     static int count = 0;
     
     count++;
-    int size_before = segment.vertices.size();
+    //FIXME: polygon 463652 increases in size about threefold due to "toSimplePolygons()"
+    //FIXME: polygon 463653 [sic] has a size mismatch 
+    
+    if (count == 463652) dumpPolygon("out/huge.poly", segment.vertices());
+    if (count == 463653) dumpPolygon("out/mismatch.poly", segment.vertices());  
+    /*
+    int size_before = segment.vertices().size();
     //double  = getTime()
-    list<VertexChain> polygons = toSimplePolygons(segments.vertices());
+    list<VertexChain> polygons = toSimplePolygons(segment.vertices());
     int size = 0;
     for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
         size+= it->vertices().size();
-    std::cout << count << "\t" << size_before << ", " << size_after;
-    if (size / (double)size_before < 0.95) << cout << ", MISMATCH";
+    std::cout << count << "\t" << size_before << ", " << size;
+    if (size / (double)size_before < 0.95) cout << ", MISMATCH";
     cout << endl;
-        
-    //poly_storage.push_back(segment);
+    */    
+    /*segment.canonicalize();
+     poly_storage.push_back(segment);*/
+     
     //#warning FIXME: filter out those "polygons" that have less than four vertices
     //dumpPolygon(file_base, segment);
 }

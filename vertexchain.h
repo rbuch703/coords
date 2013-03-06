@@ -23,7 +23,7 @@ public:
     void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end );
     void append(const VertexChain &other, bool shareEndpoint);
     
-    
+    AABoundingBox getBoundingBox() const;    
     void canonicalize();    //remove successive identical and colinear vertices
     bool isClockwise();
     //bool isSimple() const; // FIXME: is O(n²), will be too slow for many applications

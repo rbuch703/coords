@@ -87,6 +87,16 @@ bool VertexChain::simplifyArea(double allowedDeviation)
     return true;
 }
 
+
+AABoundingBox VertexChain::getBoundingBox() const
+{
+    AABoundingBox box(vertices().front());
+    for (list<Vertex>::const_iterator it = m_vertices.begin(); it!= m_vertices.end(); it++)
+        box += *it;
+        
+    return box;
+}
+
 void VertexChain::simplifyStroke(double allowedDeviation)
 {
     list<Vertex>::iterator last = m_vertices.end();

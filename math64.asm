@@ -10,7 +10,6 @@ section .text
     global subc
     global div128
     global sub128
-;    global adc
 
 ; cheat sheet: parameter order is RDI, RSI, RDX, RCX, R8, R9
 
@@ -28,7 +27,8 @@ section .text
 ;   leave
 ;    ret         ; return to the C routine
     
-mul:
+mul: ; uint64_t mul (uint64_t a, uint64_t b, uint64_t *hi);
+    ; computes a*b = hi:lo; return value is lo, hi is return via 'hi'
     mov RAX, RDI
     mov RBX, RDX    ;backup RDX (third operand), mul will overwrite it
     mul RSI         ; RDX:RAX = RAX * RSI
@@ -36,6 +36,7 @@ mul:
     ret
     
 add: ; uint64_t add(uint64_t a, uint64_t b, uint64_t *carry);
+    
     xor RBX, RBX    ; RBX = 0
     mov RAX, RDI    ; RAX = a
     add RAX, RSI    ; RAX = a+b
@@ -45,6 +46,7 @@ add: ; uint64_t add(uint64_t a, uint64_t b, uint64_t *carry);
     ret    
 
 sub: ; uint64_t sub(uint64_t a, uint64_t b, uint64_t *borrow);
+    ; computes a-b, return result (return value) and the borrow/carry in 'borrow'
     xor RBX, RBX
     mov RAX, RDI
     sub RAX, RSI
@@ -54,6 +56,7 @@ sub: ; uint64_t sub(uint64_t a, uint64_t b, uint64_t *borrow);
     ret
 
 sub128: ; uint64_t sub(uint64_t a_hi/RDI, uint64_t a_lo/RSI, uint64_t b_hi/RDX, uint64_t b_lo/RCX, uint64_t *res_hi/R8, uint64_t *res_lo/R9);
+    ;computes (a_hi:a_lo - b_hi:b_lo) in res_hi:res_lo; return value is the over/underflow
     xor RAX, RAX    ; RBX = 0
     sub RSI, RCX    ; RSI = a_lo - b_lo
     sbb RDI, RDX    ; RDI = a_hi - b_hi - borrow(a_lo - b_lo);
@@ -65,7 +68,8 @@ sub128: ; uint64_t sub(uint64_t a_hi/RDI, uint64_t a_lo/RSI, uint64_t b_hi/RDX, 
     
     ret
 
-div128: ; uint64_t div(uint64_t *a_hi/[RDI], uint64_t *a_lo/[RSI], uint64_t b/RDX)
+div128: ; uint64_t div128(uint64_t *a_hi/[RDI], uint64_t *a_lo/[RSI], uint64_t b/RDX)
+    ; computes a_hi:a_lo / b; result is stored in a_hi:a_lo, return value is the modulus;
     mov RBX, RDX    ; RBX = b
     xor RDX, RDX    ; RDX = 0
     mov RAX, [RDI]  ; RAX = a_hi
@@ -77,6 +81,7 @@ div128: ; uint64_t div(uint64_t *a_hi/[RDI], uint64_t *a_lo/[RSI], uint64_t b/RD
     mov RAX, RDX    ; modulus -> RAX (return value)
 
 add3: ; uint64_t add3(uint64_t a, uint64_t b, uint64_t c, uint64_t *carry);
+    ; computes a+b+c and return the overflow in 'carry'
     xor RBX, RBX    ; RBX = 0
     mov RAX, RDI    ; RAX = a
     add RAX, RSI    ; RAX = a+b

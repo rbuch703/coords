@@ -54,7 +54,7 @@ Vertex Vertex::operator-(const Vertex &a) const { return Vertex(x-a.x, y-a.y);}
 
 std::ostream& operator <<(std::ostream& os, const Vertex v)
 {
-    os << "( " << v.x << ", " << v.y << ")";
+    os << "( " << (int64_t)v.x << ", " << (int64_t)v.y << ")";
     return os;
 }
 
@@ -809,11 +809,12 @@ std::ostream& operator <<(std::ostream& os, const AABoundingBox box)
     return os;
 }
 
-
+#ifndef NDEBUG
 static bool isNormalized( const AABoundingBox &box)
 {
     return box.tl.x < box.br.x && box.tl.y < box.br.y;
 }
+#endif
 
 AABoundingBox AABoundingBox::getOverlap(const AABoundingBox &other) const
 {
