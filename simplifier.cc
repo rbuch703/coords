@@ -12,49 +12,58 @@
 #include "osm_types.h"
 #include "polygonreconstructor.h"
 #include "helpers.h"
-
-map<string, uint32_t> zone_entries;
-
-
-
-void dumpPolygon(string file_base, const VertexChain& segment)
-{
-    size_t pos = file_base.rfind('/');
-    string directory = file_base.substr(0, pos);
-    ensureDirectoryExists(directory);
-    
-    VertexChain poly(segment);
-    //assert (poly.isSimple());
-    //std::cout << poly.isClockwiseHeuristic() << endl;
-    poly.canonicalize();
-    if (poly.vertices().size() < 4) return;
-    
-   
-    FILE* f = fopen(file_base.c_str(), "ab");
-    uint64_t nVertices = poly.vertices().size();
-    fwrite( &nVertices, sizeof(nVertices), 1, f);
-    
-    BOOST_FOREACH( const Vertex vertex, poly.vertices())
-    {
-        int32_t val = (int32_t)vertex.x;
-        fwrite(&val, sizeof(val), 1, f);
-        val = (int32_t)vertex.y;
-        fwrite(&val, sizeof(val), 1, f);
-        
-    }
-    
-    fclose(f);
-}
-
+#include "quadtree.h"
 
 
 list<VertexChain> poly_storage;
- 
+
+
+void writePolygonToDisk(std::string path, VertexChain segment)
+{
+   
+    double secs = 0;
+    if (segment.vertices().size() > 1000)
+    {
+        secs = getWallTime();
+        cout << "\t\tsegment of size " << segment.vertices().size();
+        cout.flush();
+    }
+
+    if (segment.vertices().size() < 4) return; // can't be a polygon with less than four vertices (first and last are identical)
+    list<VertexChain> simples = toSimplePolygons( segment.vertices() );
+    
+    if (segment.vertices().size() > 1000)
+        std::cout << "\ttook " << (getWallTime() - secs) << " seconds" << endl;
+    
+    //assert (poly.isSimple());
+    //std::cout << poly.isClockwiseHeuristic() << endl;
+    while (simples.begin() != simples.end())
+    {
+        VertexChain poly = simples.front();
+        simples.pop_front();
+        poly.canonicalize();
+        if (poly.vertices().size() < 4) continue;
+        dumpPolygon( path, poly.vertices() );
+    }
+}
 
 void handlePolygon(string, VertexChain& segment)
 {
-    segment.canonicalize();
-    poly_storage.push_back(segment);
+    //segment.canonicalize();
+    static int count = 0;
+    
+    count++;
+    int size_before = segment.vertices.size();
+    //double  = getTime()
+    list<VertexChain> polygons = toSimplePolygons(segments.vertices());
+    int size = 0;
+    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+        size+= it->vertices().size();
+    std::cout << count << "\t" << size_before << ", " << size_after;
+    if (size / (double)size_before < 0.95) << cout << ", MISMATCH";
+    cout << endl;
+        
+    //poly_storage.push_back(segment);
     //#warning FIXME: filter out those "polygons" that have less than four vertices
     //dumpPolygon(file_base, segment);
 }
@@ -166,6 +175,7 @@ void clipFirstComponent(list<VertexChain> &in, int32_t clip_pos, list<VertexChai
     }
 }
 
+//FIXME: for each recursion, call "toSimplePolygon()" only if the polygon was clipped in the previous recursion step. Otherwise it still is a simple polygon
 void clipRecursive(string file_base, string position, list<VertexChain>& segments, 
                    int32_t top, int32_t left, int32_t bottom, int32_t right, uint32_t level = 0)
 {
@@ -181,6 +191,8 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     //if (position != "" && position[0] != '3') return;
     if (segments.size() == 0) return;   //recursion termination
 
+    //cerr << segments.size()
+
     BOOST_FOREACH( const VertexChain seg, segments)
         assert( seg.vertices().front() == seg.vertices().back());
 
@@ -188,7 +200,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     if (num_vertices < VERTEX_LIMIT)    //few enough vertices to not further subdivide the area
     {
         BOOST_FOREACH( const VertexChain seg, segments)
-            dumpPolygon(file_base+"#"+position, seg);
+            writePolygonToDisk(file_base+"#"+position, seg.vertices() );
         return;
     }
     
@@ -206,7 +218,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
         if (simp.simplifyArea( (right-(uint64_t)left)/2048 ))
         {
             simp.canonicalize();
-            dumpPolygon(file_base+"#"+position, simp);
+            writePolygonToDisk(file_base+"#"+position, simp.vertices() );
         }
     }
          
@@ -219,7 +231,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     list<VertexChain> vLeft, vRight;
 
     // segments.size() is an O(n) operation in the GNU stl, so better cache it;
-    for (uint64_t i = segments.size(); i; i--)
+    while (segments.begin() != segments.end())
     {
         VertexChain seg = segments.front();
         segments.pop_front();

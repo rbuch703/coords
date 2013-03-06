@@ -68,7 +68,7 @@ OSMRelation         getRelation(uint64_t relation_id)
     return OSMRelation(relation_id, list<OSMRelationMember>(), list<OSMKeyValuePair>() );
 }
 
-map<string, uint32_t> zone_entries;
+//map<string, uint32_t> zone_entries;
 
 
 //static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};

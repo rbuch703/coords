@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include <gmpxx.h>
+//#include <gmpxx.h>
 
 #include <iostream>
 
@@ -54,14 +54,14 @@ public:
         return isPositive ? d : -d;    
     }
 
-    mpz_class toMpz() const
+    /*mpz_class toMpz() const
     {
         mpz_class x = data[3];
         x = (x << 32) + data[2];
         x = (x << 32) + data[1];
         x = (x << 32) + data[0];
         return (isPositive) ? x : mpz_class(-x);
-    }
+    }*/
 
     explicit operator int64_t() const
     {
@@ -75,6 +75,7 @@ public:
     explicit operator uint64_t() const
     {
         assert(data[3] == 0 && data[2] == 0 && "Overflow");
+        assert( isPositive && "Overflow (negative number)");
         return ((uint64_t)data[1]) << 32 | data[0];
     }
     

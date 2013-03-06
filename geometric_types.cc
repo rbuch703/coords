@@ -4,7 +4,7 @@
 #include <queue>
 #include <iostream>
 
-#include <boost/foreach.hpp>
+//#include <boost/foreach.hpp>
 
 #include <assert.h>
 #include <stdlib.h> //for llabs

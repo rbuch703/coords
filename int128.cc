@@ -480,7 +480,7 @@ std::ostream& operator<<(std::ostream &os, int128_t a)
         }
     }
 #else
-    os << a.toMpz();
+    os << a.toDouble();
  
 #endif
     return os;

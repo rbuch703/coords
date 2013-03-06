@@ -10,7 +10,6 @@
 #include <iostream>
 
 #include <boost/foreach.hpp>
-#include <stack>
 #include "fraction.h"
 
 typedef Fraction<BigInt> BigFrac;
@@ -35,151 +34,9 @@ void testOverlapResolution( LineSegment A, LineSegment B, LineSegment res_A, Lin
     TEST( A == res_A && B == res_B);
 }
 
-Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Vertex end)
-{
-    bool hasMinLeft = false;
-    bool hasMinRight = false;
-    
-    Vertex minLeft, minRight;
-    //cout << "finding continuation for " << start << " - " << end << endl;
-    for (set<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
-    {
-        //cout << "\t testing " << *it << endl;
-        BigInt dist = it->pseudoDistanceToLine(start, end);
-        //cout << "\t\t pseudodistance is " << dist << endl;
-        if (dist < 0) //lies left of line (start-end)
-        {
-            //cout << "\t\t left " << endl;
-            if (!hasMinLeft) 
-            {
-                hasMinLeft = true;
-                minLeft = *it;
-                //cout << "\t\t is new minleft" << endl;
-                continue;
-            }
-            if (it->pseudoDistanceToLine(end, minLeft) < 0)
-                minLeft = *it;
-        } else if (dist > 0)    //lies right of line (start-end)
-        {
-            if (!hasMinRight)
-            {
-                hasMinRight = true;
-                minRight = *it;
-                continue;
-            }
-            if (it->pseudoDistanceToLine(end, minRight) < 0)
-                minRight = *it;
-        } else  //dist == 0
-        {
-            if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
-            assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
-            assert(!hasMinRight || minRight.pseudoDistanceToLine(end, *it) != 0); //there should only be continuation straight ahead
-            hasMinRight = true;
-            minRight = *it;
-        }
-    }
-    if (hasMinLeft) return minLeft;
-    if (hasMinRight) return minRight;
-    
-    assert( vertices.count(start) == 1);
-    return start;
-}
 
-/*
-    Returns the polygons that give the outline of the connected graph 'graph'
-    Basic idea of the algorithm:
-        1. Find the minimum vertex (lexicographically). This one is guaranteed to be part of the outline
-        2. Find its one neighboring vertex (from the graph) for which all
-           neighboring vertices are on the right side of the edge between the two vertices.
-           This vertex is guaranteed to be on the outline as well
-        3. From that edge follow the a outline, by turning as far left as possible at each vertex. Whenever
-           a vertex is passed twice while following that outline, the vertex chain between the two
-           occurrences is extracted as a separate polygon
-        4. The algorithm terminates when the starting edge (not just the starting vertex) is visited again.
-        
-*/
-list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
-{
-    list<VertexChain> res;
 
-    Vertex initial_start = graph.begin()->first;
-    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
-    {
-        if (it->first < initial_start) initial_start = it->first;
-        assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
-    }
-
-    std::cout << "minimum vertex is " << initial_start << std::endl;
-
-    assert( graph.count(initial_start) && (graph[initial_start].size() > 0));
-    Vertex initial_end = *graph[initial_start].begin();
-    for ( set<Vertex>::const_iterator it = graph[initial_start].begin(); it != graph[initial_start].end(); it++)
-    {
-        BigInt dist = it->pseudoDistanceToLine(initial_start, initial_end);
-        if (dist  < 0) initial_end = *it;
-    }
-    std::cout << "leftmost neighbor is " << initial_end << std::endl;
-
-    assert (initial_end > initial_start);
-    
-    Vertex start = initial_start;
-    Vertex end = initial_end;
-    set<Vertex> alreadyPassed;
-    alreadyPassed.insert(start);
-    alreadyPassed.insert(end);
-    stack<Vertex> chain;
-    chain.push(start);
-    chain.push(end);
-    
-    do
-    {
-        Vertex cont = getLeftMostContinuation(graph[end], start, end);
-        //std::cout << "continue at" <<  cont << std::endl;
-        start = end;
-        end = cont;
-        
-        if (alreadyPassed.count(end) > 0)
-        {
-            //std::cout << "already passed this vertex, backtracking..." << std::endl;
-            list<Vertex> polygon;
-            polygon.push_front( end);
-            while (chain.top() != end)
-            {
-                //'front' to maintain orientation, since the vertices are removed from the stack in reverse order
-                polygon.push_front(chain.top());
-                alreadyPassed.erase(chain.top());
-                //std::cout << "\t" << chain.top() << std::endl;
-                chain.pop();
-            }
-            assert(polygon.front() != polygon.back());
-            polygon.push_front(end);
-            assert(polygon.front() == polygon.back());
-            
-            res.push_back(VertexChain(polygon));
-        } else
-        {
-            chain.push(end);
-            alreadyPassed.insert(end);
-        }
-        
-    } while (start != initial_start || end != initial_end);
-    
-#ifndef NDEBUG
-    assert (alreadyPassed.erase(start) == 1);
-    assert (alreadyPassed.erase(end) == 1);
-    assert (alreadyPassed.size() == 0);
-    
-    assert (chain.top() == end);
-    chain.pop();
-    assert (chain.top() == start);
-    chain.pop();
-    assert(chain.size() == 0);
-#endif
-    
-    return res;
-}
-
-#define CAIRO_DEBUG_OUTPUT
+//#define CAIRO_DEBUG_OUTPUT
 
 #ifdef CAIRO_DEBUG_OUTPUT
 #include <cairo.h>
@@ -187,6 +44,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
 
 #define M_PI 3.14159265358979323846
 
+/*
 void renderGraph(cairo_t *cr, map<Vertex, set<Vertex>> &graph)
 {
     
@@ -213,8 +71,7 @@ void renderGraph(cairo_t *cr, map<Vertex, set<Vertex>> &graph)
     }    
     
     cairo_rectangle (cr, 0.25, 0.25, 0.5, 0.5);
-    cairo_stroke (cr); 
-
+    cairo_stroke (cr);
 }
 
 void renderPolygons(cairo_t *cr, list<VertexChain> &polygons)
@@ -244,10 +101,10 @@ void renderPolygon(cairo_t *cr, const list<Vertex> &vertices)
         cairo_line_to(cr, it->x, it->y);
 
     cairo_stroke( cr );
-}
+} */
 #endif
 
-// #define CAIRO_DEBUG_OUTPUT
+
 int main(int, char** )
 {
 #if 0

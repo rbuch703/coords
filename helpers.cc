@@ -5,7 +5,20 @@
 #include <sys/types.h>  //for mkdir
 #include <stdio.h>      //for perror
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
+
+#include <boost/foreach.hpp>
+
 using namespace std;
+
+double getWallTime()
+{
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    return usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1000000.0;
+}
 
 void ensureDirectoryExists(string directory)
 {
@@ -22,6 +35,31 @@ void ensureDirectoryExists(string directory)
         if (pos == string::npos) break;
         start_pos = pos+1;
     } while ( true);
+}
+
+map<string, uint32_t> zone_entries;
+
+
+
+void dumpPolygon(string file_base, const list<Vertex>& poly)
+{
+    size_t pos = file_base.rfind('/');
+    string directory = file_base.substr(0, pos);
+    ensureDirectoryExists(directory);
+    
+    FILE* f = fopen(file_base.c_str(), "ab");
+    uint64_t nVertices = poly.size();
+    fwrite( &nVertices, sizeof(nVertices), 1, f);
+    
+    BOOST_FOREACH( const Vertex vertex, poly)
+    {
+        int32_t val = (int32_t)vertex.x;
+        fwrite(&val, sizeof(val), 1, f);
+        val = (int32_t)vertex.y;
+        fwrite(&val, sizeof(val), 1, f);
+    }
+    
+    fclose(f);
 }
 
 

@@ -1,7 +1,7 @@
 
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
-SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc validatingbigint.cc int128.cc
+SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc #validatingbigint.cc  
 GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128.cc quadtree.cc #validatingbigint.cc 
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
 
@@ -41,16 +41,21 @@ data_converter: $(CONV_OBJ)
 
 simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
-	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
+	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -o $@ #-lgmp -lgmpxx
 
 geo_unit_tests: $(GEO_OBJ)
 	@echo [LD ] $@
 	@g++ $(GEO_OBJ) $(CCFLAGS) $(LD_FLAGS) `pkg-config --libs cairo` -lgmp -lgmpxx -o $@
 
+math64.o: math64.asm
+	@echo [ASM] $<
+	@nasm -f elf64 -o $@ $<
+
 %.o: %.cc
 	@echo [C++] $<
 	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
 
+	
 clean:
 	@echo [CLEAN]
 	@rm -rf *.o
