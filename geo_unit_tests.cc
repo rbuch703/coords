@@ -9,7 +9,7 @@
 #include <fstream>
 #include <iostream>
 
-#include <boost/foreach.hpp>
+//#include <boost/foreach.hpp>
 #include "fraction.h"
 
 typedef Fraction<BigInt> BigFrac;
@@ -114,15 +114,44 @@ int main(int, char** )
     b = b << 64;
     a/b;
     return 0;*/
+    BigInt(-1) >> 1;
+    BigInt(-2) >> 1;
+    BigInt(-3) >> 1;
+    BigInt(-4) >> 1;
+    BigInt((int64_t)-5) >> 1;
+    BigInt((int64_t)5) >> 1;
+    BigInt(0) == BigInt(0);
+    
+    BigInt(1) << 95;
     for (int i = 0; i < 100000; i++)
     {
         BigInt a( getRandom());
         BigInt b( getRandom());
         //cout << i << ", " << b << endl;
         uint32_t c = rand() % 0xFFFFFFFF;
-        b = b >> 62;
-        a/c;
-        a/b;
+        int d = rand() % 128;
+        a>>d;
+        c%a;
+
+        BigInt res = a/c;
+        c*res;
+        res = a/(b >> 62);
+        (b >> 62)*res;
+        res*(uint64_t)abs(b>>65);
+
+        //a|b;
+        //a&b;
+        a = a >> 1;
+        b = b >> 1;
+        a.toDouble();
+        a+b;
+        a-b;
+        (uint64_t)(abs(a)>>64);
+        a>=b;
+        a = a >> 64;
+        a*=a;
+        
+        (int64_t)(b >> 65);
         //a+c;
     }
     return 0;
@@ -274,6 +303,7 @@ int main(int, char** )
     //return 0;
     list<VertexChain> polygons = getPolygons(graph);
 
+/*
     for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
     {
         AABoundingBox box = it->getBoundingBox();
@@ -281,7 +311,7 @@ int main(int, char** )
         for (list<Vertex>::const_iterator it2 = it->vertices().begin(); it2 != it->vertices().end(); it2++)
             std::cout << "\t" << *it2 << endl;
     }
-
+*/
     std::cout << "generated " << polygons.size() << " polygons" << endl;
     
     // print final polygons    

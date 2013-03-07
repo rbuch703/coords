@@ -171,15 +171,17 @@ int128_t divmod (const int128_t a, const uint64_t b, uint64_t &mod)
 
 }
 
-/* determines the length of the sequence of zero-valued high-order bits in 'a' 
-   The number is not exact (because it does not need to be for our application), but never bigger than the correct result*/
+/* determines the length of the sequence of zero-valued high-order bits in 'a' */
 inline int numHighZero(uint64_t a)
 {
+    assert ( a!= 0); // if 'a' is zero, this method should not need to be used
     int shl = 0;
     if (! (a & 0xFFFFFFFF00000000ull)) { shl += 32; a <<= 32;}    
     if (! (a & 0xFFFF000000000000ull)) { shl += 16; a <<= 16;}
     if (! (a & 0xFF00000000000000ull)) { shl += 8;  a <<= 8;}
     if (! (a & 0xF000000000000000ull)) { shl += 4;  a <<= 4;}
+    if (! (a & 0xC000000000000000ull)) { shl += 2;  a <<= 2;}
+    if (! (a & 0x8000000000000000ull)) { shl += 1;  a <<= 1;}
     
     assert(shl <= 64);
     return shl;
@@ -221,33 +223,25 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     assert(b.hi < 0xFFFFFFFFFFFFFFFFull && "not implemented"); // otherwise we could not increase b_hi by 1
     
     
-    /* FIXME: Optimize. This initial approximation gets worse the longer the sequence of high-order bits of b that is zero
-              (because in this way the relative difference between b and (b.hi << 64) increases)
-              This can be countered by shifting in an appropriate number of bits from the lower 
-              parts of a and b, and adjusting the final shift right accordingly
-              */
-              
-    int a_shl = numHighZero(a.hi);  
+    /* if 'b' is small (i.e. b.hi has many leading zeros) the relative difference between 'b' and '(b.hi << 64)'
+       can become very big. Thus, in the naive approach of computing '(a/b.hi) >> 64' as an approximation to 'a/b',
+       a high error introduced. Thus, the while loop would need to perform many iterations in order to compensate.
+       Instead, we fill up the leading zeroes by left-shifting 'b' and then undo the left-shift by later adjusting
+       the '>> 64' correspondingly.
+     */
     int b_shl = numHighZero(b.hi);
-    // otherwise the early termination above would have kicked in
-    assert (b_shl >= a_shl);
-
-    b_shl = (a_shl + b_shl) /2;//experimental result, needs to be verified
-    if (b_shl < 0) b_shl = 0;
-    int128_t a_tmp = a << a_shl;
     uint64_t b_hi_tmp = (b.hi << b_shl) | (b.lo >> (64 - b_shl));
     
-    int shift_comp = 64 - (b_shl - a_shl);
-    //int128_t b_tmp = b << b_shl;
 
-    int128_t div_hi = (a_tmp/b_hi_tmp);
-    div_hi = div_hi >> (shift_comp);
-    int128_t div_lo = (a_tmp/(b_hi_tmp+1));
-    div_lo = div_lo >> shift_comp;
+    int128_t div_hi = (a/b_hi_tmp);
+    div_hi = div_hi >> (64 - b_shl);    //seems to trigger some kind of bug when integrated into the line above
+    int128_t div_lo = (a/(b_hi_tmp+1));
+    div_lo = div_lo >> (64 - b_shl);
+
     /*int128_t div_hi = (a/b.hi) >> 64;
     int128_t div_lo = a/(b.hi+1) >> 64;*/
-    if (div_hi > div_lo+1)
-        std::cout << "difference is " << (div_hi - div_lo) << std::endl;
+    //if (div_hi > div_lo+1)
+    //    std::cout << "difference is " << (div_hi - div_lo) << std::endl;
         
     while (div_hi != div_lo)
     {
@@ -344,6 +338,17 @@ int128_t operator| (int128_t a, int128_t b)
     return int128_t(a.isPositive, a.hi | b.hi, a.lo | b.lo);
 }
 
+/* //DO NOT USE, is not well-defined since int128_t is not in two's complement
+int128_t operator~ (int128_t a)
+{
+    a.isPositive = ! a.isPositive;
+    a.hi = ~a.hi;
+    a.lo = ~a.lo;
+    return a;
+}*/
+
+
+
 int128_t abs(int128_t a)
 {
     a.isPositive = true;
@@ -383,16 +388,25 @@ int128_t operator<<(int128_t a, uint32_t i)
     return a;
 }
 
+
+/* this method needs special treatment for negative nunbers. Due to the usual two's complement,
+   a right-shift by 's' on negative numbers has the effect of dividing by 2^s and rounding down, i.e. towards negative infinity.
+   Since the in128_t is not stored in two's complement, it would instead round towards zero.
+   To arrive at correct arithmetic this rounding up effect need to be simulated. This is done by adding '1' to the final result
+   of the shift whenever at least one bit that was shifted out was non-zero
+*/
 int128_t operator>>(int128_t a, uint32_t i)
 {
     /*WARNING: on x86/x64 the shift operations use the ASM operation 'shr' internally.
-     *         shr shifts not by 'i', but by 'i % 64'
+     *         shr shifts are not done by 'i', but by 'i % 64'
      *         Therefore, all shifts of - AND INCLUDING - 64 and greater have to be handled seperately
      */
     if ((a.hi == 0 && a.lo == 0) || (i == 0)) return a;
     
+    bool shiftedOutNonZero = false;
     if (i >= 64)    //shift by a whole uint64_t manually
     {
+        shiftedOutNonZero = a.lo;
         a.lo = a.hi;
         a.hi = 0;
         i   -= 64;
@@ -401,12 +415,13 @@ int128_t operator>>(int128_t a, uint32_t i)
     if (i >= 64) return a.isPositive ? 0 : -1; //would shift out everything
     
     /* WARNING: needs to early-terminate here, because '<<' is also modulo 64, so x<<64 returns x instead of 0**/
-    if (i == 0) return a.isPositive ? a : a-1;
+    if (i == 0) return a.isPositive | !shiftedOutNonZero ? a : a-1;
 
+    shiftedOutNonZero |= a.lo << (64-i);
     a.lo = (a.lo >> i) | (a.hi << (64-i));
     a.hi = (a.hi >> i);
 
-    return a.isPositive ? a : a-1;
+    return a.isPositive | !shiftedOutNonZero ? a : a-1;
 }
 
 

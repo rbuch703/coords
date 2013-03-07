@@ -74,10 +74,10 @@ public:
         return *this;
     }
     
-private:
+public:
     int128_t  i;
     mpz_class mpz;
-    
+private:    
     friend ValidatingBigint operator+ (ValidatingBigint a, ValidatingBigint b);
     friend ValidatingBigint operator- (ValidatingBigint a, ValidatingBigint b);
     friend ValidatingBigint operator* (ValidatingBigint a, ValidatingBigint b);
@@ -100,7 +100,8 @@ private:
     friend bool operator>=(const ValidatingBigint a, const ValidatingBigint b);
 
     friend ValidatingBigint abs(ValidatingBigint a);
-    
+    //friend ValidatingBigint operator~(ValidatingBigint a);
+
     friend std::ostream& operator<<(std::ostream &os, ValidatingBigint a);
 
 //    friend std::ostream& operator<<(std::ostream &os, int128_t a);

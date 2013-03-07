@@ -57,6 +57,12 @@ ValidatingBigint abs(ValidatingBigint a)
     return ValidatingBigint( abs(a.i), abs(a.mpz));
 }
 
+/*
+ValidatingBigint operator~(ValidatingBigint a)
+{
+    return ValidatingBigint( ~a.i, ~a.mpz);
+}*/
+
 std::ostream& operator<<(std::ostream &os, ValidatingBigint a)
 {
     os << a.mpz;

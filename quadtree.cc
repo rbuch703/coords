@@ -137,6 +137,8 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     {
         if (it->first < initial_start) initial_start = it->first;
         assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
+        if (it->second.size() == 1)
+            std::cout << "warning: vertex " << it->first << "is only connected to one other vertex" << endl;
     }
 
     //std::cout << "minimum vertex is " << initial_start << std::endl;
