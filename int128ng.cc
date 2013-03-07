@@ -7,7 +7,7 @@ extern "C" uint64_t sub (uint64_t a, uint64_t b, uint64_t *borrow);
 extern "C" uint64_t add3(uint64_t a, uint64_t b, uint64_t c, uint64_t *carry_out);
 extern "C" uint64_t sub128(uint64_t a_hi, uint64_t a_lo, uint64_t b_hi, uint64_t b_lo, uint64_t *res_hi, uint64_t *res_lo);
 extern "C" uint64_t mul (uint64_t a, uint64_t b, uint64_t *hi);
-extern "C" uint64_t div128_64(uint64_t *a_hi, uint64_t *a_lo, uint64_t b);
+extern "C" uint64_t div128(uint64_t *a_hi, uint64_t *a_lo, uint64_t b);
 
 
 bool operator<(const int128_t a, const int128_t b)
@@ -132,6 +132,7 @@ int128_t operator*(int128_t a, int128_t b)
 
 /* since b is in range [0, 2^32-1], mod can be in range [-2^32-1, 2^32-1] (the former only if a is negative),
    and thus we need something bigger than an int32_t to hold 'b' */
+
 int128_t divmod (const int128_t a, const uint64_t b, uint64_t &mod)
 {
     int128_t res;
@@ -139,7 +140,7 @@ int128_t divmod (const int128_t a, const uint64_t b, uint64_t &mod)
     
     res = a;
     
-    mod = div128_64(&res.hi, &res.lo, b);
+    mod = div128(&res.hi, &res.lo, b);
     
 /*
     res.data[3] = a.data[3] / b;
@@ -170,9 +171,28 @@ int128_t divmod (const int128_t a, const uint64_t b, uint64_t &mod)
 
 }
 
+/* determines the length of the sequence of zero-valued high-order bits in 'a' 
+   The number is not exact (because it does not need to be for our application), but never bigger than the correct result*/
+inline int numHighZero(uint64_t a)
+{
+    int shl = 0;
+    if (! (a & 0xFFFFFFFF00000000ull)) { shl += 32; a <<= 32;}    
+    if (! (a & 0xFFFF000000000000ull)) { shl += 16; a <<= 16;}
+    if (! (a & 0xFF00000000000000ull)) { shl += 8;  a <<= 8;}
+    if (! (a & 0xF000000000000000ull)) { shl += 4;  a <<= 4;}
+    
+    assert(shl <= 64);
+    return shl;
+}
+
 int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
 {
-    if (b.hi == 0) return divmod(a, b.lo, res_mod);
+    if (b.hi == 0) 
+    { 
+        res_mod = div128(&a.hi, &a.lo, b.lo);//divmod(a, b.lo, res_mod);
+        a.isPositive = (a.isPositive == b.isPositive);
+        return a;
+    }
 
     if ( abs(b) > abs(a) )
     {
@@ -194,14 +214,41 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     
     a.isPositive = b.isPositive = true;
 
-    int b_idx = b.hi ? 1 : 0;
+    //int b_idx = b.hi ? 1 : 0;
     
-    int128_t res(0);
-    
-    assert(b.hi < 0xFFFFFFFFFFFFFFFFull && "not implemented"); // otherwise we could not increase b_hi by 1
-    int128_t div_hi = a/b.hi;
-    int128_t div_lo = a/(b.hi+1);
+    //int128_t res(0);
 
+    assert(b.hi < 0xFFFFFFFFFFFFFFFFull && "not implemented"); // otherwise we could not increase b_hi by 1
+    
+    
+    /* FIXME: Optimize. This initial approximation gets worse the longer the sequence of high-order bits of b that is zero
+              (because in this way the relative difference between b and (b.hi << 64) increases)
+              This can be countered by shifting in an appropriate number of bits from the lower 
+              parts of a and b, and adjusting the final shift right accordingly
+              */
+              
+    int a_shl = numHighZero(a.hi);  
+    int b_shl = numHighZero(b.hi);
+    // otherwise the early termination above would have kicked in
+    assert (b_shl >= a_shl);
+
+    b_shl = (a_shl + b_shl) /2;//experimental result, needs to be verified
+    if (b_shl < 0) b_shl = 0;
+    int128_t a_tmp = a << a_shl;
+    uint64_t b_hi_tmp = (b.hi << b_shl) | (b.lo >> (64 - b_shl));
+    
+    int shift_comp = 64 - (b_shl - a_shl);
+    //int128_t b_tmp = b << b_shl;
+
+    int128_t div_hi = (a_tmp/b_hi_tmp);
+    div_hi = div_hi >> (shift_comp);
+    int128_t div_lo = (a_tmp/(b_hi_tmp+1));
+    div_lo = div_lo >> shift_comp;
+    /*int128_t div_hi = (a/b.hi) >> 64;
+    int128_t div_lo = a/(b.hi+1) >> 64;*/
+    if (div_hi > div_lo+1)
+        std::cout << "difference is " << (div_hi - div_lo) << std::endl;
+        
     while (div_hi != div_lo)
     {
         assert( div_hi > div_lo);
@@ -228,7 +275,7 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     
     res_mod = (aPositive) ? a : -a;
     
-    return resPositive ? res : -res;
+    return resPositive ? div_hi : -div_hi;
 }
 
 int128_t operator/ (int128_t a, int128_t b)
@@ -276,8 +323,11 @@ int128_t operator-(int128_t a, int128_t b)
         
         assert( b <= a);
         
-        int64_t diff;
-        uint64_t carry = sub128(a.hi, a.lo, b.hi, b.lo, &res.hi, &res.lo);
+        //int64_t diff;
+#ifndef NDEBUG
+        uint64_t carry = 
+#endif
+        sub128(a.hi, a.lo, b.hi, b.lo, &res.hi, &res.lo);
                     
         assert( carry == 0 && "buggy arithmetic" );
         return res;
@@ -327,7 +377,7 @@ int128_t operator<<(int128_t a, uint32_t i)
     
     assert (a.hi >> (64-i) == 0 && "Overflow");
 
-    a.hi = (a.hi << i) | (a.lo << (64-i));
+    a.hi = (a.hi << i) | (a.lo >> (64-i));
     a.lo = a.lo << i;
 
     return a;
@@ -339,7 +389,7 @@ int128_t operator>>(int128_t a, uint32_t i)
      *         shr shifts not by 'i', but by 'i % 64'
      *         Therefore, all shifts of - AND INCLUDING - 64 and greater have to be handled seperately
      */
-    if (a.hi == 0 && a.lo == 0) return a;
+    if ((a.hi == 0 && a.lo == 0) || (i == 0)) return a;
     
     if (i >= 64)    //shift by a whole uint64_t manually
     {
@@ -348,15 +398,15 @@ int128_t operator>>(int128_t a, uint32_t i)
         i   -= 64;
     }
     
-    if (i >= 64) return 0; //would shift out everything
+    if (i >= 64) return a.isPositive ? 0 : -1; //would shift out everything
     
     /* WARNING: needs to early-terminate here, because '<<' is also modulo 64, so x<<64 returns x instead of 0**/
-    if (i == 0) return a;
+    if (i == 0) return a.isPositive ? a : a-1;
 
     a.lo = (a.lo >> i) | (a.hi << (64-i));
     a.hi = (a.hi >> i);
 
-    return a;
+    return a.isPositive ? a : a-1;
 }
 
 
@@ -380,7 +430,7 @@ std::ostream& operator<<(std::ostream &os, int128_t a)
         }
     }
 #else
-    os << a.toDouble();
+    os << a.toMpz();//toDouble();
  
 #endif
     return os;

@@ -1,23 +1,23 @@
 
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
-SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc #validatingbigint.cc  
-GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128.cc quadtree.cc #validatingbigint.cc 
+SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128ng.cc validatingbigint.cc  
+GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128ng.cc quadtree.cc validatingbigint.cc 
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
 
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
 CONV_OBJ = $(CONV_SRC:.cc=.o)
-SIMP_OBJ = $(SIMP_SRC:.cc=.o)
-GEO_OBJ  = $(GEO_SRC:.cc=.o)
+SIMP_OBJ = $(SIMP_SRC:.cc=.o) math64.o
+GEO_OBJ  = $(GEO_SRC:.cc=.o) math64.o
 
 # -ftrapv is extremely important to catch integer overflow bugs, which are otherwise hard to detect
 # OSM data covers almost the entire range of int32_t; multiplying two values (required for some algorithms)
 # already uses all bits of an int64_t, so, more complex algorithms could easily cause an - otherwise undetected -
 # integer overflow
 # WARNING: the gcc option -O2 appears to negate the effects of -ftrapv ! 
-FLAGS = -g -Wall -Wextra -DNDEBUG -O2
-#FLAGS = -ftrapv -g -Wall -Wextra 
+#FLAGS = -g -Wall -Wextra -DNDEBUG -O2
+FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
@@ -35,13 +35,13 @@ conv_osmxml: $(CONV_XML_OBJ)
 	@echo [LD ] $@
 	@g++ $(CONV_XML_OBJ) $(LD_FLAGS) -o $@
 
-data_converter: $(CONV_OBJ) 
+data_converter: $(CONV_OBJ)
 	@echo [LD ] $@
-	@g++ $(CONV_OBJ) $(CCFLAGS) $(LD_FLAGS) -o $@
+	@g++ $(CONV_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
 simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
-	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -o $@ #-lgmp -lgmpxx
+	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
 geo_unit_tests: $(GEO_OBJ)
 	@echo [LD ] $@

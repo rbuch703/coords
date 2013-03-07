@@ -79,6 +79,7 @@ div128: ; uint64_t div128(uint64_t *a_hi/[RDI], uint64_t *a_lo/[RSI], uint64_t b
     div RBX         ; RAX = (mod:a_lo)/b; RDX = (mod:a_lo)/b
     mov [RSI], RAX  ; *a_lo = RAX
     mov RAX, RDX    ; modulus -> RAX (return value)
+    ret
 
 add3: ; uint64_t add3(uint64_t a, uint64_t b, uint64_t c, uint64_t *carry);
     ; computes a+b+c and return the overflow in 'carry'
@@ -90,7 +91,7 @@ add3: ; uint64_t add3(uint64_t a, uint64_t b, uint64_t c, uint64_t *carry);
     add RAX, RDX    ; RAX = RAX + c
     adc RBX, 0      ; RBX+= carry(RAX + c)
     
-    mov [RDX], RBX  ; *carry = RBX
+    mov [RCX], RBX  ; *carry = RBX
     ret    
 
 

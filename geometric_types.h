@@ -85,6 +85,8 @@ inline double asDouble(int64_t a) { return a;}
 
 inline double asDouble(int128_t a) { return a.toDouble();}
 
+inline double asDouble(ValidatingBigint a) { return a.toDouble();}
+
 inline std::ostream& operator <<(std::ostream& os, const LineSegment &edge)
 {
     os << "(" << asDouble(edge.start.x) << ", " << asDouble(edge.start.y) << ") - (";

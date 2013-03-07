@@ -3,7 +3,7 @@
 #define VALIDATINGBIGINT_H
 
 #include <gmpxx.h>
-#include "int128.h"
+#include "int128ng.h"
 
 
 class ValidatingBigint
@@ -65,6 +65,14 @@ public:
         return (uint64_t)i;
     }
 
+    ValidatingBigint operator*=(const ValidatingBigint &other)
+    {
+        i*= other.i;
+        mpz*=other.mpz;
+        
+        assert( i.toMpz() == mpz);
+        return *this;
+    }
     
 private:
     int128_t  i;
@@ -79,6 +87,7 @@ private:
     friend ValidatingBigint operator% (ValidatingBigint a, ValidatingBigint b);
 
     friend ValidatingBigint operator<<(ValidatingBigint a, uint32_t i);
+    friend ValidatingBigint operator>>(ValidatingBigint a, uint32_t i);
 
     friend ValidatingBigint operator| (ValidatingBigint a, ValidatingBigint b);
 

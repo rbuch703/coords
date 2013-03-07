@@ -9,11 +9,11 @@ typedef mpz_class BigInt;
 #endif
 
 
-#if false
+#if true
     #include "validatingbigint.h" 
     typedef ValidatingBigint BigInt;
 #else
-    #include "int128.h" 
+    #include "int128ng.h" 
     typedef int128_t BigInt;
 #endif
 

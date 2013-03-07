@@ -108,6 +108,24 @@ void renderPolygon(cairo_t *cr, const list<Vertex> &vertices)
 
 int main(int, char** )
 {
+/*
+    BigInt a( getRandom());
+    BigInt b = 1;
+    b = b << 64;
+    a/b;
+    return 0;*/
+    for (int i = 0; i < 100000; i++)
+    {
+        BigInt a( getRandom());
+        BigInt b( getRandom());
+        //cout << i << ", " << b << endl;
+        uint32_t c = rand() % 0xFFFFFFFF;
+        b = b >> 62;
+        a/c;
+        a/b;
+        //a+c;
+    }
+    return 0;
 #if 0
     Vertex a(1,0);
     Vertex b(0,1);
