@@ -135,38 +135,10 @@ int128_t operator*(int128_t a, int128_t b)
 
 int128_t divmod (const int128_t a, const uint64_t b, uint64_t &mod)
 {
-    int128_t res;
-    
-    
-    res = a;
+    int128_t res = a;
     
     mod = div128(&res.hi, &res.lo, b);
-    
-/*
-    res.data[3] = a.data[3] / b;
-    
-    int64_t tmp = a.data[3] - (res.data[3] * (int64_t)b);
-    tmp = (tmp << 32) | a.data[2];
-    assert(tmp >= 0);
-    
-    res.data[2] = tmp / b;
-    tmp = tmp - (res.data[2] * (int64_t)b);
-    tmp = (tmp << 32) | a.data[1];
-    assert( tmp >=0);
-    
-    res.data[1] = tmp / b;
-    tmp = tmp - (res.data[1] * (int64_t)b);
-    tmp = (tmp << 32) | a.data[0];
-    assert( tmp >= 0);
-    
-    res.data[0] = tmp / b;
-    tmp = tmp - (res.data[0] * (int64_t)b);
-    assert( tmp < b);
 
-    mod = a.isPositive ? tmp : - (int64_t)tmp;
-
-    assert( res*b + mod == a );
-  */  
     return res;
 
 }
@@ -192,6 +164,7 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     if (b.hi == 0) 
     { 
         res_mod = div128(&a.hi, &a.lo, b.lo);//divmod(a, b.lo, res_mod);
+        res_mod.isPositive = a.isPositive;
         a.isPositive = (a.isPositive == b.isPositive);
         return a;
     }
@@ -230,7 +203,7 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
        the '>> 64' correspondingly.
      */
     int b_shl = numHighZero(b.hi);
-    uint64_t b_hi_tmp = (b.hi << b_shl) | (b.lo >> (64 - b_shl));
+    uint64_t b_hi_tmp = b_shl == 0 ? b.hi : (b.hi << b_shl) | (b.lo >> (64 - b_shl));
     
 
     int128_t div_hi = (a/b_hi_tmp);
@@ -445,7 +418,7 @@ std::ostream& operator<<(std::ostream &os, int128_t a)
         }
     }
 #else
-    os << a.toMpz();//toDouble();
+    os << a.toDouble();
  
 #endif
     return os;

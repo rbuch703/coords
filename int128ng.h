@@ -42,13 +42,6 @@ public:
         return isPositive ? d : -d;    
     }
 
-    mpz_class toMpz() const
-    {
-        mpz_class x = hi;
-        x = (x << 64) + lo;
-        return (isPositive) ? x : mpz_class(-x);
-    }
-
     explicit operator int64_t() const
     {
         assert(hi == 0 && "Overflow");
@@ -66,7 +59,8 @@ public:
     
     int128_t& operator*=(int128_t other)
     {
-        *this = *this * other;
+        int128_t tmp = *this * other;
+        *this = tmp;
         return *this;
     }
 
@@ -82,23 +76,27 @@ public:
         assert(hi == 0 && ((lo && 0xFFFFFFFF00000000ull) == 0) && "Overflow");
         return lo;
     }
+    
+    uint64_t getHi() const {return hi;}
+    uint64_t getLo() const {return lo;}
+    bool hasPositiveSign() const { return isPositive;}
 
 private:
     int128_t(bool pIsPositive, uint64_t pHi, uint64_t pLo): isPositive(pIsPositive), hi(pHi), lo(pLo) { }
-    
-    friend int128_t operator+ (int128_t a, int128_t b);
-    friend int128_t operator- (int128_t a, int128_t b);
-    friend int128_t operator* (int128_t a, int128_t b);
-    friend int128_t operator* (int128_t a, uint64_t b);
+    friend int128_t operator+ (const int128_t a, const int128_t b);
+    friend int128_t operator- (const int128_t a, const int128_t b);
+    friend int128_t operator* (const int128_t a, const int128_t b);
+    friend int128_t operator* (const int128_t a, const uint64_t b);
+
 
     
-    friend int128_t operator/ (int128_t a, uint64_t b);
-    friend int128_t operator% (int128_t a, uint64_t b);
-    friend int128_t operator/ (int128_t a, int128_t b);
-    friend int128_t operator% (int128_t a, int128_t b);
+    friend int128_t operator/ (const int128_t a, const uint64_t b);
+    friend int128_t operator% (const int128_t a, const uint64_t b);
+    friend int128_t operator/ (const int128_t a, const int128_t b);
+    friend int128_t operator% (const int128_t a, const int128_t b);
 
-    friend int128_t operator<<(int128_t a, uint32_t i);
-    friend int128_t operator>>(int128_t a, uint32_t i);
+    friend int128_t operator<<(const int128_t a, const uint32_t i);
+    friend int128_t operator>>(const int128_t a, const uint32_t i);
 
     friend int128_t operator| (const int128_t a, const int128_t b);
     //friend int128_t operator~ (const int128_t a); //DO NOT USE, is not well-defined since int128_t is not in two's complement

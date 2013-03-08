@@ -5,15 +5,21 @@
 #include <gmpxx.h>
 #include "int128ng.h"
 
+inline mpz_class toMpz(int128_t val) 
+{
+    mpz_class x = val.getHi();
+    x = (x << 64) + val.getLo();
+    return val.hasPositiveSign() ? x : mpz_class(-x);
+}
 
 class ValidatingBigint
 {
 public:
     ValidatingBigint() {}
-    ValidatingBigint( int32_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); } 
-    ValidatingBigint(uint32_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); }
-    ValidatingBigint( int64_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); } 
-    ValidatingBigint(uint64_t a): i(a), mpz(a) { assert(i.toMpz() == mpz); } 
+    ValidatingBigint( int32_t a): i(a), mpz(a) { assert(toMpz(i) == mpz); } 
+    ValidatingBigint(uint32_t a): i(a), mpz(a) { assert(toMpz(i) == mpz); }
+    ValidatingBigint( int64_t a): i(a), mpz(a) { assert(toMpz(i) == mpz); } 
+    ValidatingBigint(uint64_t a): i(a), mpz(a) { assert(toMpz(i) == mpz); } 
     ValidatingBigint(const char* c): i(0), mpz(0)
     { 
         bool neg = (c[0] == '-');
@@ -31,7 +37,7 @@ public:
             i = -i;
             mpz = -mpz;
         }
-        assert( i.toMpz() == mpz);
+        assert( toMpz(i) == mpz);
         
         
     } 
@@ -39,9 +45,9 @@ public:
     
     ValidatingBigint(int128_t pI, mpz_class pMpz): i(pI), mpz(pMpz)
     {
-        if (i.toMpz() != mpz)
-        std::cout << i.toMpz() << " vs. " << mpz << std::endl;
-        assert(i.toMpz() == mpz);        
+        if (toMpz(i) != mpz)
+        std::cout << toMpz(i) << " vs. " << mpz << std::endl;
+        assert(toMpz(i) == mpz);        
     }
 
     ValidatingBigint operator-() const { return ValidatingBigint( -i, -mpz); }
@@ -70,7 +76,7 @@ public:
         i*= other.i;
         mpz*=other.mpz;
         
-        assert( i.toMpz() == mpz);
+        assert( toMpz(i) == mpz);
         return *this;
     }
     
