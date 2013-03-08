@@ -63,6 +63,7 @@ void moveIntersectionsToIntegerCoordinates3(list<LineSegment> &segments)
     assert(segments.size() == 0);
     //root.printHierarchy();
     root.exportSegments(segments);
+    //delete root;
 }
 
 Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Vertex end)

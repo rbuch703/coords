@@ -33,15 +33,34 @@ enum EventType { START, STOP, SPLIT, MERGE, REGULAR };
 // ===========================================================
 
 #error CONTINUEHERE determine algorithm sweep direction, verify classification, especially for cases with identical x/y-values
-#warning handle edge case than thwo adjacent vertices share the same x/y value and thus none is a start/stop/split/merge vertex
+#warning handle edge case than two adjacent vertices share the same x/y value and thus none is a start/stop/split/merge vertex
+#warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
+#warning TODO: handle special cases where line segments share their x-coordinate (and thus either none or both vertices would be stop/split/stop/merge vertices)
+//TODO: if two adjacent vertices share the same x coordinate 
 EventType classifyVertex(Vertex pos, Vertex pred, Vertex succ)
 {
     //FIXME set event type based on spacial relation between the three vertices
     assert( pos != pred && pos != succ && pred != succ);
-    if (pos < pred && pos< succ)    //is either a START or a SPLIT vertex
+    // colinear successive vertices could cause additional special cases
+    assert( ! LineSegment(pred, succ).isColinearWith(pos)); //should have been removed by canonicalize()
+    if (pos.x < pred.x && pos.x < succ.x)    //is either a START or a SPLIT vertex
     {
-    } else if (pos > pred && pos > succ) //is either a STOP or a MERGE vertex
+        int128_t dist = succ.pseudoDistanceToLine(pred, pos);
+        assert (dist != 0 && "colinear vertices");
+        if (dist < lo) //left turn
+            return EventType::SPLIT;
+        else    //right turn
+            return EventType::START;
+    
+    } else if (pos.x > pred.x && pos.x > succ.x) //is either a STOP or a MERGE vertex
     {
+        int128_t dist = succ.pseudoDistanceToLine(pred, pos);
+        assert (dist != 0 && "colinear vertices");
+        if (dist < lo) //left turn
+            return EventType::MERGE;
+        else
+            return EventType::STOP;
+        
     } else //is a regular vertex
     {
         return EventType::REGULAR;
@@ -103,7 +122,7 @@ public:
   
     void remove(Vertex v)
     {
-        this->remove( SimpEvent(v, REGULAR));   //arbitrary event type, remove() is based only on the Vertex
+        this->remove( SimpEvent(v, REGULAR));   //uses arbitrary event type 'REGULAR', which remove() ignores anyway
     }    
 };
 

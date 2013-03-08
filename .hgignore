@@ -12,6 +12,8 @@ geo_unit_tests
 simplifier
 stats_xmlosm
 gl_test
+tests/arithmetic_test
+tests/geometric_test
 
 #ignore compiled objects
 *.o

@@ -55,20 +55,19 @@ void handlePolygon(string, VertexChain& segment)
     count++;
     //FIXME: polygon 463652 increases in size about threefold due to "toSimplePolygons()"
     //FIXME: polygon 463653 [sic] has a size mismatch 
+    //FIXME: polygon 305673	is split into 39 simple polygons, could be a bug
     
-    if (count == 463652) dumpPolygon("out/huge.poly", segment.vertices());
-    if (count == 463653) dumpPolygon("out/mismatch.poly", segment.vertices());  
-    /*
-    int size_before = segment.vertices().size();
+    /*if (count == 463652) dumpPolygon("out/huge.poly", segment.vertices());
+    if (count == 463653) dumpPolygon("out/mismatch.poly", segment.vertices());  */
+    
+    //int size_before = segment.vertices().size();
     //double  = getTime()
     list<VertexChain> polygons = toSimplePolygons(segment.vertices());
-    int size = 0;
-    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
-        size+= it->vertices().size();
-    std::cout << count << "\t" << size_before << ", " << size;
-    if (size / (double)size_before < 0.95) cout << ", MISMATCH";
-    cout << endl;
-    */    
+    //int size = 0;
+    std::cout << count;
+    if (polygons.size() > 10)
+        std::cout << "\t split into " << polygons.size() << " simple polygons ";// << size;
+    std::cout << std::endl;
     /*segment.canonicalize();
      poly_storage.push_back(segment);*/
      

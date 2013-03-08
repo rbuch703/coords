@@ -21,10 +21,10 @@ FLAGS = -ftrapv -g -Wall -Wextra
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = -fprofile-arcs#--as-needed
+LD_FLAGS = #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
-all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test
+all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test tests
 #	 @echo [ALL] $<
 
 gl_test: $(GL_TEST_SRC)
@@ -47,6 +47,16 @@ geo_unit_tests: $(GEO_OBJ)
 	@echo [LD ] $@
 	@g++ $(GEO_OBJ) $(CCFLAGS) $(LD_FLAGS) `pkg-config --libs cairo` -lgmp -lgmpxx -o $@
 
+tests: tests/arithmetic_test tests/geometry_test
+
+tests/arithmetic_test: math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc
+	@echo [LD ] $@
+	@g++ $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@ math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc
+
+tests/geometry_test: math64.o int128ng.o geometric_types.o tests/geometry_test.cc
+	@echo [LD ] $@
+	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ math64.o int128ng.o geometric_types.o tests/geometry_test.cc
+	 
 math64.o: math64.asm
 	@echo [ASM] $<
 	@nasm -f elf64 -o $@ $<
@@ -62,7 +72,7 @@ clean:
 	@rm -rf *~
 	@rm -rf *gcda
 	@rm -rf *gcno
-	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests gl_test
+	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests gl_test tests/arithmetic_test tests/geometry_test
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC)
 	@echo [DEP]
