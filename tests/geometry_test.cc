@@ -12,6 +12,29 @@
 //#include <boost/foreach.hpp>
 //#include "fraction.h"
 
+
+class QuadTreeNode //copied from quadtree.cc (is normally not exposed)
+{
+public:
+    QuadTreeNode(AABoundingBox _box);
+    ~QuadTreeNode();
+    void insertIntoHierarchy( LineSegment edge1, list<LineSegment> &createdSegments, int depth);
+    void printHierarchy(int depth = 0);
+    void exportSegments(list<LineSegment> &segments_out);
+public:
+    bool addToQuadrant(LineSegment seg);    
+    bool intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments, int depth);
+    int  coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &bl, bool &br) const;
+    void subdivide();
+    static const unsigned int SUBDIVISION_THRESHOLD = 20; //determined experimentally
+    
+    QuadTreeNode *tl, *tr, *bl, *br;
+    list<LineSegment> segments;
+    AABoundingBox     box;
+    BigInt            mid_x, mid_y;
+};
+
+
 typedef Fraction<BigInt> BigFrac;
 #define TEST(X) { cout << ((X)?"\033[22;32mpassed":"\033[22;31mfailed") << "\033[1;30m \"" << #X <<"\" ("<< "line " << __LINE__ << ")" << endl;}
 
@@ -34,7 +57,14 @@ void testOverlapResolution( LineSegment A, LineSegment B, LineSegment res_A, Lin
     TEST( A == res_A && B == res_B);
 }
 
-
+bool testQuadTreeNodeVsLine(const QuadTreeNode &node, const LineSegment &line, bool tl, bool tr, bool bl, bool br)
+{
+    bool in_tl, in_tr, in_bl, in_br;
+    
+    node.coversQuadrants( line, in_tl, in_tr, in_bl, in_br);
+    
+    return tl == in_tl && tr == in_tr && bl == in_bl && br == in_br;
+}
 
 int main(int, char** )
 {
@@ -108,8 +138,43 @@ int main(int, char** )
         testOverlapResolution(A, LineSegment(Vertex(3,3), Vertex(1,1)), A, LineSegment(Vertex(3,3), Vertex(2,2)));
         
     }
- 
+    
+    //TEST( LineSegment( Vertex(0,0), Vertex(2,0)).overlapsWith( LineSegment(Vertex(1,1), Vertex(1,0)))); 
+    //TEST( LineSegment( Vertex(0,0), Vertex(2,0)).overlapsWith( LineSegment(Vertex(1,0), Vertex(1,1)))); 
+
+    {
+        Vertex A(-298695466,310533612);
+        Vertex B(-298811012,310385291);
+        
+        //Vertex X(-298814597,310397197);
+        Vertex Y(-298805191,310393248);
+        Vertex Z(-298809204,310384402);
+
+        //TEST( LineSegment(A,B).intersects(LineSegment(X,Y)) );
+        TEST( LineSegment(A,B).intersects(LineSegment(Y,Z)) );
+        TEST( LineSegment(A,B).intersects(LineSegment(Z,Y)) );
+        TEST( LineSegment(B,A).intersects(LineSegment(Y,Z)) );
+        TEST( LineSegment(B,A).intersects(LineSegment(Z,Y)) );
+    }
+
+    {
+        Vertex A(0,0);
+        Vertex B(0,4);
+        Vertex C(4,4);
+        Vertex D(4,0);
+        AABoundingBox box(A);
+        box += B; box += C; box+= D;
+        QuadTreeNode node(box);
+        
+        TEST( testQuadTreeNodeVsLine( node, LineSegment( Vertex(2,2), Vertex(10,10)), true, true, true, true   ));
+        TEST( testQuadTreeNodeVsLine( node, LineSegment( Vertex(3,3), Vertex(10,10)), false, false, false, true   ));
+        TEST( testQuadTreeNodeVsLine( node, LineSegment( Vertex(0,2), Vertex(2,4)), true, false, true, true   ));
+        
+        
+    }
 }
+
+
 
 
 

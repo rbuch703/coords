@@ -418,7 +418,10 @@ std::ostream& operator<<(std::ostream &os, int128_t a)
         }
     }
 #else
-    os << a.toDouble();
+    //if (a.hi == 0)
+        os << (a.isPositive ? "" : "-") << a.lo;
+    //else
+    //    os << a.toDouble();
  
 #endif
     return os;

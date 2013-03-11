@@ -23,7 +23,7 @@ void testOverlapResolution( LineSegment A, LineSegment B, LineSegment res_A, Lin
 
 
 
-//#define CAIRO_DEBUG_OUTPUT
+#define CAIRO_DEBUG_OUTPUT
 
 #ifdef CAIRO_DEBUG_OUTPUT
 #include <cairo.h>
@@ -95,6 +95,22 @@ void renderPolygon(cairo_t *cr, const list<Vertex> &vertices)
 
 int main(int, char** )
 {
+
+    Vertex A(-298811012,310385291);
+    Vertex B(-298695466,310533612);
+
+    Vertex C(-298805191, 310393248);
+    Vertex D(-298809204, 310384402);
+    
+
+    
+    LineSegment S1(A,B);
+    LineSegment S2(C,D);
+    
+    bool b1, b2;
+    LineSegment d1,d2;
+    handleIntersection(S1,S2,d1,d2,b1, b2);
+    
     VertexChain p; /*
     p.append(Vertex(0,1));
     p.append(Vertex(1,0));
@@ -105,29 +121,34 @@ int main(int, char** )
     p.append(Vertex(3,2));  //was 1,2
     p.append(Vertex(0,1));
     */
+    #warning TODO: re-create the simple polygon generation from random line arrangements to test the changes to the simple polygon algorithm
 #ifdef CAIRO_DEBUG_OUTPUT
     cairo_surface_t *surface;
     cairo_t *cr;
-    surface = cairo_pdf_surface_create ("debug.pdf", 1500, 2500);
+//    surface = cairo_pdf_surface_create ("debug.pdf", 1500, 2500);
+    surface = cairo_pdf_surface_create ("debug.pdf", 1000, 1000);
     cr = cairo_create (surface);
-    cairo_translate( cr, 500, 200);
-    cairo_scale (cr, 1/1000000.0, 1/1000000.0);
+    cairo_translate( cr, 500, 500);
+    cairo_scale (cr, 1/1000.0, -1/1000.0);
+    //cairo_translate( cr, 500, 200);
+    //cairo_scale (cr, 1/1000000.0, 1/1000000.0);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL);
 #endif 
 
     FILE* f = fopen("out/huge.poly", "rb");
     uint64_t numVertices;
-    fread( &numVertices, sizeof(numVertices), 1, f);
-
+    int nRead = fread( &numVertices, sizeof(numVertices), 1, f);
+    if (nRead != 1) return 0;
     while (numVertices--)
     {
         int32_t v[2];
-        fread( v, 2 * sizeof(int32_t), 1, f);
+        int nRead = fread( v, 2 * sizeof(int32_t), 1, f);
+        if (nRead != 1) return 0;
         p.append(Vertex(v[0], v[1]));
     }
     
     //p.simplifyArea(100000);
-    std::cout << "has " << p.vertices().size() << " vertices left" << endl;
+    std::cout << "has " << p.vertices().size() << " vertices" << endl;
     /*
     //TODO: perform multiple polygon simplifications for medium-sized polygons (~500 vertices) under changing random seeds
     srand(24);
@@ -136,7 +157,7 @@ int main(int, char** )
     p.append(p.front()); //close polygon*/
 
 #ifdef CAIRO_DEBUG_OUTPUT    
-    renderPolygon(cr, p.vertices() );
+    //renderPolygon(cr, p.vertices() );
 #endif
 
     /*
@@ -158,39 +179,131 @@ int main(int, char** )
 
     //TEST( intersectionsOnlyShareEndpoint(segs) );
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
+
+/*    Vertex v(-298811012,310385291);
+    for (set<Vertex>::const_iterator it = graph[v].begin(); it != graph[v].end(); it++)
+    {
+        std::cout << "vertex " << v << " is connected to vertex " << *it << std::endl;
+    }*/
+    
+
+    
     int numEdges = 0;
+    
+    BigInt X (-298904510);
+    BigInt Y ( 310265273);
+    cairo_set_source_rgb(cr, 1, 0.7, 0.7);
+    cairo_set_line_width(cr, 10);
+    int num_nodes = 0;
     for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
     {
+        if ((abs(X - it->first.x) < 1000000) && abs(Y- it->first.y) < 1000000)
+        {
+            cairo_set_source_rgb(cr, 1, 0.7, 0.7);
+        
+           for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
+           {
+                cairo_set_source_rgb(cr, 1, 0.7, 0.7);
+                cairo_set_line_width(cr, 10);
+                cairo_move_to(cr, asDouble(it->first.x-X), asDouble(it->first.y-Y) );
+                cairo_line_to(cr, asDouble(it2->x-X), asDouble(it2->y-Y));
+                cairo_stroke(cr);
+                num_nodes++;
+            }
+            
+            cairo_arc(cr, asDouble(it->first.x-X), asDouble(it->first.y-Y), 1500, 0, 2 * M_PI);
+            cairo_set_source_rgb (cr, 0.2, 0.2, 0.8);
+            cairo_fill (cr);
+            cairo_stroke(cr);
+        }
+        
 /*           for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
                 cout << "#\t" << it->first << "," << *it2 << endl;
                 */
         numEdges += it->second.size();
     }
+
+
+	
+
+    cairo_arc(cr, asDouble(-298918556 - X), asDouble(310273241 - Y), 1500, 0, 2 * M_PI); //'predecessor'
+    cairo_set_source_rgb (cr, 0.8, 0.2, 0.8);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+
+    cairo_arc(cr, 0, 0, 1500, 0, 2 * M_PI); //'Center'
+    cairo_set_source_rgb (cr, 0.2, 0.8, 0.2);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+
+    cairo_arc(cr, asDouble(-298851625 - X), asDouble(310333159 - Y), 1500, 0, 2 * M_PI); //'successor'
+    cairo_set_source_rgb (cr, 0.8, 0.2, 0.2);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+
+    cairo_arc(cr, asDouble(-298853216 - X), asDouble(310343209 - Y), 1500, 0, 2 * M_PI); //'successor 2'
+    cairo_set_source_rgb (cr, 0.8, 0.8, 0.2);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+
+	    
+    cairo_arc(cr, asDouble(-299044300 - X), asDouble(310085832 - Y), 1500, 0, 2 * M_PI); //'predecessor during 2nd approach'
+    cairo_set_source_rgb (cr, 0.8, 0.8, 0.8);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+    	
+    cairo_arc(cr, asDouble(-298811012 - X), asDouble(310385291 - Y), 1500, 0, 2 * M_PI); 
+    cairo_set_source_rgb (cr, 0.7, 0.7, 0.8);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+
+    cairo_arc(cr, asDouble(-298825118 - X), asDouble(310367184 - Y), 1500, 0, 2 * M_PI); 
+    cairo_set_source_rgb (cr, 0.5, 0.5, 0.7);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+
+    cairo_arc(cr, asDouble(-298809204 - X), asDouble(310384402 - Y), 1500, 0, 2 * M_PI); 
+    cairo_set_source_rgb (cr, 0.9, 0.3, 0.3);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+	
+    cairo_arc(cr, asDouble(-298805191 - X), asDouble(310393248 - Y), 1500, 0, 2 * M_PI); 
+    cairo_set_source_rgb (cr, 0.3, 0.9, 0.3);
+    cairo_fill (cr);
+    cairo_stroke(cr);
+	
+   	
+
+    
+    cout << num_nodes << " edges rendered to pdf" << endl;
+
     std::cout << "Connectivity graph consists of " << graph.size() << " vertices and " << numEdges << " edges." << std::endl;
 
     //return 0;
+    
     list<VertexChain> polygons = getPolygons(graph);
 
-/*
+    uint64_t num_vertices = 0;
     for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
     {
+        num_vertices += it->vertices().size();
+        /*
         AABoundingBox box = it->getBoundingBox();
         std::cout << "size: " << it->vertices().size() << ", box: (" << box.width() << ", " << box.height() << ") " << box << endl;
         for (list<Vertex>::const_iterator it2 = it->vertices().begin(); it2 != it->vertices().end(); it2++)
-            std::cout << "\t" << *it2 << endl;
+            std::cout << "\t" << *it2 << endl;*/
     }
-*/
-    std::cout << "generated " << polygons.size() << " polygons" << endl;
+    std::cout << "generated " << polygons.size() << " polygons with a total of " << num_vertices << " vertices " << endl;
     
     // print final polygons    
 
     
 #ifdef CAIRO_DEBUG_OUTPUT
     //renderPolygons(cr, polygons);
-    renderGraph(cr, graph);
-    cairo_set_source_rgb(cr, 1, 0, 0);
-    cairo_arc (cr, 46, 38, 2, 0, 2*M_PI);
-    cairo_stroke(cr);
+    //renderGraph(cr, graph);
+    //cairo_set_source_rgb(cr, 1, 0, 0);
+    //cairo_arc (cr, 46, 38, 2, 0, 2*M_PI);
+    //cairo_stroke(cr);
 
     cairo_destroy(cr);
     cairo_surface_finish (surface);

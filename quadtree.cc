@@ -7,12 +7,12 @@ class QuadTreeNode
 public:
     QuadTreeNode(AABoundingBox _box);
     ~QuadTreeNode();
-    void insertIntoHierarchy( LineSegment edge1, list<LineSegment> &createdSegments);
+    void insertIntoHierarchy( LineSegment edge1, list<LineSegment> &createdSegments, int depth);
     void printHierarchy(int depth = 0);
     void exportSegments(list<LineSegment> &segments_out);
 private:
     bool addToQuadrant(LineSegment seg);    
-    bool intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments);
+    bool intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments, int depth);
     int  coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &bl, bool &br) const;
     void subdivide();
     static const unsigned int SUBDIVISION_THRESHOLD = 20; //determined experimentally
@@ -58,12 +58,18 @@ void moveIntersectionsToIntegerCoordinates3(list<LineSegment> &segments)
         LineSegment seg = segments.front();
         segments.pop_front();
         //cout << "inserting segment " << ++num << ": " << seg << endl;
-        root.insertIntoHierarchy(seg, segments);
+        root.insertIntoHierarchy(seg, segments, 0);
     }
     assert(segments.size() == 0);
     //root.printHierarchy();
     root.exportSegments(segments);
-    //delete root;
+    
+    
+    /*TODO: should be actived and used once for the whole world coastline set (to make sure than no bugs remain)
+            This is likely unfeasible for the current implementation (which has an O(n²) time complexity), since
+            the largest polygon consists of 4 mio. vertices. But an alternative implementation might serve.
+    //assert(intersectionsOnlyShareEndpoint(segments)); */
+
 }
 
 Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Vertex end)
@@ -138,8 +144,8 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     {
         if (it->first < initial_start) initial_start = it->first;
         assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
-        if (it->second.size() == 1)
-            std::cout << "warning: vertex " << it->first << "is only connected to one other vertex" << endl;
+        /*if (it->second.size() == 1)
+            std::cout << "warning: vertex " << it->first << " is only connected to one other vertex" << endl;*/
     }
 
     //std::cout << "minimum vertex is " << initial_start << std::endl;
@@ -164,12 +170,15 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     chain.push(start);
     chain.push(end);
     
+    //std::cout << start << ", " << graph[start].size() << endl;
+    //cout << end << ", " << graph[end].size() << endl;
     do
     {
         Vertex cont = getLeftMostContinuation(graph[end], start, end);
         //std::cout << "continue at" <<  cont << std::endl;
         start = end;
         end = cont;
+        //cout << cont << ", " << graph[cont].size() << (alreadyPassed.count(cont) ? " *":"" ) << endl;
         
         if (alreadyPassed.count(end) > 0)
         {
@@ -212,15 +221,48 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     return res;
 }
 
-list<VertexChain> toSimplePolygons(const list<Vertex> &polygon)
+map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments )
+{
+    map<Vertex, set<Vertex> > graph;
+    
+    for (list<LineSegment>::const_iterator seg = segments.begin(); seg != segments.end(); seg++)
+    {
+        if (graph.count( seg->start ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->start, set<Vertex>()));
+        if (graph.count( seg->end   ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->end,   set<Vertex>()));
+        
+        graph[seg->start].insert( seg->end);
+        graph[seg->end].insert( seg->start);
+    }
+    
+    return graph;
+}
+
+list<VertexChain> toSimplePolygons(VertexChain &polygon/*, bool canDestroyInput*/)
 {
     assert (polygon.front() == polygon.back());    
-    if (polygon.size() < 4) return list<VertexChain>();
+    polygon.canonicalize();
+    
+    if (polygon.vertices().size() < 4) return list<VertexChain>();
     
     list<LineSegment> segs;
-    list<Vertex>::const_iterator it2 = polygon.begin();
-    for (list<Vertex>::const_iterator it = it2++; it2 != polygon.end(); it++, it2++)
+    list<Vertex>::const_iterator it2 = polygon.vertices().begin();
+    list<Vertex>::const_iterator it = it2++;
+    list<Vertex>::const_iterator end = polygon.vertices().end();
+    while ( it2 != end )
+    {
         segs.push_back( LineSegment(*it, *it2) );
+        it2++;
+        //if (canDestroyInput)
+        //    it = polygon.erase(it);
+        //else
+            it++;
+    }
+/*    if (canDestroyInput)
+    {
+        assert( polygon.size() == 1);
+        polygon.clear();
+    }*/
+        
     
     moveIntersectionsToIntegerCoordinates3(segs);
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
@@ -270,13 +312,12 @@ QuadTreeNode::~QuadTreeNode()
     delete br;
 }
 
-bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments)
+bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments, int depth)
 {
    for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); )
    {
         LineSegment edge1_aux, edge2_aux;
         bool edge1_modified, edge2_modified;
-        //LineSegment oldEdge2 = *edge2;
         handleIntersection (edge1, *edge2, edge1_aux, edge2_aux, edge1_modified, edge2_modified);
 
         if (edge1_aux) createdSegments.push_back(edge1_aux);    //newly created segments need to be checked against the whole hierarchy as well
@@ -284,14 +325,16 @@ bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> 
         
         if (edge2_modified)
         {
-            if ((bool) *edge2) createdSegments.push_back(*edge2);
+            if ((bool) *edge2) 
+                createdSegments.push_back(*edge2);
             //cout << "removing edge " << oldEdge2 << endl;
             edge2 = segments.erase(edge2);
         } else edge2++;
         
         if (edge1_modified)
         {
-            if ((bool) edge1) createdSegments.push_back(edge1);
+            if ((bool) edge1) 
+                createdSegments.push_back(edge1);
             return true;
         }
     }
@@ -301,11 +344,11 @@ bool QuadTreeNode::intersectedByRecursive( LineSegment edge1, list<LineSegment> 
     
     bool in_tl, in_tr, in_bl, in_br;
     coversQuadrants( edge1, in_tl, in_tr, in_bl, in_br);
-    
-    if (in_tl && tl->intersectedByRecursive( edge1, createdSegments)) return true;
-    if (in_tr && tr->intersectedByRecursive( edge1, createdSegments)) return true;
-    if (in_bl && bl->intersectedByRecursive( edge1, createdSegments)) return true;
-    if (in_br && br->intersectedByRecursive( edge1, createdSegments)) return true;
+        
+    if (in_tl && tl->intersectedByRecursive( edge1, createdSegments, depth)) return true;
+    if (in_tr && tr->intersectedByRecursive( edge1, createdSegments, depth)) return true;
+    if (in_bl && bl->intersectedByRecursive( edge1, createdSegments, depth)) return true;
+    if (in_br && br->intersectedByRecursive( edge1, createdSegments, depth)) return true;
     return false;
 }
 
@@ -313,27 +356,25 @@ bool QuadTreeNode::addToQuadrant(LineSegment seg)
 {
     assert (tl && tr && bl && br);
 
+   
+
     if      (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { 
-        //cout << "adding edge " << seg << " to QuadTreeNode " << tl->box << endl;
         tl->segments.push_front(seg); 
         return true; 
     }
     
     if (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y > mid_y && seg.end.y > mid_y) { 
-        //cout << "adding edge " << seg << " to QuadTreeNode " << bl->box << endl;
         bl->segments.push_front(seg); 
         return true; 
     }
     
     if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { 
-        //cout << "adding edge " << seg << " to QuadTreeNode " << tr->box << endl;
         tr->segments.push_front(seg); 
         return true; 
     }
     
     if (seg.start.x > mid_x && seg.end.x > mid_x && seg.start.y > mid_y && seg.end.y > mid_y) 
     { 
-        //cout << "adding edge " << seg << " to QuadTreeNode " << br->box << endl;
         br->segments.push_front(seg); 
         return true; 
     }
@@ -549,17 +590,18 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
 
     BigInt dist = Vertex(mid_x, mid_y).pseudoDistanceToLine(edge.start, edge.end);
     if (dist == 0) { tl = tr = bl = br = true; return 4;} // edge passes through center (where all quadrants meet) --> passes all quadrants
-
-    if ( tl && br) //tl and br quadrant --> edge has to pass through at lest one other quadrant to connect these two
+    //FIXME: the following four relations have been inverted, because with top<bottom for the bounding boxed, the x axis was inverted
+    //       still, the inversion has been done based on a hunch, without any formal tests
+    if ( tl && br) //tl and br quadrant --> edge has to pass through at least one other quadrant to connect these two
     {
-        bl = dist <  0; //edge from top-left to bottom-right; (mid_x,mid_y) lies left of edge --> edge passes through bl quadrant
-        tr = dist >  0; //edge from tl to br; (mid_x, mid_y) lies right of edge --> edge passes through tr quadrant
+        bl = dist >  0; //edge from top-left to bottom-right; (mid_x,mid_y) lies left of edge --> edge passes through bl quadrant
+        tr = dist <  0; //edge from tl to br; (mid_x, mid_y) lies right of edge --> edge passes through tr quadrant
     }
     
     if ( bl && tr)
     {
-        br = (dist <  0); //edge from bottom-left to top-right; (mid_x,mid_y) lies left of edge --> edge passes through br quadrant
-        tl = (dist >  0); //edge from bl to tr; (mid_x, mid_y) lies right of edge --> edge passes through tr quadrant
+        br = (dist >  0); //edge from bottom-left to top-right; (mid_x,mid_y) lies left of edge --> edge passes through br quadrant
+        tl = (dist <  0); //edge from bl to tr; (mid_x, mid_y) lies right of edge --> edge passes through tr quadrant
     }
     return 3;
 }
@@ -574,21 +616,14 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
  * 3. Add it to the current QuadTreeNode
  * 4. If the number of edges in the current QuadTreeNode now exceeds a given threshold, subdivide it
  */
-void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &createdSegments)
+ 
+void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &createdSegments, int depth)
 {
-/*    static int num = 0;
-    num++;*/
-    
-    /*if ((box.left() == 37) && (box.top() == 36) && (box.right() == 50) && (box.bottom() == 49))
-        for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); edge2++)
-            cout << "  edges at box: " << box << ": " << *edge2 << endl;
-    */
     for (list<LineSegment>::iterator edge2 = segments.begin(); edge2 != segments.end(); )
     {
-    //( 37, 36) - ( 50, 49)
+
         LineSegment edge1_aux, edge2_aux;
         bool edge1_modified, edge2_modified;
-        //LineSegment oldEdge2 = *edge2;
         handleIntersection (edge1, *edge2, edge1_aux, edge2_aux, edge1_modified, edge2_modified);
 
         if (edge1_aux) createdSegments.push_back(edge1_aux);    //newly created segments need to be checked against the whole hierarchy as well
@@ -624,10 +659,10 @@ void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &cr
     int num_quads = coversQuadrants( edge1, in_tl, in_tr, in_bl, in_br);
     if (num_quads == 1)
     {
-        if      (in_tl) return tl->insertIntoHierarchy(edge1, createdSegments);
-        else if (in_tr) return tr->insertIntoHierarchy(edge1, createdSegments);
-        else if (in_bl) return bl->insertIntoHierarchy(edge1, createdSegments);
-        else if (in_br) return br->insertIntoHierarchy(edge1, createdSegments);
+        if      (in_tl) return tl->insertIntoHierarchy(edge1, createdSegments, depth+1);
+        else if (in_tr) return tr->insertIntoHierarchy(edge1, createdSegments, depth+1);
+        else if (in_bl) return bl->insertIntoHierarchy(edge1, createdSegments, depth+1);
+        else if (in_br) return br->insertIntoHierarchy(edge1, createdSegments, depth+1);
         else assert(false);
         return;
     }
@@ -636,15 +671,16 @@ void QuadTreeNode::insertIntoHierarchy( LineSegment edge1, list<LineSegment> &cr
      * has children. But edge still needs to be here, because it would pass through more than one child node
      * Before it can be added to 'segments', however, we need to verify that 'edge' does not intersect with any
      * edge from any child node */
-     
-     if ( tl->intersectedByRecursive( edge1, createdSegments)) return;
-     if ( tr->intersectedByRecursive( edge1, createdSegments)) return;
-     if ( bl->intersectedByRecursive( edge1, createdSegments)) return;
-     if ( br->intersectedByRecursive( edge1, createdSegments)) return;
+    if (in_tl && tl->intersectedByRecursive( edge1, createdSegments, depth+1)) return;
+    if (in_tr && tr->intersectedByRecursive( edge1, createdSegments, depth+1)) return;
+    if (in_bl && bl->intersectedByRecursive( edge1, createdSegments, depth+1)) return;
+    if (in_br && br->intersectedByRecursive( edge1, createdSegments, depth+1)) return;
      
     segments.push_back(edge1);
     //cout << "adding edge " << edge1 << " to QuadTreeNode " << box << endl;
     //no need to check if this node should be subdivided, this point is only reached if the node is already subdivided
     assert (tl && tr && bl && br);
 } 
+
+
 

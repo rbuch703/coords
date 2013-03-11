@@ -71,6 +71,11 @@ bool LineSegment::isParallelTo( const LineSegment &other) const
     return (end.x- start.x)*(other.end.y - other.start.y) ==  (end.y- start.y)*(other.end.x - other.start.x);
 }
 
+std::ostream& operator <<(std::ostream &os, const LineSegment edge)
+{
+    os << edge.start  << " - " << edge.end;
+    return os;
+}
 
 // @returns whether the vertex lies on the line (not necessarily on the line segment)
 bool LineSegment::isColinearWith(const Vertex v) const
@@ -271,6 +276,9 @@ BigFraction LineSegment::getCoefficient(const Vertex v) const
     return c1;
 }
 
+
+/** returns whether two line segments overlap by more than a single point.
+  * As a necessary condition for overlap, the two segments have to be parallel */
 bool LineSegment::overlapsWith(const LineSegment &other) const
 {
     BigInt odx = other.end.x-other.start.x;
@@ -632,21 +640,6 @@ void moveIntersectionsToIntegerCoordinates2(list<LineSegment> &segments)
 }
 #endif
 
-map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments )
-{
-    map<Vertex, set<Vertex> > graph;
-    
-    for (list<LineSegment>::const_iterator seg = segments.begin(); seg != segments.end(); seg++)
-    {
-        if (graph.count( seg->start ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->start, set<Vertex>()));
-        if (graph.count( seg->end   ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->end,   set<Vertex>()));
-        
-        graph[seg->start].insert( seg->end);
-        graph[seg->end].insert( seg->start);
-    }
-    
-    return graph;
-}
 
 bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments)
 {

@@ -1,5 +1,6 @@
 
 #include "vertexchain.h"
+#include "quadtree.h" //for toSimplePolygons()
 
 #include <queue>
 #include <boost/foreach.hpp>
@@ -539,4 +540,10 @@ bool VertexChain::isClockwise()
     assert( v.pseudoDistanceToLine( vPred, vSucc) != 0 && "colinear vertices detected");
     return v.pseudoDistanceToLine( vPred, vSucc) < 0;
 }
+
+list<VertexChain> VertexChain::toSimplePolygon()
+{
+    return toSimplePolygons(*this);
+}
+
 

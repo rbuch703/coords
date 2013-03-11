@@ -15,6 +15,7 @@
 #include "osm_types.h"
 #include "symbolic_tags.h"
 
+#include <iostream>
 
 std::ostream& operator <<(std::ostream& os, const OSMVertex v)
 {
@@ -361,11 +362,20 @@ OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
     {
         int32_t lat;
         size_t num_read = fread(&lat, sizeof(lat), 1, src);
-        assert (num_read == 1);
+        if (num_read != 1)
+        {
+            cout << "Invalid read operation" << endl;
+            exit(0);
+        }
         
         int32_t lon;
         num_read = fread(&lon, sizeof(lon), 1, src);
-        assert (num_read == 1);
+        if (num_read != 1)
+        {
+            cout << "Invalid read operation" << endl;
+            exit(0);
+        }
+
         vertices.push_back( OSMVertex(lat, lon));
     }
     tags = deserializeTags(src);

@@ -37,6 +37,7 @@ public:
         In the latter case the state of the polygon is undefined. */
     bool simplifyArea(double allowedDeviation);
     void simplifyStroke(double allowedDeviation);
+    list<VertexChain> toSimplePolygon();
 private:
     void simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);
     std::list<Vertex> m_vertices;

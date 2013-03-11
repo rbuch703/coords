@@ -30,7 +30,7 @@ void writePolygonToDisk(std::string path, VertexChain segment)
     }
 
     if (segment.vertices().size() < 4) return; // can't be a polygon with less than four vertices (first and last are identical)
-    list<VertexChain> simples = toSimplePolygons( segment.vertices() );
+    list<VertexChain> simples = segment.toSimplePolygon( );
     
     if (segment.vertices().size() > 1000)
         std::cout << "\ttook " << (getWallTime() - secs) << " seconds" << endl;
@@ -49,29 +49,9 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 
 void handlePolygon(string, VertexChain& segment)
 {
-    segment.canonicalize();
-    static int count = 0;
-    
-    count++;
-    //FIXME: polygon 463652 increases in size about threefold due to "toSimplePolygons()"
-    //FIXME: polygon 463653 [sic] has a size mismatch 
-    //FIXME: polygon 305673	is split into 39 simple polygons, could be a bug
-    
-    /*if (count == 463652) dumpPolygon("out/huge.poly", segment.vertices());
-    if (count == 463653) dumpPolygon("out/mismatch.poly", segment.vertices());  */
-    
-    //int size_before = segment.vertices().size();
-    //double  = getTime()
-    list<VertexChain> polygons = toSimplePolygons(segment.vertices());
-    //int size = 0;
-    std::cout << count;
-    if (polygons.size() > 10)
-        std::cout << "\t split into " << polygons.size() << " simple polygons ";// << size;
-    std::cout << std::endl;
-    /*segment.canonicalize();
-     poly_storage.push_back(segment);*/
+    list<VertexChain> polys = segment.toSimplePolygon();
+    poly_storage.splice(poly_storage.end(), polys);
      
-    //#warning FIXME: filter out those "polygons" that have less than four vertices
     //dumpPolygon(file_base, segment);
 }
 

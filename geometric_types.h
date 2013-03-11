@@ -89,15 +89,15 @@ inline double asDouble(int128_t a) { return a.toDouble();}
 inline double asDouble(ValidatingBigint a) { return a.toDouble();}
 #endif
 
-inline std::ostream& operator <<(std::ostream& os, const LineSegment &edge)
-{
-    os << "(" << asDouble(edge.start.x) << ", " << asDouble(edge.start.y) << ") - (";
-    os        << asDouble(edge.end.x)   << ", " << asDouble(edge.end.y) << ")";
-    //os << edge.start << " - " << edge.end;
-    return os;
-}
+std::ostream& operator <<(std::ostream &os, const LineSegment edge);
 
 
+/* BEWARE: the AABB has orientation semantics different from all other classes: 
+           For an AABB "top" refers to the line with the minimum y coordinate (of the AABB), whereas
+           All other classes assume 'top' to have the maximum relevant y value.
+           Thus, the meaning of 'top' and 'bottom' (and by extension the meaning of'left and 'right'
+           for the orientation test) are switched for AABBs
+            */
 struct AABoundingBox
 {
     AABoundingBox(const Vertex v);
@@ -125,7 +125,6 @@ std::ostream& operator <<(std::ostream& os, const Vertex v);
 
 bool resolveOverlap(LineSegment &A, LineSegment &B);
 map<LineSegment, list<LineSegment>> findIntersectionsBruteForce(const list<LineSegment> &segments);
-map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments );
 bool intersectionsOnlyShareEndpoint(const list<LineSegment> &segments);
 void moveIntersectionsToIntegerCoordinates(list<LineSegment> &segments);
 

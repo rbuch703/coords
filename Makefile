@@ -16,8 +16,8 @@ GEO_OBJ  = $(GEO_SRC:.cc=.o) math64.o
 # already uses all bits of an int64_t, so, more complex algorithms could easily cause an - otherwise undetected -
 # integer overflow
 # WARNING: the gcc option -O2 appears to negate the effects of -ftrapv ! 
-#FLAGS = -g -Wall -Wextra -DNDEBUG -O2
-FLAGS = -ftrapv -g -Wall -Wextra 
+FLAGS = -g -Wall -Wextra -DNDEBUG -O2
+#FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
@@ -51,11 +51,11 @@ tests: tests/arithmetic_test tests/geometry_test
 
 tests/arithmetic_test: math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@ math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc
+	@g++ math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@ 
 
-tests/geometry_test: math64.o int128ng.o geometric_types.o tests/geometry_test.cc
+tests/geometry_test: math64.o int128ng.o quadtree.o vertexchain.o geometric_types.o tests/geometry_test.cc
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ math64.o int128ng.o geometric_types.o tests/geometry_test.cc
+	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ math64.o int128ng.o quadtree.o vertexchain.o geometric_types.o tests/geometry_test.cc
 	 
 math64.o: math64.asm
 	@echo [ASM] $<
