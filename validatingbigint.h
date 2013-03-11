@@ -3,7 +3,7 @@
 #define VALIDATINGBIGINT_H
 
 #include <gmpxx.h>
-#include "int128ng.h"
+#include "int128.h"
 
 inline mpz_class toMpz(int128_t val) 
 {

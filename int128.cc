@@ -1,28 +1,31 @@
 
 #include "int128.h"
 
+// from math64.asm
+extern "C" uint64_t add (uint64_t a, uint64_t b, uint64_t *carry_out);
+extern "C" uint64_t sub (uint64_t a, uint64_t b, uint64_t *borrow);
+extern "C" uint64_t add3(uint64_t a, uint64_t b, uint64_t c, uint64_t *carry_out);
+extern "C" uint64_t sub128(uint64_t a_hi, uint64_t a_lo, uint64_t b_hi, uint64_t b_lo, uint64_t *res_hi, uint64_t *res_lo);
+extern "C" uint64_t mul (uint64_t a, uint64_t b, uint64_t *hi);
+extern "C" uint64_t div128(uint64_t *a_hi, uint64_t *a_lo, uint64_t b);
+
 
 bool operator<(const int128_t a, const int128_t b)
 {
     //special case: both are zero --> none is smaller, no matter what their (possibly different) signs may be
-    if ( a.data[3] == 0 && a.data[2] == 0 && a.data[1] == 0 && a.data[0] == 0 &&
-         b.data[3] == 0 && b.data[2] == 0 && b.data[1] == 0 && b.data[0] == 0)
-        return false;
+    if ( a.hi == 0 && a.lo == 0 && b.hi == 0 && b.lo == 0) return false;
 
-    if (a.isPositive != b.isPositive)
-        return b.isPositive;
-        
+    if (a.isPositive != b.isPositive) return b.isPositive;
+    
+    //if this point is reached, 'a' and 'b' have equal sign
     bool flipSign = (! a.isPositive);
     
-    //special case: both values are equal--> none is smaller
-    if (a.data[3] == b.data[3] && a.data[2] == b.data[2] &&
-        a.data[1] == b.data[1] && a.data[0] == b.data[0])
-        return false;
+    //special case: both values are equal--> none is smaller, no matter the actual sign
+    if (a.hi == b.hi && a.lo == b.lo) return false;
     
-    bool sign = a.data[3] != b.data[3] ? a.data[3] < b.data[3] :
-                a.data[2] != b.data[2] ? a.data[2] < b.data[2] :
-                a.data[1] != b.data[1] ? a.data[1] < b.data[1] :
-                a.data[0] <  b.data[0];
+    bool sign = a.hi != b.hi ? a.hi < b.hi :
+                a.lo < b.lo;
+                
     return flipSign ? !sign : sign;
 }
 
@@ -35,13 +38,10 @@ bool operator>=(const int128_t a, const int128_t b) { return a > b || a == b;}
 bool operator==(int128_t a, int128_t b)
 {
     //if both are zero, they are equal, no matter their sign
-    if ( a.data[3] == 0 && a.data[2] == 0 && a.data[1] == 0 && a.data[0] == 0 &&
-         b.data[3] == 0 && b.data[2] == 0 && b.data[1] == 0 && b.data[0] == 0)
+    if ( a.hi == 0 && a.lo == 0 && b.hi == 0 && b.lo == 0)
          return true;
 
-
-    return (a.isPositive == b.isPositive && a.data[0] == b.data[0] && a.data[1] == b.data[1] &&
-            a.data[2] == b.data[2] && a.data[3] == b.data[3]);
+    return (a.isPositive == b.isPositive && a.hi == b.hi && a.lo == b.lo);
 }
 
 bool operator!=(int128_t a, int128_t b)
@@ -57,32 +57,15 @@ int128_t operator+(int128_t a, int128_t b)
     {
         int128_t tmp;
         tmp.isPositive = a.isPositive;
-        /*
-        uint32_t carry = 0;
         
-        for (int i = 0; i < 4; i++)
-        {
-            uint64_t sum = ((uint64_t)a.data[i]) + b.data[i] + carry;
-            tmp.data[i] = sum & 0x00000000FFFFFFFFull;
-            carry       =(sum & 0xFFFFFFFF00000000ull) >> 32;
-        }*/
-        uint64_t sum = ((uint64_t)a.data[0]) + b.data[0];
-        tmp.data[0] = sum & 0x00000000FFFFFFFFull;
-
-        sum         =(sum & 0xFFFFFFFF00000000ull) >> 32;
-        sum +=       ((uint64_t)a.data[1]) + b.data[1];
-        tmp.data[1] = sum & 0x00000000FFFFFFFFull;
-
-        sum         =(sum & 0xFFFFFFFF00000000ull) >> 32;
-        sum +=       ((uint64_t)a.data[2]) + b.data[2];
-        tmp.data[2] = sum & 0x00000000FFFFFFFFull;
-
-        sum         =(sum & 0xFFFFFFFF00000000ull) >> 32;
-        sum +=       ((uint64_t)a.data[3]) + b.data[3];
-        tmp.data[3] = sum & 0x00000000FFFFFFFFull;
-
-        assert( (sum & 0xFFFFFFFF00000000ull) >> 32 == 0 && "Overflow");
-
+        uint64_t carry;
+        tmp.lo = add(a.lo, b.lo, &carry);
+        tmp.hi = add(a.hi, carry,&carry);
+        
+        assert (!carry && "Overflow");
+        tmp.hi = add(tmp.hi, b.hi, &carry);
+        assert (!carry && "Overflow");
+        
         return tmp;
 
     } else if (a.isPositive)
@@ -91,9 +74,26 @@ int128_t operator+(int128_t a, int128_t b)
         return b - (-a);
 }
 
-
-int128_t operator*(int128_t a, uint32_t b)
+int128_t operator*(int128_t a, uint64_t b)
 {
+
+    uint64_t hi1;
+    uint64_t lo = mul(a.lo, b, &hi1);
+    uint64_t overflow;
+    uint64_t hi = mul(a.hi, b, &overflow);
+    assert(!overflow && "Overflow");
+    
+    hi = add(hi, hi1, &overflow);
+    assert(!overflow && "Overflow");
+    
+    return int128_t( a.isPositive, hi, lo);
+}
+
+/*int128_t operator*(int128_t a, uint32_t b)
+{
+    
+    
+
     uint32_t carry = 0;
     for (int i = 0; i < 4; i++)
     {
@@ -104,115 +104,81 @@ int128_t operator*(int128_t a, uint32_t b)
     }
     assert (carry == 0 && "Overflow");
     return a;
-}
+}*/
 
 
 int128_t operator*(int128_t a, int128_t b)
 {
 
-    int128_t res;
-    res.isPositive = (a.isPositive == b.isPositive);
-
-    /*    a3    a2    a1    a0 * b3    b2    b1    b0
-     *    ===========================================
-     *                       | a3b0  a2b0  a1b0  a0b0
-     *                   a3b1| a2b1  a1b1  a0b1
-     *             a3b2  a2b2| a1b2  a0b2
-     *       a3b3  a2b3  a1b3| a0b3                 
-                 Overflow    |  fits into an int128_t  */
-            
-    assert( (a.data[3] == 0 || (b.data[3] == 0 && b.data[2] == 0 && b.data[1] == 0) ) && "Overflow");
-    assert( (a.data[2] == 0 || (b.data[3] == 0 && b.data[2] == 0)                   ) && "Overflow");
-    assert( (a.data[1] == 0 ||  b.data[3] == 0                                      ) && "Overflow");
-     
-    uint64_t sum = (uint64_t)a.data[0] * b.data[0];
-
-    res.data[0] =  sum & 0x00000000FFFFFFFFull;
-    uint64_t carry=(sum & 0xFFFFFFFF00000000ull) >> 32;
-
-    //need to "shave off" the carry after each multiplication, otherwise 'sum' could overflow
-    sum = (uint64_t)a.data[1]*b.data[0]+carry;
-    carry = (sum & 0xFFFFFFFF00000000ull) >> 32;
-    sum&= 0x00000000FFFFFFFFull;
-    sum+= (uint64_t)a.data[0]*b.data[1];
-    carry+= (sum & 0xFFFFFFFF00000000ull) >> 32;
-    res.data[1] = sum & 0x00000000FFFFFFFFull;
-
-    sum = (uint64_t)a.data[2]*b.data[0] + carry;
-    carry = (sum & 0xFFFFFFFF00000000ull) >> 32;
-    sum&= 0x00000000FFFFFFFFull;
-    sum+= (uint64_t)a.data[1]*b.data[1];
-    carry+= (sum & 0xFFFFFFFF00000000ull) >> 32;
-    sum&= 0x00000000FFFFFFFFull;
-    sum+= (uint64_t)a.data[0]*b.data[2];
-    carry+= (sum & 0xFFFFFFFF00000000ull) >> 32;
-    res.data[2] = sum & 0x00000000FFFFFFFFull;
     
-    sum = (uint64_t)a.data[3]*b.data[0] + carry;
-    carry = (sum & 0xFFFFFFFF00000000ull) >> 32;
-    sum&= 0x00000000FFFFFFFFull;
-    sum+= (uint64_t)a.data[2]*b.data[1];
-    carry+= (sum & 0xFFFFFFFF00000000ull) >> 32;
-    sum&= 0x00000000FFFFFFFFull;
-    sum+= (uint64_t)a.data[1]*b.data[2];
-    carry+= (sum & 0xFFFFFFFF00000000ull) >> 32;
-    sum&= 0x00000000FFFFFFFFull;
-    sum+= (uint64_t)a.data[0]*b.data[3];
-    carry+= (sum & 0xFFFFFFFF00000000ull) >> 32;
-    res.data[3] = sum & 0x00000000FFFFFFFFull;
+    bool isPositive = (a.isPositive == b.isPositive);
     
-    assert(carry == 0 && "Overflow");
+    uint64_t hi;
+    uint64_t lo = mul(a.lo, b.lo, /*out*/&hi);
+
+    uint64_t overflow;
+    uint64_t hi2 = mul(a.lo, b.hi, /*out*/&overflow);
+    assert( !overflow );
+
+    uint64_t hi3 = mul(a.hi, b.lo, /*out*/&overflow);
+    assert( !overflow);
     
-    return res;
+    assert ((a.hi == 0 || b.hi == 0) && "Overflow");
+    hi = add3( hi, hi2, hi3, &overflow);
+    assert(!overflow);
     
-    /*int128_t res = a * b.data[0] + 
-                  (a * b.data[1] << 32) + 
-                  (a * b.data[2] << 64) + 
-                  (a * b.data[2] << 96);
-    return res; */
+    return int128_t(isPositive, hi, lo);
 }
 
 /* since b is in range [0, 2^32-1], mod can be in range [-2^32-1, 2^32-1] (the former only if a is negative),
    and thus we need something bigger than an int32_t to hold 'b' */
-int128_t divmod (const int128_t a, const uint32_t b, int64_t &mod)
+
+int128_t divmod (const int128_t a, const uint64_t b, uint64_t &mod)
 {
-    int128_t res;
-    res.isPositive = a.isPositive;
+    int128_t res = a;
     
-    res.data[3] = a.data[3] / b;
-    
-    int64_t tmp = a.data[3] - (res.data[3] * (int64_t)b);
-    tmp = (tmp << 32) | a.data[2];
-    assert(tmp >= 0);
-    
-    res.data[2] = tmp / b;
-    tmp = tmp - (res.data[2] * (int64_t)b);
-    tmp = (tmp << 32) | a.data[1];
-    assert( tmp >=0);
-    
-    res.data[1] = tmp / b;
-    tmp = tmp - (res.data[1] * (int64_t)b);
-    tmp = (tmp << 32) | a.data[0];
-    assert( tmp >= 0);
-    
-    res.data[0] = tmp / b;
-    tmp = tmp - (res.data[0] * (int64_t)b);
-    assert( tmp < b);
+    mod = div128(&res.hi, &res.lo, b);
 
-    mod = a.isPositive ? tmp : - (int64_t)tmp;
-
-    assert( res*b + mod == a );
-    
     return res;
 
 }
 
+/* determines the length of the sequence of zero-valued high-order bits in 'a' */
+inline int numHighZero(uint64_t a)
+{
+    assert ( a!= 0); // if 'a' is zero, this method should not need to be used
+    int shl = 0;
+    if (! (a & 0xFFFFFFFF00000000ull)) { shl += 32; a <<= 32;}    
+    if (! (a & 0xFFFF000000000000ull)) { shl += 16; a <<= 16;}
+    if (! (a & 0xFF00000000000000ull)) { shl += 8;  a <<= 8;}
+    if (! (a & 0xF000000000000000ull)) { shl += 4;  a <<= 4;}
+    if (! (a & 0xC000000000000000ull)) { shl += 2;  a <<= 2;}
+    if (! (a & 0x8000000000000000ull)) { shl += 1;  a <<= 1;}
+    
+    assert(shl <= 64);
+    return shl;
+}
+
 int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
 {
+    if (b.hi == 0) 
+    { 
+        res_mod = div128(&a.hi, &a.lo, b.lo);//divmod(a, b.lo, res_mod);
+        res_mod.isPositive = a.isPositive;
+        a.isPositive = (a.isPositive == b.isPositive);
+        return a;
+    }
+
     if ( abs(b) > abs(a) )
     {
         res_mod = a;
         return 0;
+    }
+    
+    if (abs(b) == abs(a))
+    {
+        res_mod = 0;
+        return int128_t( a.isPositive == b.isPositive, 0, 1);
     }
 
     int128_t remainder;
@@ -223,79 +189,60 @@ int128_t divmod (int128_t a, int128_t b, int128_t &res_mod)
     
     a.isPositive = b.isPositive = true;
 
-    int b_idx = b.data[3] ? 3 :
-                b.data[2] ? 2 :
-                b.data[1] ? 1 : 0;
+    //int b_idx = b.hi ? 1 : 0;
     
-    
-    /*    
-    if (b.data[3] == 0 && b.data[2] == 0 && b.data[1] == 0)
-    {
-        int64_t remainder;
-        res = divmod(a, b.data[0], remainder);
-        if (resNegative) 
-            res = -res;
+    //int128_t res(0);
 
-        res_mod = resNegative ? -remainder : remainder;
-        return res;
+    assert(b.hi < 0xFFFFFFFFFFFFFFFFull && "not implemented"); // otherwise we could not increase b_hi by 1
+    
+    
+    /* if 'b' is small (i.e. b.hi has many leading zeros) the relative difference between 'b' and '(b.hi << 64)'
+       can become very big. Thus, in the naive approach of computing '(a/b.hi) >> 64' as an approximation to 'a/b',
+       a high error introduced. Thus, the while loop would need to perform many iterations in order to compensate.
+       Instead, we fill up the leading zeroes by left-shifting 'b' and then undo the left-shift by later adjusting
+       the '>> 64' correspondingly.
+     */
+    int b_shl = numHighZero(b.hi);
+    uint64_t b_hi_tmp = b_shl == 0 ? b.hi : (b.hi << b_shl) | (b.lo >> (64 - b_shl));
+    
+
+    int128_t div_hi = (a/b_hi_tmp);
+    div_hi = div_hi >> (64 - b_shl);    //seems to trigger some kind of bug when integrated into the line above
+    int128_t div_lo = (a/(b_hi_tmp+1));
+    div_lo = div_lo >> (64 - b_shl);
+
+    /*int128_t div_hi = (a/b.hi) >> 64;
+    int128_t div_lo = a/(b.hi+1) >> 64;*/
+    //if (div_hi > div_lo+1)
+    //    std::cout << "difference is " << (div_hi - div_lo) << std::endl;
         
-    }*/
-
-    int128_t res(0);
-
-    
-    uint64_t hi = 0;
-    for (int a_idx = 3; (a_idx >= b_idx) || hi; a_idx--)
+    while (div_hi != div_lo)
     {
-        if (a < b)
-            break;
-            
-        assert ( (hi & 0xFFFFFFFFull) == 0);
-        uint64_t num = hi | a.data[a_idx];  //numerator
-        uint64_t div_hi = num / (uint64_t)b.data[b_idx];        //we can't determine the exact quotient, all we can do is
-        uint64_t div_lo = num / (((uint64_t)b.data[b_idx])+1);  //determien the lower and upper bounds and then refine them
+        assert( div_hi > div_lo);
+        int128_t mid = (div_hi + div_lo)/2;
         
-        while (div_hi != div_lo)
+        int128_t prod( b*mid );
+        if (prod <= a)
         {
-            assert( div_hi > div_lo);
-            uint32_t mid = (((uint64_t)div_hi) + div_lo)/2;
-            
-            int128_t prod( (b*mid) << ((a_idx - b_idx)*32) );
-            if (prod <= a)
-            {
-                if (prod + b > a)
-                    { div_hi = div_lo =mid; break; } //found the right divisor 
-                else  //have to go on looking, but 'mid' is too low
-                    div_lo = mid + 1;
-            }
-            else
-            {
-                assert( prod > a);
-                div_hi = mid-1;
-            }
+            if (prod + b > a)
+                { div_hi = div_lo =mid; break; } //found the right divisor 
+            else  //have to go on looking, but 'mid' is too low
+                div_lo = mid + 1;
         }
-        
-        int128_t prod = (b*div_hi) << ((a_idx - b_idx)*32);
-        
-        res.data[a_idx - b_idx] = div_hi;
-        assert (prod <= a);
-                
-        a = a - prod;
-        if (a_idx < 3) assert( a.data[a_idx+1] == 0) ;
-
-        hi = ((uint64_t)a.data[a_idx]) << 32;
+        else
+        {
+            assert( prod > a);
+            div_hi = mid-1;
+        }
     }
-
+    
+    a = a - b * div_hi;
+    
     assert ( a < b);
     
-    //res.isPositive = resPositive;
-    
-    //res_mod = a;
     res_mod = (aPositive) ? a : -a;
     
-    return resPositive ? res : -res;
-
-    
+    return resPositive ? div_hi : -div_hi;
 }
 
 int128_t operator/ (int128_t a, int128_t b)
@@ -312,15 +259,15 @@ int128_t operator% (int128_t a, int128_t b)
 }
 
 
-int128_t operator/ (int128_t a, const uint32_t b)
+int128_t operator/ (int128_t a, const uint64_t b)
 {
-    int64_t dummy;
+    uint64_t dummy;
     return divmod(a, b, dummy);
 }
 
-int128_t operator% (int128_t a, uint32_t b)
+int128_t operator% (int128_t a, uint64_t b)
 {
-    int64_t remainder;
+    uint64_t remainder;
     divmod(a,b,remainder);
     return remainder;
 }
@@ -343,36 +290,12 @@ int128_t operator-(int128_t a, int128_t b)
         
         assert( b <= a);
         
-        /*
-        uint32_t carry = 0;
-        //uint32_t res[4];
-        for (int i = 0; i < 4; i++)
-        {
-            int64_t diff = ((int64_t)a.data[i]) - b.data[i] - carry;
-
-            carry = (diff < 0) ? 1 : 0;
-            //as a (necessary) side effect, this assignment of an int64_t to an uint32_t 'repairs' the potentially negative "diff"
-            res.data[i] = diff; 
-        }*/
-
-        int64_t diff;
-        uint32_t carry;
-        diff = ((int64_t)a.data[0]) - b.data[0];
-        carry = (diff < 0);
-        res.data[0] = diff;
-
-        diff = ((int64_t)a.data[1]) - b.data[1] - carry;
-        carry = (diff < 0);
-        res.data[1] = diff;
-        
-        diff = ((int64_t)a.data[2]) - b.data[2] - carry;
-        carry = (diff < 0);
-        res.data[2] = diff;
-
-        diff = ((int64_t)a.data[3]) - b.data[3] - carry;
-        carry = (diff < 0);
-        res.data[3] = diff;
-            
+        //int64_t diff;
+#ifndef NDEBUG
+        uint64_t carry = 
+#endif
+        sub128(a.hi, a.lo, b.hi, b.lo, &res.hi, &res.lo);
+                    
         assert( carry == 0 && "buggy arithmetic" );
         return res;
 
@@ -385,8 +308,19 @@ int128_t operator-(int128_t a, int128_t b)
 int128_t operator| (int128_t a, int128_t b)
 {
     assert(a.isPositive == b.isPositive && "Opposite signs in OR, undefined result");
-    return int128_t(a.isPositive, a.data[3] | b.data[3], a.data[2] | b.data[2], a.data[1] | b.data[1], a.data[0] | b.data[0]);
+    return int128_t(a.isPositive, a.hi | b.hi, a.lo | b.lo);
 }
+
+/* //DO NOT USE, is not well-defined since int128_t is not in two's complement
+int128_t operator~ (int128_t a)
+{
+    a.isPositive = ! a.isPositive;
+    a.hi = ~a.hi;
+    a.lo = ~a.lo;
+    return a;
+}*/
+
+
 
 int128_t abs(int128_t a)
 {
@@ -398,65 +332,69 @@ int128_t abs(int128_t a)
 int128_t operator<<(int128_t a, uint32_t i)
 {
     /*WARNING: on x86 the shift operations use the ASM operation 'shl' internally.
-     *         shl shifts not by 'i', but by 'i % 32'
-     *         thus, 'x << 32' on an uint32_t does not return zero, but instead returns x unchanged
-     *         Therefore, all shifts of - AND INCLUDING - 32 and greater have to be handled seperately
+     *         shl shifts not by 'i', but by 'i % 64'
+     *         thus, 'x << 64' on an uint64_t does not return zero, but instead returns x unchanged
+     *         Therefore, all shifts of - AND INCLUDING - 64 and greater have to be handled seperately
      */
-    if (a == int128_t(0) ) return a;
+     
+    //need this early termination, because 0 is the only value for which a left-shift by an arbitrary number does not overflow
+    if (a.hi == 0 && a.lo == 0 ) return a;
     
-    assert ( i < 128);  //would overflow in any case
-    
-    while (i >= 32) //shift by a whole uint32_t
+    if (i >= 64)
     {
-        assert( a.data[3] == 0 && "Overflow");
-        a.data[3] = a.data[2];
-        a.data[2] = a.data[1];
-        a.data[1] = a.data[0];
-        a.data[0] = 0;
-        i-=32;
+        assert( (a.hi==0) && "Overflow");
+        a.hi = a.lo;
+        a.lo = 0;
+        i -= 64;
     }
 
-    /* WARNING: needs to early-terminate here, because '>>' is also modulo 32, so x>>32 returns x instead of 0**/
+    /* WARNING: needs to early-terminate here, because '>>' is also modulo 64, so x>>64 returns x instead of 0**/
+    assert( i < 64 && "Overflow");
+    
     if (i == 0) return a;
     
-    assert( (a.data[3] >> (32- i)) == 0 && "Overflow");
-    
-    a.data[3] = (a.data[3] << i) |  a.data[2] >> (32-i);
-    a.data[2] = (a.data[2] << i) | (a.data[1] >> (32-i));
-    a.data[1] = (a.data[1] << i) | (a.data[0] >> (32-i));
-    a.data[0] =  a.data[0] << i;
+    assert (a.hi >> (64-i) == 0 && "Overflow");
+
+    a.hi = (a.hi << i) | (a.lo >> (64-i));
+    a.lo = a.lo << i;
+
     return a;
 }
 
+
+/* this method needs special treatment for negative nunbers. Due to the usual two's complement,
+   a right-shift by 's' on negative numbers has the effect of dividing by 2^s and rounding down, i.e. towards negative infinity.
+   Since the in128_t is not stored in two's complement, it would instead round towards zero.
+   To arrive at correct arithmetic this rounding up effect need to be simulated. This is done by adding '1' to the final result
+   of the shift whenever at least one bit that was shifted out was non-zero
+*/
 int128_t operator>>(int128_t a, uint32_t i)
 {
     /*WARNING: on x86/x64 the shift operations use the ASM operation 'shr' internally.
-     *         shr shifts not by 'i', but by 'i % 32'
-     *         Therefore, all shifts of - AND INCLUDING - 32 and greater have to be handled seperately
+     *         shr shifts are not done by 'i', but by 'i % 64'
+     *         Therefore, all shifts of - AND INCLUDING - 64 and greater have to be handled seperately
      */
-    if (a == int128_t(0) ) return a;
+    if ((a.hi == 0 && a.lo == 0) || (i == 0)) return a;
     
-    if ( i > 128) return 0; //would shift out everything
-    
-    while (i >= 32) //shift by a whole uint32_t
+    bool shiftedOutNonZero = false;
+    if (i >= 64)    //shift by a whole uint64_t manually
     {
-        
-        a.data[0] = a.data[1];
-        a.data[1] = a.data[2];
-        a.data[2] = a.data[3];
-        a.data[3] = 0;
-        i-=32;
+        shiftedOutNonZero = a.lo;
+        a.lo = a.hi;
+        a.hi = 0;
+        i   -= 64;
     }
+    
+    if (i >= 64) return a.isPositive ? 0 : -1; //would shift out everything
+    
+    /* WARNING: needs to early-terminate here, because '<<' is also modulo 64, so x<<64 returns x instead of 0**/
+    if (i == 0) return a.isPositive | !shiftedOutNonZero ? a : a-1;
 
-    /* WARNING: needs to early-terminate here, because '<<' is also modulo 32, so x<<32 returns x instead of 0**/
-    if (i == 0) return a;
+    shiftedOutNonZero |= a.lo << (64-i);
+    a.lo = (a.lo >> i) | (a.hi << (64-i));
+    a.hi = (a.hi >> i);
 
-    a.data[0] = (a.data[0] >> i) | (a.data[1] << (32 -i));
-    a.data[1] = (a.data[1] >> i) | (a.data[2] << (32 -i));
-    a.data[2] = (a.data[2] >> i) | (a.data[3] << (32 -i));
-    a.data[3] = (a.data[3] >> i);
-
-    return a;
+    return a.isPositive | !shiftedOutNonZero ? a : a-1;
 }
 
 
@@ -471,16 +409,19 @@ std::ostream& operator<<(std::ostream &os, int128_t a)
         
     for (int i = 3; i >=0; i--)
     {
-        uint32_t shift = 28;
-        for (uint32_t mask = 0xF0000000; mask; mask >>= 4, shift -= 4)
+        uint64_t shift = 64 - 4;
+        for (uint64_t mask = 0xF000000000000000ull; mask; mask >>= 4, shift -= 4)
         {
-            uint32_t nibble = (a.data[i] & mask) >> shift;
+            uint64_t nibble = (a.data[i] & mask) >> shift;
             assert (nibble < 16);
             os << hex_digits[nibble];
         }
     }
 #else
-    os << a.toDouble();
+    //if (a.hi == 0)
+        os << (a.isPositive ? "" : "-") << a.lo;
+    //else
+    //    os << a.toDouble();
  
 #endif
     return os;

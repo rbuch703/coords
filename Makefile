@@ -1,8 +1,7 @@
 
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
-SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128ng.cc validatingbigint.cc  
-GEO_SRC = geo_unit_tests.cc geometric_types.cc vertexchain.cc int128ng.cc quadtree.cc validatingbigint.cc 
+SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc# validatingbigint.cc  
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
 
 
@@ -24,7 +23,7 @@ CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
-all: make.dep conv_osmxml data_converter simplifier geo_unit_tests gl_test tests
+all: make.dep conv_osmxml data_converter simplifier gl_test tests
 #	 @echo [ALL] $<
 
 gl_test: $(GL_TEST_SRC)
@@ -43,19 +42,23 @@ simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
 	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
-geo_unit_tests: $(GEO_OBJ)
-	@echo [LD ] $@
-	@g++ $(GEO_OBJ) $(CCFLAGS) $(LD_FLAGS) `pkg-config --libs cairo` -lgmp -lgmpxx -o $@
+#geo_unit_tests: $(GEO_OBJ)
+#	@echo [LD ] $@
+#	@g++ $(GEO_OBJ) $(CCFLAGS) $(LD_FLAGS) `pkg-config --libs cairo` -lgmp -lgmpxx -o $@
 
-tests: tests/arithmetic_test tests/geometry_test
+tests: tests/arithmetic_test tests/geometry_test tests/quadtree_test
 
-tests/arithmetic_test: math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc
+tests/arithmetic_test: math64.o validatingbigint.o int128.o tests/arithmetic_test.cc
 	@echo [LD ] $@
-	@g++ math64.o validatingbigint.o int128ng.o tests/arithmetic_test.cc $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@ 
+	@g++ math64.o validatingbigint.o int128.o tests/arithmetic_test.cc $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@ 
 
-tests/geometry_test: math64.o int128ng.o quadtree.o vertexchain.o geometric_types.o tests/geometry_test.cc
+tests/geometry_test: math64.o int128.o quadtree.o vertexchain.o geometric_types.o tests/geometry_test.cc
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ math64.o int128ng.o quadtree.o vertexchain.o geometric_types.o tests/geometry_test.cc
+	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ math64.o int128.o quadtree.o vertexchain.o geometric_types.o tests/geometry_test.cc
+
+tests/quadtree_test: tests/quadtree_test.cc geometric_types.o vertexchain.o int128.o quadtree.o math64.o
+	@echo [LD ] $@
+	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ 
 	 
 math64.o: math64.asm
 	@echo [ASM] $<

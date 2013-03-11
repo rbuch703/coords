@@ -13,7 +13,7 @@ typedef mpz_class BigInt;
     #include "validatingbigint.h" 
     typedef ValidatingBigint BigInt;
 #else
-    #include "int128ng.h" 
+    #include "int128.h" 
     typedef int128_t BigInt;
 #endif
 

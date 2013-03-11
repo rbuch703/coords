@@ -356,9 +356,7 @@ bool QuadTreeNode::addToQuadrant(LineSegment seg)
 {
     assert (tl && tr && bl && br);
 
-   
-
-    if      (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { 
+    if (seg.start.x < mid_x && seg.end.x < mid_x && seg.start.y < mid_y && seg.end.y < mid_y) { 
         tl->segments.push_front(seg); 
         return true; 
     }
