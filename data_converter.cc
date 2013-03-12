@@ -291,7 +291,7 @@ int main()
     
     list<pair<list<OSMKeyValuePair>, FILE*> > extract_config;
     
-    const char* base_dir = "data";
+    const char* base_dir = "intermediate";
     ensureDirectoryExists(base_dir);
     /*
     list<OSMKeyValuePair> country_border_tags;
@@ -325,7 +325,7 @@ int main()
     coastline.push_back( OSMKeyValuePair("natural", "coastline"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("intermediate/coastline.dump", "wb")));
     */
-    
+    /*
     FILE* file = fopen("intermediate/coastline.dump", "wb");
     for (uint64_t i = 0; i < num_ways; i++)
     {
@@ -336,7 +336,7 @@ int main()
             way.serialize(file);
 
     }    
-    fclose(file);
+    fclose(file); */
     /*
     list<OSMKeyValuePair> water;
     water.push_back( OSMKeyValuePair("natural", "water"));

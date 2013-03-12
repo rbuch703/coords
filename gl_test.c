@@ -116,14 +116,14 @@ void render_tile(tile_t tile)
     for (int i = 0; i < tile.num_polygons; i++) 
     {
         glBegin(GL_LINE_STRIP);
-            int64_t pd = isClockwise(tile.polygons[i]);
+           /* int64_t pd = isClockwise(tile.polygons[i]);
             if (pd > 0)
                 glColor3f(1,1,1);
             else if (pd < 0)
                 glColor3f(0,0,0);
             else
                 glColor3f(1,0,0);
-            
+            */
             int32_t* v = tile.polygons[i].vertices;
             for (int64_t num_vertices = tile.polygons[i].num_vertices; num_vertices; num_vertices--, v+=2)
             {
@@ -203,16 +203,15 @@ typedef struct rect_t
 double max(double a, double b) { return a> b ? a : b;}
 double min(double a, double b) { return a< b ? a : b;}
 double width(rect_t rect) { return rect.right - rect.left;}
-static const char* BASEPATH = "output/coast/seg#";
 
-void render(const rect_t view, rect_t tile, char *position)
+void render(const char* basepath, const rect_t view, rect_t tile, char *position)
 {
     struct stat dummy;
     
-    int buf_size = strlen(BASEPATH) + strlen(position) + 2;
+    int buf_size = strlen(basepath) + strlen(position) + 2;
     char *path = calloc( 1, buf_size ); // plus zero termination and an additional character (see below)
     // path = BASEPATH + position
-    snprintf(path, buf_size, "%s%s", BASEPATH, position);
+    snprintf(path, buf_size, "%s%s", basepath, position);
     
     
     if ( stat( path, &dummy ) != 0) 
@@ -264,21 +263,23 @@ void render(const rect_t view, rect_t tile, char *position)
     if ( mid_x > view.left) //has to render left half
     {
         pos[len] = '0';
-        if (mid_y > view.bottom) render(view, bl0, pos);
+        if (mid_y > view.bottom) render(basepath, view, bl0, pos);
         pos[len] = '2';
-        if (mid_y < view.top   ) render(view, tl2, pos);
+        if (mid_y < view.top   ) render(basepath, view, tl2, pos);
     }
     
     if ( mid_x < view.right) //has to render right half
     {
         pos[len] = '1';
-        if (mid_y > view.bottom) render(view, br1, pos);
+        if (mid_y > view.bottom) render(basepath, view, br1, pos);
         pos[len] = '3';
-        if (mid_y < view.top   ) render(view, tr3, pos);
+        if (mid_y < view.top   ) render(basepath, view, tr3, pos);
     }
 
     free(pos);
 }
+
+//static const char* BASEPATH = "output/coast/seg#";
 
 int main () {
     int running = 1;
@@ -308,11 +309,13 @@ int main () {
         glLoadIdentity();
         glOrtho(g_left, g_right, g_bottom, g_top, 0, 10);
 
-        glColor3f(1,1,1);
         
         rect_t view ={ g_top, g_left, g_bottom, g_right };
         rect_t world={ 900000000, -1800000000, -900000000, 1800000000};
-        render( view, world, "");
+        glColor3f(1,1,1);
+        render( "output/coast/seg#", view, world, "");
+        glColor3f(0,0,0);
+        render( "output/coast/country#", view, world, "");
         // Swap front and back rendering buffers
         glfwSwapBuffers ();
         // Check if ESC key was pressed or window was closed

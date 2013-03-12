@@ -99,6 +99,7 @@ struct OSMRelation
 {
     OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags);
     OSMRelation( const uint8_t* data_ptr, uint64_t relation_id);
+    OSMRelation( FILE* src, uint64_t rel_id = -1);
 
     void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     bool hasKey(string key) const;

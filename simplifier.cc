@@ -164,7 +164,7 @@ void clipFirstComponent(list<VertexChain> &in, int32_t clip_pos, list<VertexChai
 
 //FIXME: for each recursion, call "toSimplePolygon()" only if the polygon was clipped in the previous recursion step. Otherwise it still is a simple polygon
 void clipRecursive(string file_base, string position, list<VertexChain>& segments, 
-                   int32_t top, int32_t left, int32_t bottom, int32_t right, uint32_t level = 0)
+                   int32_t top = -900000000, int32_t left = -1800000000, int32_t bottom = 900000000, int32_t right = 1800000000, uint32_t level = 0)
 {
     uint64_t VERTEX_LIMIT = 20000;
 
@@ -291,6 +291,74 @@ void reconstructCoastline(FILE * src, list<VertexChain> &poly_storage)
     //    poly_storage.push_back(s);
 }
 
+void extractGermany()
+{
+    mmap_t idx_map = init_mmap ( "intermediate/ways.idx", true, false);
+    mmap_t data_map= init_mmap ( "intermediate/ways_int.data",true, false);
+    uint64_t* offset = (uint64_t*) idx_map.ptr;
+    assert ( idx_map.size % sizeof(uint64_t) == 0);
+    uint64_t num_ways = idx_map.size / sizeof(uint64_t);
+    
+    
+    PolygonReconstructor recon;
+    
+    for (uint64_t way_id = 0; way_id < num_ways; way_id++)
+    {
+        if (! offset[way_id]) continue;
+        OSMIntegratedWay way( ((uint8_t*)data_map.ptr) + offset[way_id], way_id);
+        
+        if (! way.hasKey("boundary") || way["boundary"] != "administrative") continue;
+        if (! way.hasKey("admin_level") || way["admin_level"] != "2") continue;
+        if (! way.hasKey("left:country") && ! way.hasKey("right:country")) continue;
+        
+        bool match = false;
+        if (way.hasKey("left:country") && way["left:country"] == "Germany") match = true;
+        if (way.hasKey("right:country") && way["right:country"] == "Germany") match = true;
+        
+        if (!match) continue;
+        
+        recon.add( VertexChain(way.vertices));
+        
+        //if (! rel.hasKey("left:country")) continue;
+        
+        //if (! rel.tags.count( OSMKeyValuePair("boundary", "administrative"))) continue;
+        cout << way.id << endl;
+    }
+    recon.forceClosePolygons();
+
+    list<VertexChain> polys = recon.getClosedPolygons();
+    
+    for (list<VertexChain>::const_iterator it = polys.begin(); it != polys.end(); it++)
+    {
+        cout << "polygon with " << it->vertices().size() << "vertices" << endl;
+    }
+    
+
+    clipRecursive( "output/coast/country", "", polys);
+
+}
+
+
+void foreach_relation()
+{
+    mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
+    mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
+    uint64_t* offset = (uint64_t*) idx_map.ptr;
+    assert ( idx_map.size % sizeof(uint64_t) == 0);
+    uint64_t num_rels = idx_map.size / sizeof(uint64_t);
+    
+    for (uint64_t rel_id = 0; rel_id < num_rels; rel_id++)
+    {
+        if (! offset[rel_id]) continue;
+        OSMRelation rel( ((uint8_t*)data_map.ptr) + offset[rel_id], rel_id);
+        
+        //if (! rel.hasKey("boundary") || rel["boundary"] != "administrative") continue;
+        if (! rel.hasKey("left:country")) continue;
+        
+        //if (! rel.tags.count( OSMKeyValuePair("boundary", "administrative"))) continue;
+        cout << rel << endl;
+    }
+}
 
 int main()
 {
@@ -298,9 +366,10 @@ int main()
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    FILE* f = fopen("coastline.dump", "rb");
-    if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
-    reconstructCoastline(f, poly_storage);
-    cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
-    clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);
+    extractGermany();
+    //FILE* f = fopen("coastline.dump", "rb");
+    //if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
+    //reconstructCoastline(f, poly_storage);
+    //cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
+    //clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);
 }

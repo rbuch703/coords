@@ -81,43 +81,6 @@ void fread( void* dest, uint64_t size, FILE* file)
     { perror("[ERR] fread"); exit(0);}
 }
 
-/*
-list<OSMKeyValuePair> deserializeTags(FILE* data_file)
-{
-    list<OSMKeyValuePair> tags;
-    
-    
-    uint16_t num_symbolic_tags;
-    fread(&num_symbolic_tags, sizeof(num_symbolic_tags), data_file);
-    
-    uint16_t num_verbose_tags;  //TODO: are these really necessary? --> yes, if it is zero, then this is the final element
-    fread(&num_verbose_tags, sizeof(num_verbose_tags), data_file);
-    
-    for (int i = 0; i < num_symbolic_tags; i++)
-    {
-        uint8_t tag_id;
-        fread(&tag_id, sizeof(tag_id), data_file);
-        tags.push_back( OSMKeyValuePair( symbolic_tags_keys[tag_id] , symbolic_tags_values[tag_id] ));
-    }
-    if (num_verbose_tags == 0) return tags;
-    
-    //TODO: maybe replace this with a static buffer to reduce number of reallocations;
-    // however, this would mean that the method cannot be used in multithread-applications
-    char *buf = new char[verbose_tag_data_len];
-    const char* str = buf;
-    while (num_verbose_tags--)
-    {
-        const char* key = str;
-        str += strlen(str)+1;
-        tags.push_back( OSMKeyValuePair( key, str));
-        str += strlen(str)+1;
-    }
-    
-    
-    delete [] buf;
-    return tags;
-}*/
-
 list<OSMKeyValuePair> deserializeTags(const uint8_t* data_ptr)
 {
     list<OSMKeyValuePair> tags;
@@ -465,6 +428,30 @@ OSMRelation::OSMRelation( const uint8_t* data_ptr, uint64_t relation_id): id(rel
     }
    
     tags = deserializeTags(data_ptr);
+}
+
+OSMRelation::OSMRelation( FILE* src, uint64_t rel_id): id(rel_id)
+{
+    uint32_t num_members;
+    if (1 != fread(&num_members, sizeof(num_members), 1, src)) return;
+    
+    while (num_members--)
+    {
+        ELEMENT type;
+        if (1 != fread (&type, sizeof(ELEMENT), 1, src)) return;
+        
+        uint64_t ref;
+        if (1 != fread (&ref, sizeof(ref), 1, src)) return;
+        
+        int i;
+        string s;
+        while ( (i = fgetc(src)) != EOF  && i != '\0')
+            s+=i;
+        //data_ptr+=strlen(role)+1;  //including zero termination
+        members.push_back( OSMRelationMember(type, ref, s));
+    }
+   
+    tags = deserializeTags(src);
 }
 
 void OSMRelation::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const
