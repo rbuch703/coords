@@ -1,6 +1,6 @@
 
 #include "../geometric_types.h"
-//#include "vertexchain.h"
+#include "../vertexchain.h"
 //#include "quadtree.h"
 //#include "simplifypolygon.h"
 //#include <stdlib.h>
@@ -66,6 +66,54 @@ bool testQuadTreeNodeVsLine(const QuadTreeNode &node, const LineSegment &line, b
     return tl == in_tl && tr == in_tr && bl == in_bl && br == in_br;
 }
 
+void testVertexChain()
+{
+    VertexChain c;
+    c.append(Vertex( 349935555, -852916288));
+    c.append(Vertex( 349932039, -852915859));
+    c.append(Vertex( 349935555, -852916288));
+    c.append(Vertex( 349939642, -852917790));
+    c.append(Vertex( 349939818, -852914518));
+    c.append(Vertex( 349942059, -852914786));
+    c.append(Vertex( 349941532, -852918488));
+    c.append(Vertex( 349939642, -852917790));
+    c.append(Vertex( 349935555, -852916288));
+    c.isClockwise();
+
+    c = VertexChain();
+   
+    c.append(Vertex(350501146,-852914867));
+    c.append(Vertex(350502786,-852913921));
+    c.append(Vertex(350500898,-852908663));
+    c.append(Vertex(350501453,-852908376));
+    c.append(Vertex(350501073,-852907376));
+    c.append(Vertex(350501666,-852907054));
+    c.append(Vertex(350502018,-852908073));
+    c.append(Vertex(350502529,-852907706));
+    c.append(Vertex(350506064,-852917147));
+    c.append(Vertex(350503517,-852918542));
+    c.append(Vertex(350503379,-852918105));
+    c.append(Vertex(350502934,-852918351));
+    c.append(Vertex(350502457,-852918614));
+    c.append(Vertex(350502534,-852918571));
+    c.append(Vertex(350503379,-852918105));
+    c.append(Vertex(350502934,-852918351));
+    c.append(Vertex(350502534,-852918571));
+    c.append(Vertex(350502384,-852918740));
+    c.append(Vertex(350503379,-852918105));
+    c.append(Vertex(350503517,-852918542));
+    c.append(Vertex(350506064,-852917147));
+    c.append(Vertex(350502529,-852907706));
+    c.append(Vertex(350502018,-852908073));
+    c.append(Vertex(350501607,-852906874));
+    c.append(Vertex(350501073,-852907376));
+    c.append(Vertex(350501453,-852908376));
+    c.append(Vertex(350500898,-852908663));
+    c.append(Vertex(350502786,-852913921));
+    c.append(Vertex(350501146,-852914867));
+    c.isClockwise();
+}
+
 int main(int, char** )
 {
     Vertex a(1,0);
@@ -76,7 +124,7 @@ int main(int, char** )
     //overflow tests for OSM vertices; note that for the longitude (y-coordinate), the last-but-one bit is always zero
     Vertex min(-1800000000, -900000000);
     Vertex max( 1800000000,  900000000);
-    TEST( (max-min).squaredLength() == (uint64_t)16200000000000000000ull);
+    //TEST( (max-min).squaredLength() == (uint64_t)16200000000000000000ull);
     //a= Vertex(0,0);
     //b= Vertex(1000,1000);
     
@@ -172,6 +220,8 @@ int main(int, char** )
         
         
     }
+    
+    testVertexChain();
 }
 
 

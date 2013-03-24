@@ -51,6 +51,19 @@ int main(int, char** )
     {
         BigInt a( getRandom());
         BigInt b( getRandom());
+        a==b;
+        a!=b;
+        a< b;
+        a> b;
+        a<=b;
+        a>=b;
+        
+        a==a;
+        a!=a;
+        a< a;
+        a<=a;
+        a> a;
+        a>=a;
         //cout << i << "\t" << a << ", " << b << endl;
         uint32_t c = rand() % 0xFFFFFFFF;
         int d = rand() % 128;

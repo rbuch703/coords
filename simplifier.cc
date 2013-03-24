@@ -22,17 +22,17 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 {
    
     double secs = 0;
-    if (segment.vertices().size() > 1000)
+    if (segment.size() > 1000)
     {
         secs = getWallTime();
-        cout << "\t\tsegment of size " << segment.vertices().size();
+        cout << "\t\tsegment of size " << segment.size();
         cout.flush();
     }
 
-    if (segment.vertices().size() < 4) return; // can't be a polygon with less than four vertices (first and last are identical)
+    if (segment.size() < 4) return; // can't be a polygon with less than four vertices (first and last are identical)
     list<VertexChain> simples = segment.toSimplePolygon( );
     
-    if (segment.vertices().size() > 1000)
+    if (segment.size() > 1000)
         std::cout << "\ttook " << (getWallTime() - secs) << " seconds" << endl;
     
     //assert (poly.isSimple());
@@ -42,8 +42,8 @@ void writePolygonToDisk(std::string path, VertexChain segment)
         VertexChain poly = simples.front();
         simples.pop_front();
         poly.canonicalize();
-        if (poly.vertices().size() < 4) continue;
-        dumpPolygon( path, poly.vertices() );
+        if (poly.size() < 4) continue;
+        dumpPolygon( path, poly.data() );
     }
 }
 
@@ -55,7 +55,7 @@ void handlePolygon(string, VertexChain& segment)
     {
         it->canonicalize();
         if (it->front() != it->back()) continue;
-        if (it->vertices().size() < 4) continue;
+        if (it->size() < 4) continue;
         poly_storage.push_back(*it);
     }
     
@@ -170,7 +170,9 @@ void clipFirstComponent(list<VertexChain> &in, int32_t clip_pos, list<VertexChai
     }
 }
 
-//FIXME: for each recursion, call "toSimplePolygon()" only if the polygon was clipped in the previous recursion step. Otherwise it still is a simple polygon
+/**
+  *
+  */
 void clipRecursive(string file_base, string position, list<VertexChain>& segments, 
                    int32_t top = -900000000, int32_t left = -1800000000, int32_t bottom = 900000000, int32_t right = 1800000000, uint32_t level = 0)
 {
@@ -178,26 +180,37 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
 
     uint64_t num_vertices = 0;
     BOOST_FOREACH( const VertexChain seg, segments)
-        num_vertices+= seg.vertices().size();    
+        num_vertices+= seg.size();    
 
     for (uint32_t i = level; i; i--) cout << "  ";
     cout << "processing clipping rect '" << position << "' (" << top << ", " << left << ")-(" << bottom << ", " << right << ") with "
          << num_vertices << " vertices" << endl;
     //if (position != "" && position[0] != '3') return;
-    if (segments.size() == 0) return;   //recursion termination
+    if (num_vertices == 0) return;   //recursion termination
 
     //cerr << segments.size()
 
     BOOST_FOREACH( const VertexChain seg, segments)
-        assert( seg.vertices().front() == seg.vertices().back());
+        assert( seg.data().front() == seg.data().back());
 
     
-    if (num_vertices < VERTEX_LIMIT)    //few enough vertices to not further subdivide the area
+    if (num_vertices < VERTEX_LIMIT)    //few enough vertices to not further subdivide the area --> write everything to disk
     {
         BOOST_FOREACH( const VertexChain seg, segments)
-            writePolygonToDisk(file_base+"#"+position, seg.vertices() );
+            writePolygonToDisk(file_base+"#"+position, seg.data() );
         return;
     }
+    
+    //otherwise: will need subdivision and will only write simplified versions of all polygons to disk
+    
+    /*HACK: ensure that the file that will contain the simplified vertices exists even when no
+     *      vertices are actually written to it (which can happen when the polygons are so small
+     *      that all of them are simplified to a single point (are thus no polygons and are not 
+     *      stored.
+     *      This is necessary, because the renderer uses the existence of a file to determine
+     *      whether further sub-tiles exist.
+     */
+    createEmptyFile(file_base+"#"+position);
     
     BOOST_FOREACH( const VertexChain seg, segments)
     {
@@ -213,7 +226,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
         if (simp.simplifyArea( (right-(uint64_t)left)/2048 ))
         {
             simp.canonicalize();
-            writePolygonToDisk(file_base+"#"+position, simp.vertices() );
+            writePolygonToDisk(file_base+"#"+position, simp.data() );
         }
     }
          
@@ -236,8 +249,8 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     }
     assert(segments.size() == 0);
 
-    BOOST_FOREACH( const VertexChain seg, vLeft)    assert( seg.vertices().front() == seg.vertices().back());
-    BOOST_FOREACH( const VertexChain seg, vRight)   assert( seg.vertices().front() == seg.vertices().back());
+    BOOST_FOREACH( const VertexChain seg, vLeft)    assert( seg.data().front() == seg.data().back());
+    BOOST_FOREACH( const VertexChain seg, vRight)   assert( seg.data().front() == seg.data().back());
 
     list<VertexChain> vTop, vBottom;
 
@@ -338,7 +351,7 @@ void extractGermany()
     
     for (list<VertexChain>::const_iterator it = polys.begin(); it != polys.end(); it++)
     {
-        cout << "polygon with " << it->vertices().size() << "vertices" << endl;
+        cout << "polygon with " << it->size() << "vertices" << endl;
     }
     
 
@@ -359,7 +372,9 @@ void extractCountries()
     mmap_t way_data_map= init_mmap ( "ways_int.data",true, false);
     uint64_t* way_offset = (uint64_t*) way_idx_map.ptr;
     assert ( way_idx_map.size % sizeof(uint64_t) == 0);
+#ifndef NDEBUG
     uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
+#endif
 
     
     for (uint64_t rel_id = 0; rel_id < num_rels; rel_id++)
@@ -427,12 +442,13 @@ void extractBuildings()
         //int d = fputc(ch, f);
         //perror("fputc");
         //assert(d == ch);
-        if (i++ % 100000 == 0) cout << (i/1000) << "k buildings read" << endl;
+        if (++i % 100000 == 0) cout << (i/1000) << "k buildings read" << endl;
         OSMIntegratedWay way(f, -1);
         if (! (way.vertices.front() == way.vertices.back()))
            way.vertices.push_back(way.vertices.front());
         VertexChain tmp(way.vertices);
         handlePolygon("dummy", tmp);
+        //tmp.isClockwise();
         //cout << way << endl;        
     } 
     clipRecursive( "output/coast/building", "", poly_storage);   

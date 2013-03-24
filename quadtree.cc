@@ -242,28 +242,17 @@ list<VertexChain> toSimplePolygons(VertexChain &polygon/*, bool canDestroyInput*
     assert (polygon.front() == polygon.back());    
     polygon.canonicalize();
     
-    if (polygon.vertices().size() < 4) return list<VertexChain>();
+    if (polygon.size() < 4) return list<VertexChain>();
     
     list<LineSegment> segs;
-    list<Vertex>::const_iterator it2 = polygon.vertices().begin();
-    list<Vertex>::const_iterator it = it2++;
-    list<Vertex>::const_iterator end = polygon.vertices().end();
-    while ( it2 != end )
-    {
-        segs.push_back( LineSegment(*it, *it2) );
-        it2++;
-        //if (canDestroyInput)
-        //    it = polygon.erase(it);
-        //else
-            it++;
-    }
-/*    if (canDestroyInput)
-    {
-        assert( polygon.size() == 1);
-        polygon.clear();
-    }*/
-        
     
+    const vector<Vertex> & vertices = polygon.data();
+    
+    //do not need a line segment from last to first, because those vertices are guaranteed to be identical
+    // (see assertion above)
+    for (uint64_t i = 0; i+1 < vertices.size(); i++) 
+        segs.push_back( LineSegment( vertices[i], vertices[i+1])); 
+   
     moveIntersectionsToIntegerCoordinates3(segs);
     map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
 

@@ -6,6 +6,7 @@
 
 #include <ostream>
 #include <list>
+#include <vector>
 #include <set>
 
 #include "osm_types.h"
@@ -46,7 +47,7 @@ private:
     int32_t x,y;
     /*the following friend declarations are really just a whitelist of methods/classes that 
       can guarantee that operations on int32_t values will not overflow */
-    friend void dumpPolygon(string file_base, const list<Vertex>& poly);
+    friend void dumpPolygon(string file_base, const vector<Vertex>& poly);
     friend std::ostream& operator <<(std::ostream& os, const Vertex v);
     friend struct AABoundingBox;
     friend class QuadTreeNode;

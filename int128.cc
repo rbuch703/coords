@@ -3,6 +3,8 @@
 
 // from math64.asm
 extern "C" uint64_t add (uint64_t a, uint64_t b, uint64_t *carry_out);
+extern "C" uint64_t add128(uint64_t a_hi, uint64_t a_lo, uint64_t b_hi, uint64_t b_lo, uint64_t *res_hi, uint64_t *res_lo);
+
 extern "C" uint64_t sub (uint64_t a, uint64_t b, uint64_t *borrow);
 extern "C" uint64_t add3(uint64_t a, uint64_t b, uint64_t c, uint64_t *carry_out);
 extern "C" uint64_t sub128(uint64_t a_hi, uint64_t a_lo, uint64_t b_hi, uint64_t b_lo, uint64_t *res_hi, uint64_t *res_lo);
@@ -10,29 +12,51 @@ extern "C" uint64_t mul (uint64_t a, uint64_t b, uint64_t *hi);
 extern "C" uint64_t div128(uint64_t *a_hi, uint64_t *a_lo, uint64_t b);
 
 
-bool operator<(const int128_t a, const int128_t b)
+bool operator<(const int128_t a, const int128_t b) 
 {
-    //special case: both are zero --> none is smaller, no matter what their (possibly different) signs may be
-    if ( a.hi == 0 && a.lo == 0 && b.hi == 0 && b.lo == 0) return false;
+    if (a.hi == b.hi && a.lo == b.lo) 
+    {
+        //special case: both are zero --> not less, no matter what their (possibly different) signs may be
+        if (a.hi == 0 && a.lo == 0) return false;
+        if (a.isPositive == b.isPositive) return false; // both positive and identical in (hi|lo) --> not less
+        return b.isPositive;    // different signs and non-zero
+    }
 
     if (a.isPositive != b.isPositive) return b.isPositive;
-    
+
     //if this point is reached, 'a' and 'b' have equal sign
-    bool flipSign = (! a.isPositive);
-    
-    //special case: both values are equal--> none is smaller, no matter the actual sign
-    if (a.hi == b.hi && a.lo == b.lo) return false;
-    
-    bool sign = a.hi != b.hi ? a.hi < b.hi :
-                a.lo < b.lo;
+    //bool flipSign = (! a.isPositive);    
+    bool sign = a.hi != b.hi ? a.hi < b.hi : a.lo < b.lo;
                 
-    return flipSign ? !sign : sign;
+    //return flipSign ? !sign : sign;
+    //return flipSign != sign;
+    return a.isPositive == sign;
 }
 
-bool operator>(const int128_t a,  const int128_t b) { return b < a; }
+bool operator<=(const int128_t a, const int128_t b) 
+{
+    if (a.hi == b.hi && a.lo == b.lo) 
+    {
+        //special case: both are zero --> equal, no matter what their (possibly different) signs may be
+        if (a.hi == 0 && a.lo == 0) return true;
+        if (a.isPositive == b.isPositive) return true; // both positive and identical in (hi|lo) --> really identical
+        return b.isPositive;    // different signs and non-zero
+    }
 
-bool operator<=(const int128_t a, const int128_t b) { return a < b || a == b;}
-bool operator>=(const int128_t a, const int128_t b) { return a > b || a == b;}
+    if (a.isPositive != b.isPositive) return b.isPositive;
+
+    //if this point is reached, 'a' and 'b' have equal sign
+    //bool flipSign = (! a.isPositive);    
+    bool sign = a.hi != b.hi ? a.hi < b.hi : a.lo < b.lo;
+                
+    //return flipSign ? !sign : sign;
+    //return flipSign != sign;
+    return a.isPositive == sign;
+}
+
+
+bool operator>(const int128_t a,  const int128_t b) { return b < a; }
+bool operator>=(const int128_t a, const int128_t b) { return b <= a;}
  
 
 bool operator==(int128_t a, int128_t b)
@@ -58,14 +82,20 @@ int128_t operator+(int128_t a, int128_t b)
         int128_t tmp;
         tmp.isPositive = a.isPositive;
         
-        uint64_t carry;
+        #ifndef NDEBUG
+        uint64_t carry =
+        #endif
+        add128( a.hi, a.lo, b.hi, b.lo, &tmp.hi, &tmp.lo);
+        assert(!carry && "Overflow");
+        /*
+        
         tmp.lo = add(a.lo, b.lo, &carry);
         tmp.hi = add(a.hi, carry,&carry);
         
-        assert (!carry && "Overflow");
+        assert (
         tmp.hi = add(tmp.hi, b.hi, &carry);
         assert (!carry && "Overflow");
-        
+        */
         return tmp;
 
     } else if (a.isPositive)
@@ -279,7 +309,7 @@ int128_t operator-(int128_t a, int128_t b)
     if (a.isPositive == b.isPositive)
     {
         int128_t res;
-        res.isPositive = (b <= a);
+        res.isPositive = (a > b);
         a.isPositive = b.isPositive = true; //HACK: so that the next line computes the relation of the *absolute* values
         if (b > a)
         {

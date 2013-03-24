@@ -6,6 +6,7 @@ section .text
     global mul
     global add
     global add3
+    global add128
     global sub
     global subc
     global div128
@@ -46,6 +47,20 @@ add: ; uint64_t add(uint64_t a, uint64_t b, uint64_t *carry);
     adc RCX, RCX    ; RCX = carry(a+b)
     mov [RDX], RCX  ; *carry = RCX
     ret    
+
+add128: ; uint64_t add128(uint64_t a_hi/RDI, uint64_t a_lo/RSI, uint64_t b_hi/RDX, uint64_t b_lo/RCX, uint64_t *res_hi/R8, uint64_t *res_lo/R9);
+    ;computes (a_hi:a_lo - b_hi:b_lo) in res_hi:res_lo; return value is the over/underflow
+    xor RAX, RAX    ; RAX = 0
+    add RSI, RCX    ; RSI = a_lo + b_lo
+    adc RDI, RDX    ; RDI = a_hi + b_hi + carry(a_lo + b_lo);
+    
+    adc RAX, RAX    ; RAX = carry( adc ...)    --> RAX is return value
+    
+    mov [R8], RDI
+    mov [R9], RSI
+    
+    ret
+
 
 sub: ; uint64_t sub(uint64_t a, uint64_t b, uint64_t *borrow);
     ; computes a-b, return result (return value) and the borrow/carry in 'borrow'

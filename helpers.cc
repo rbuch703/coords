@@ -11,6 +11,7 @@
 
 #include <boost/foreach.hpp>
 
+
 using namespace std;
 
 double getWallTime()
@@ -19,6 +20,7 @@ double getWallTime()
     getrusage(RUSAGE_SELF, &usage);
     return usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1000000.0;
 }
+
 
 void ensureDirectoryExists(string directory)
 {
@@ -39,9 +41,18 @@ void ensureDirectoryExists(string directory)
 
 map<string, uint32_t> zone_entries;
 
+void createEmptyFile(string file_base)
+{
+    size_t pos = file_base.rfind('/');
+    string directory = file_base.substr(0, pos);
+    ensureDirectoryExists(directory);
+    
+    FILE* f = fopen(file_base.c_str(), "ab");
+    fclose(f);
+}
 
 
-void dumpPolygon(string file_base, const list<Vertex>& poly)
+void dumpPolygon(string file_base, const vector<Vertex>& poly)
 {
     size_t pos = file_base.rfind('/');
     string directory = file_base.substr(0, pos);

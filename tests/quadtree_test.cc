@@ -34,10 +34,10 @@ int main(int, char** )
     p.append(p.front()); //close polygon*/
 
     list<LineSegment> segs;
-    const list<Vertex> &verts = p.vertices();
+    const vector<Vertex> &verts = p.data();
     
-    list<Vertex>::const_iterator it2 = verts.begin();
-    for (list<Vertex>::const_iterator it = it2++; it2 != verts.end(); it++, it2++)
+    vector<Vertex>::const_iterator it2 = verts.begin();
+    for (vector<Vertex>::const_iterator it = it2++; it2 != verts.end(); it++, it2++)
         segs.push_back( LineSegment(*it, *it2) );
     
     moveIntersectionsToIntegerCoordinates3(segs);

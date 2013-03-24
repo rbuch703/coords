@@ -8,6 +8,10 @@
 static BigInt getXCoordinate(const Vertex &v) { return v.get_x();}
 static BigInt getYCoordinate(const Vertex &v) { return v.get_y();}
 
+void simplifySection(list<Vertex> &m_vertices, list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);
+
+bool isClockwise(const list<Vertex> &m_vertices);
+
 /** 
     @brief: BASIC ALGORITHM (for clipping along the x-axis):
         Sort all polygon segments by endpoint with biggest y coordinate
@@ -27,6 +31,8 @@ typedef BigInt (*VertexCoordinate)(const Vertex &v);
 
 VertexChain::VertexChain(const int32_t * vertices, int64_t num_vertices)
 {
+    m_vertices.reserve(num_vertices);
+    
     while (num_vertices--)
     {
         m_vertices.push_back( Vertex( vertices[0], vertices[1]));
@@ -71,9 +77,16 @@ bool VertexChain::simplifyArea(double allowedDeviation)
         We can safely terminate the simplification here, if we are short of four vertices. */
     if ( m_vertices.size() < 4) { m_vertices.clear(); return false; }
 
-    list<Vertex>::iterator last = m_vertices.end();
+
+    list<Vertex> vertices( m_vertices.begin(), m_vertices.end() );
+    m_vertices.clear();
+    
+    
+    list<Vertex>::iterator last = vertices.end();
     last--;
-    simplifySection( m_vertices.begin(), last, allowedDeviation);
+    simplifySection( vertices, vertices.begin(), last, allowedDeviation);
+
+    m_vertices = vector<Vertex>(vertices.begin(), vertices.end() );
 
     canonicalize();
     
@@ -81,18 +94,18 @@ bool VertexChain::simplifyArea(double allowedDeviation)
         If the polygon was simplified to degenerate to a line or even a single point,
         This means that the whole polygon would not be visible given the current 
         allowedDeviation. It may thus be omitted completely */
-    if (m_vertices.size() < 4) { m_vertices.clear(); return false; }
+    if (m_vertices.size() < 4) { return false; }
 
     assert( m_vertices.front() == m_vertices.back());
-    if ( isClockwise() != clockwise) m_vertices.reverse();
+    if ( isClockwise() != clockwise) this->reverse();
     return true;
 }
 
 
 AABoundingBox VertexChain::getBoundingBox() const
 {
-    AABoundingBox box(vertices().front());
-    for (list<Vertex>::const_iterator it = m_vertices.begin(); it!= m_vertices.end(); it++)
+    AABoundingBox box(m_vertices.front());
+    for (vector<Vertex>::const_iterator it = m_vertices.begin(); it!= m_vertices.end(); it++)
         box += *it;
         
     return box;
@@ -100,12 +113,23 @@ AABoundingBox VertexChain::getBoundingBox() const
 
 void VertexChain::simplifyStroke(double allowedDeviation)
 {
-    list<Vertex>::iterator last = m_vertices.end();
+    
+    //TODO: check whether the whole VertexChain would be simplified to a single line (start-end)
+    //      if so, do not allocate the list, but set the result right away
+
+    list<Vertex> vertices( m_vertices.begin(), m_vertices.end());
+    m_vertices.clear();
+    
+    
+    list<Vertex>::iterator last = vertices.end();
     last--;
-    simplifySection( m_vertices.begin(), last, allowedDeviation);
+    simplifySection( vertices, vertices.begin(), last, allowedDeviation);
+    
+    m_vertices = vector<Vertex>( vertices.begin(), vertices.end() );    
+    
 }
 
-void VertexChain::simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)
+void simplifySection(list<Vertex> &m_vertices, list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)
 {
     list<Vertex>::iterator it_max;
     
@@ -132,11 +156,12 @@ void VertexChain::simplifySection(list<Vertex>::iterator segment_first, list<Ver
         assert( m_vertices.front() == m_vertices.back());
     } else  //use point with maximum deviation as additional necessary point in the simplified polygon, recurse
     {
-        simplifySection(segment_first, it_max, allowedDeviation);
-        simplifySection(it_max, segment_last, allowedDeviation);
+        simplifySection(m_vertices, segment_first, it_max, allowedDeviation);
+        simplifySection(m_vertices, it_max, segment_last, allowedDeviation);
     }
 }
 
+/*
 static Vertex getSuccessor(list<Vertex>::const_iterator it, const list<Vertex> &lst)
 {
     bool closed = lst.front() == lst.back();
@@ -164,7 +189,7 @@ static Vertex getPredecessor(list<Vertex>::const_iterator it, const list<Vertex>
     if (pred == lst.end() && closed)
         pred--; // move from end() to the actual last element (which equals the first element);
     return pred == lst.begin() ? *pred : *(--pred);
-}
+}*/
 
 
 
@@ -182,7 +207,7 @@ static void connectClippedSegments( BigInt clip_pos, list<VertexChain*> lst, lis
         if (seg->front() != seg->back()) seg->append(seg->front());
         
         seg->canonicalize();
-        if (seg->vertices().size() >= 4)   //skip degenerate segments (points, lines) that do not form a polygon
+        if (seg->size() >= 4)   //skip degenerate segments (points, lines) that do not form a polygon
             out.push_back(*seg);
         delete seg;
         return;
@@ -195,10 +220,10 @@ static void connectClippedSegments( BigInt clip_pos, list<VertexChain*> lst, lis
       * Thus, in order for the connecting algorithm to work, the first segment has to be joined with the last
       * segment, if the corresponding vertices do not lie on the clipping line. */
 
-    if ( significantCoordinate(lst.front()->vertices().front() ) != clip_pos && 
-         significantCoordinate(lst.back()->vertices().back()   ) != clip_pos)
+    if ( significantCoordinate(lst.front()->data().front() ) != clip_pos && 
+         significantCoordinate(lst.back()->data().back()   ) != clip_pos)
     {
-        assert(lst.front()->vertices().front() == lst.back()->vertices().back() );
+        assert(lst.front()->data().front() == lst.back()->data().back() );
         lst.back()->append( *lst.front(), true);
         //cout << lst.front() << endl;
         delete lst.front();
@@ -208,11 +233,11 @@ static void connectClippedSegments( BigInt clip_pos, list<VertexChain*> lst, lis
     priority_queue< pair< BigInt, VertexChain*> > queue;
     BOOST_FOREACH( VertexChain* seg, lst)
     {
-        assert( ( significantCoordinate( seg->vertices().front()) == clip_pos) && 
-                ( significantCoordinate( seg->vertices().back() ) == clip_pos));
+        assert( ( significantCoordinate( seg->data().front()) == clip_pos) && 
+                ( significantCoordinate( seg->data().back() ) == clip_pos));
                 
-        queue.push( pair<BigInt, VertexChain*>( max( otherCoordinate(seg->vertices().front()),
-                                                        otherCoordinate(seg->vertices().back() ) ), seg));
+        queue.push( pair<BigInt, VertexChain*>( max( otherCoordinate(seg->data().front()),
+                                                     otherCoordinate(seg->data().back() ) ), seg));
     }
     
     
@@ -229,12 +254,12 @@ static void connectClippedSegments( BigInt clip_pos, list<VertexChain*> lst, lis
         {
             //cout << "creating closed polygon out of single segment" << endl << *seg1 << endl;
             if (seg1->front() != seg1->back())
-                seg1->append(seg1->vertices().front());
+                seg1->append(seg1->data().front());
 
             assert( seg1->front() == seg1->back() && "clipped polygon is not closed");
             
             seg1->canonicalize();
-            if (seg1->vertices().size() >= 4)
+            if (seg1->size() >= 4)
                 out.push_back(*seg1);
             delete seg1;
             continue;
@@ -260,7 +285,140 @@ static void connectClippedSegments( BigInt clip_pos, list<VertexChain*> lst, lis
 
 }
 
+bool VertexChain::isCanonicalPolygon()
+{
+    if (front() != back()) return false;
+    
+    m_vertices.pop_back();
+    
+    uint64_t n = size();
+    for (uint64_t me = 0; me < n-1; me++)
+        if (m_vertices[me].pseudoDistanceToLine( m_vertices[(me+n-1)%n], m_vertices[(me+1) % n]) == 0)
+        {   //colinear --> not canonical
+            m_vertices.push_back( front());
+            return false;
+        }
+    
+    for (uint64_t me = 0; me < n; me++)
+    {
+        if ( m_vertices[me] == m_vertices[ (me+1) % n])
+        {   //identical to successor --> not canonical
+            m_vertices.push_back( front() );
+            return false;
+        }
+    }
+    
+    m_vertices.push_back( front() );
+    return true;
+    
+}
 
+/** ensures that no two consecutive vertices of a polygon are identical, 
+    and that no three consecutive vertices are colinear.
+    This property is a necessary prerequisite for many advanced algorithms */
+void VertexChain::canonicalize()
+{
+    #warning FIXME: for open vertex chains, this method is incorrect; For these, colinearity must not be checked among first and last vertex
+    
+    if (size() == 0) return;
+    
+    bool closed = m_vertices.front() == m_vertices.back();
+    if (closed)
+    {
+        // first==last causes to many special cases, so remove the duplicate(s) here add re-add one later.
+        /* As a side-effect, this re-adding will only occur iff the polygon still has at least 3 vertices
+         * after removing colinearities and consecutive duplicates. So only non-degenerated polygon will 
+         * ever be closed, and closed polygons are guaranteed to never be degenerated.
+        */
+        m_vertices.pop_back(); 
+    }
+
+    if ( size() < 2) return; //segments of length 0 and 1 are always canonical
+    
+    if ( size() == 2)
+    { //segments of length 2 cannot be colinear, only need to check if vertices are identical
+        if (m_vertices.front() == m_vertices.back()) 
+            m_vertices.pop_back();
+        return;
+    }
+    assert( size() >= 3 );
+    
+    
+    bool hasMadeChanges = true;
+    /* current algorithm cannot always find all colinear successive edges in a single run */
+    while (hasMadeChanges)
+    {
+        hasMadeChanges = false;
+        uint64_t n = size();
+        uint64_t gap = 0;
+        //when vertices is removed, all succesor vertices need to be moved some positions left (as indicated by 'gap')
+        //in order to fill the empty spot(s). The variable 'alreadyShifted' hold whether m_vertices[i] has already 
+        //been shifted
+        
+        bool alreadyShifted = false;    
+        for (int i = 0; i+gap < n;)
+        {
+            if (! (alreadyShifted || (gap == 0)) )
+            {
+                assert (m_vertices[i] == Vertex(0,0)); //debug code, holds only while invalidated verices are overwritten with Vertex(0,0)
+                m_vertices[i] = m_vertices[i+gap];
+                m_vertices[i+gap] = Vertex(0,0); //debug code to visualize invalidated entries
+            }
+            alreadyShifted = false;
+            
+            uint64_t pred = (i+  n-1) % n;
+            uint64_t succ = (i+gap+1) % n;
+            
+            if ( m_vertices[i].pseudoDistanceToLine( m_vertices[pred], m_vertices[ succ]) != 0) //not colinear
+            {
+                i++;
+            } else
+            {
+                hasMadeChanges = true;
+                gap++;
+                m_vertices[i] = Vertex(0,0);    //debug code
+                
+                if (i > 0)
+                {
+                    /* since vertex 'i' was removed, vertex 'i-1' has a new successor and may be 
+                     * colinear to that (and its the predecessor i-2) --> needs to be checked again */
+                    i--;
+                    alreadyShifted = true;
+                }
+                //otherwise we removed the first vertex --> no vertex to recheck, just continue as usual
+            }
+        }
+
+        m_vertices.resize( size() - gap);
+    }
+    
+    
+    #ifndef NDEBUG
+    uint64_t n = size();
+    //gap = 0;
+    for (uint64_t i = 0; i < n; i++)
+        assert( m_vertices[i] != m_vertices[ (i+1)%n ]);
+    
+    #endif
+    
+    /*
+    for (int i = 0; i+gap < n;)
+    {
+        if (gap > 0)
+            m_vertices[i] = m_vertices[i+gap];
+            
+        if (m_vertices[i] == m_vertices[ (i+gap+1) % n]) //successive identical vertices
+            gap++;
+        else
+            i++; 
+    }*/
+
+    //m_vertices.resize( size() - gap);
+    if (m_vertices.size() >= 3 && closed) // reclose polygon if - after canonicalization - it still has an area
+        m_vertices.push_back(m_vertices.front());
+}
+
+#if 0
 /** ensures that no two consecutive vertices of a polygon are identical, 
     and that no three consecutive vertices are colinear.
     This property is a necessary prerequisite for many advanced algorithms */
@@ -287,22 +445,24 @@ void VertexChain::canonicalize()
             m_vertices.pop_back();
         return;
     }
-    
     assert( m_vertices.size() >= 3 );
-    list<Vertex>::iterator v3 = m_vertices.begin();
+    
+    list<Vertex> verts( m_vertices.begin(), m_vertices.end() );
+    
+    list<Vertex>::iterator v3 = verts.begin();
     list<Vertex>::iterator v1 = v3++;
     list<Vertex>::iterator v2 = v3++;
     
     //at this point, v1, v2, v3 hold references to the first three vertices of the polygon
     
     //first part: find and remove colinear vertices
-    while (v3 != m_vertices.end())
+    while (v3 != verts.end())
     {
         assert ( (v1!=v2) && (v2!=v3) && (v3!=v1) );
     
         if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) //colinear
         {
-            m_vertices.erase(v2);
+            verts.erase(v2);
             v2 = v3++;
         }
         else
@@ -317,38 +477,38 @@ void VertexChain::canonicalize()
         or the last and the first two vertices may be colinear */
     if (closed)
     {
-        if (m_vertices.size() >= 3)
+        if (verts.size() >= 3)
         {
-            list<Vertex>::iterator v1 = --m_vertices.end();
-            list<Vertex>::iterator v2 = m_vertices.begin(); 
-            list<Vertex>::iterator v3 = ++m_vertices.begin();
+            list<Vertex>::iterator v1 = --verts.end();
+            list<Vertex>::iterator v2 = verts.begin(); 
+            list<Vertex>::iterator v3 = ++verts.begin();
             if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) 
-                m_vertices.erase(v2);
+                verts.erase(v2);
         }
 
         // if we still have three vertices, even after potentially removing one in the previous step
-        if (m_vertices.size() >= 3)
+        if (verts.size() >= 3)
         {
-            list<Vertex>::iterator v1 = ----m_vertices.end();
-            list<Vertex>::iterator v2 = --m_vertices.end(); 
-            list<Vertex>::iterator v3 = m_vertices.begin();
+            list<Vertex>::iterator v1 = ----verts.end();
+            list<Vertex>::iterator v2 = --verts.end(); 
+            list<Vertex>::iterator v3 = verts.begin();
             if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) 
-                m_vertices.erase(v2);
+                verts.erase(v2);
         }
         
     }
 
     //second part: remove consecutive identical vertices
-    v1 = m_vertices.begin();
-    v2 = ++m_vertices.begin();
+    v1 = verts.begin();
+    v2 = ++verts.begin();
     assert( v1!= v2);
-    assert( m_vertices.size() > 1);
+    assert( verts.size() > 1);
     
-    while (v2 != m_vertices.end())
+    while (v2 != verts.end())
     {
         if (*v1 == *v2)
         {
-            m_vertices.erase(v1);
+            verts.erase(v1);
             v1 = v2++;
         } else
         {
@@ -360,27 +520,46 @@ void VertexChain::canonicalize()
     /* when relying only on front() == back() as a loop condition, the while-loop could delete even the final element,
      * and continue after that. But at that point, calls to front() and back() are invalid, and cause segfault.
      * Thus the additional check with m_vertices.size() */
-    int num_vertices = m_vertices.size();   // without caching this, the next line could degenerate to O(n²)
-    while (m_vertices.front() == m_vertices.back() && (--num_vertices))
+    int num_vertices = verts.size();   // without caching this, the next line could degenerate to O(n²)
+    while (verts.front() == verts.back() && (--num_vertices))
     {
-        m_vertices.pop_back();
+        verts.pop_back();
     }
     
-    if (closed && m_vertices.size() >= 3)
+    if (closed && verts.size() >= 3)
         //re-duplicate the first vertex to again mark the polygon as closed 
-        m_vertices.push_back(m_vertices.front());   
+        verts.push_back(verts.front());
+        
+    m_vertices = vector<Vertex>(verts.begin(), verts.end());
+        
 }
-
+#endif
 const Vertex&       VertexChain::front()     const  { return m_vertices.front(); }
 const Vertex&       VertexChain::back()      const  { return m_vertices.back(); }
-const list<Vertex>& VertexChain::vertices()  const  { return m_vertices; }
-void                VertexChain::reverse()          { m_vertices.reverse(); }
+//const list<Vertex>& VertexChain::vertices()  const  { return m_vertices; }
+const vector<Vertex>& VertexChain::data()   const { return m_vertices; }
 void                VertexChain::append(const Vertex& node) { m_vertices.push_back(node); }
-
 
 void VertexChain::append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end )
 {
     m_vertices.insert(m_vertices.end(),begin, end);
+}
+
+void VertexChain::reverse()          
+{ 
+    uint64_t i = 0;
+    uint64_t j = m_vertices.size()-1;
+    
+    while (i < j)
+    {
+        Vertex tmp = m_vertices[i];
+        m_vertices[i] = m_vertices[j];
+        m_vertices[j] = tmp;
+    
+        i++;
+        j--;
+    }
+    
 }
 
 
@@ -421,19 +600,19 @@ bool VertexChain::isSimple() const
 
 
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
-static void clip( const list<Vertex> & polygon, BigInt clip_pos, list<VertexChain*> &above, list<VertexChain*> &below)
+static void clip( const vector<Vertex> & polygon, BigInt clip_pos, list<VertexChain*> &above, list<VertexChain*> &below)
 {
     assert( polygon.front() == polygon.back());
     #warning TODO: handle the edge case that front() and back() both lie on the split line
 
     VertexChain *current_seg = new VertexChain();
-    list<Vertex>::const_iterator v2 = polygon.begin();
+    vector<Vertex>::const_iterator v2 = polygon.begin();
 
     do { current_seg->append( *v2 ); v2++;}
     while (significantCoordinate (current_seg->back()) == clip_pos);
 
     bool isAbove = significantCoordinate( current_seg->back() ) <= clip_pos;
-    list<Vertex>::const_iterator v1 = v2;
+    vector<Vertex>::const_iterator v1 = v2;
     for ( v1--; v2 != polygon.end(); v1++, v2++)
     {
         if (( isAbove && significantCoordinate(*v2) <= clip_pos) || 
@@ -520,23 +699,50 @@ void VertexChain::clipFirstComponent( BigInt clip_x, list<VertexChain> &out_left
     ensureOrientation(tmp_right, out_right, clockwise);
 }
 
-bool VertexChain::isClockwise()
-{
-    assert (front() == back() && "Clockwise test is defined for closed polygons only");
+#warning TODO: rewrite using modulus arithmetic
+bool VertexChain::isClockwise() { 
+    /*static int i = 0;
+    i++;
+    
+    if (i == 50859662)
+    {
+        cout << *this << endl;
+        cout << "==============" << endl;
+    }*/
+    
+    assert (m_vertices.front() == m_vertices.back() && "Clockwise test is defined for closed polygons only");
     canonicalize(); // otherwise, the minimum vertex and its two neighbors may be colinear, meaning that isClockwise won't work
-    
     if (m_vertices.size() < 3) return false; //'clockwise' is only meaningful for closed polygons; and those require at least 3 vertices
-    list<Vertex>::const_iterator vMin = m_vertices.begin();
+    /*
+    if (! isCanonicalPolygon())
+    {
+        std::cout << "non-canonical polygon at " << i << endl;
+        cout << m_vertices << endl;
+
+    }*/
+    assert (isCanonicalPolygon());
     
-    for (list<Vertex>::const_iterator v = m_vertices.begin(); v != m_vertices.end(); v++)
-        if (*v < *vMin)
-            vMin = v;
-            
-    Vertex v = *vMin;
-    Vertex vPred = getPredecessor( vMin, m_vertices);
-    Vertex vSucc = getSuccessor(   vMin, m_vertices);
+    vector<Vertex>::const_iterator vMin = m_vertices.begin();
     
+    m_vertices.pop_back();  //so that the modulus-arithmetic ignored the duplicate end vertex
+    uint64_t min_pos = 0;
+    for (uint64_t i = 0; i < m_vertices.size(); i++)
+        if ( m_vertices[i] < m_vertices[min_pos]) min_pos = i;
+         
+    Vertex v = m_vertices[min_pos];
+    Vertex vPred = m_vertices[ (min_pos - 1 + m_vertices.size()) % m_vertices.size()  ];   // '+ m_vertices.size()' for the edge case min_pos = 0;
+    Vertex vSucc = m_vertices[ (min_pos + 1)                     % m_vertices.size()  ];
     
+//#error simplifier: vertexchain.cc:534: bool VertexChain::isClockwise(): Assertion `v.pseudoDistanceToLine( vPred, vSucc) != 0 && "colinear vertices detected"' failed.
+    /*if (v.pseudoDistanceToLine( vPred, vSucc) == 0)
+    {
+        cout << i << endl;
+        cout << *this << endl;
+        exit(0);
+    }*/
+
+    m_vertices.push_back( m_vertices.front());
+
     assert( v.pseudoDistanceToLine( vPred, vSucc) != 0 && "colinear vertices detected");
     return v.pseudoDistanceToLine( vPred, vSucc) < 0;
 }
@@ -546,4 +752,12 @@ list<VertexChain> VertexChain::toSimplePolygon()
     return toSimplePolygons(*this);
 }
 
+
+std::ostream& operator <<(std::ostream& os, const VertexChain &seg)
+{
+    const vector<Vertex> &verts = seg.data();
+    for (vector<Vertex>::const_iterator it = verts.begin(); it != verts.end(); it++)
+        os << *it << endl;
+    return os;
+}
 

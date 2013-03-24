@@ -316,6 +316,9 @@ int main () {
         render( "output/coast/seg#", view, world, "");
         glColor3f(0,0,0);
         render( "output/coast/country#", view, world, "");
+        glColor3f(1,0,0);
+        render( "output/coast/building#", view, world, "");
+
         // Swap front and back rendering buffers
         glfwSwapBuffers ();
         // Check if ESC key was pressed or window was closed
