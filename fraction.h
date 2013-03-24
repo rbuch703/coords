@@ -102,7 +102,10 @@ public:
     bool operator >=(const Fraction &other) const { return num * other.denom >= other.num * denom; }
 
     bool operator ==(const Fraction &other) const { return num * other.denom == other.num * denom; }
+    bool operator ==(const int32_t &other) const  { return num               == other     * denom; }
+
     bool operator !=(const Fraction &other) const { return num * other.denom != other.num * denom; }
+    bool operator !=(const int32_t &other) const  { return num               != other     * denom; }
 
     Fraction operator+(const Fraction &other) const { Fraction res = *this; return res+=other; }
     Fraction operator-(const Fraction &other) const { Fraction res = *this; return res-=other; }

@@ -10,13 +10,14 @@
 #include <stdlib.h> //for llabs
 #include <math.h>
 
-Vertex::Vertex() :x(0), y(0) {}
-Vertex::Vertex(BigInt v_x, BigInt v_y): x(v_x), y(v_y) {}
+Vertex::Vertex(): x(0), y(0) {}
+Vertex::Vertex(BigInt v_x, BigInt v_y): x((int32_t)v_x), y((int32_t)v_y) {}
 
 double Vertex::squaredDistanceToLine(const Vertex &A, const Vertex &B) const
 {
     assert( B!= A);
-    BigInt num = (B.x-A.x)*(A.y-y) - (B.y-A.y)*(A.x-x);
+    BigInt num = (B.get_x() - A.get_x() )*(A.get_y() - get_y() ) - 
+                 (B.get_y() - A.get_y() )*(A.get_x() - get_x() );
     if (num < 0) num = -num; //distance is an absolute value
     BigInt denom_sq = (B-A).squaredLength();//(B.x-A.x)*(B.x-A.x) + (B.y-A.y)*(B.y-A.y);
     assert(denom_sq != 0);
@@ -36,17 +37,17 @@ double Vertex::distanceToLine(const Vertex &A, const Vertex &B) const
 
 BigInt Vertex::pseudoDistanceToLine(const Vertex &start, const Vertex &end) const
 {
-    return (end.x-start.x)*(start.y-y) - (end.y-start.y)*(start.x-x);
+    return (end.get_x()-start.get_x())*(start.get_y()-get_y()) - (end.get_y()-start.get_y())*(start.get_x()-get_x());
 }
 
-BigInt Vertex::squaredLength() const { return (x*x)+(y*y);}
+BigInt Vertex::squaredLength() const { BigInt bx = get_x(); BigInt by = get_y(); return (bx*bx)+(by*by);}
 bool Vertex::operator==(const Vertex &other) const { return x==other.x && y == other.y;}
 bool Vertex::operator!=(const Vertex &other) const { return x!=other.x || y != other.y;}
 bool Vertex::operator< (const Vertex &other) const { return (x < other.x) || ((x == other.x) && (y < other.y));}
 bool Vertex::operator> (const Vertex &other) const { return (x > other.x) || ((x == other.x) && (y > other.y));}
 
-Vertex Vertex::operator+(const Vertex &a) const { return Vertex(x+a.x, y+a.y);}
-Vertex Vertex::operator-(const Vertex &a) const { return Vertex(x-a.x, y-a.y);}
+Vertex Vertex::operator+(const Vertex &a) const { return Vertex( get_x() + a.get_x(), y + a.get_y() );}
+Vertex Vertex::operator-(const Vertex &a) const { return Vertex( get_x() - a.get_x(), y - a.get_y() );}
 
 //Vertex operator*(const int64_t a, const Vertex b) { return Vertex(a*b.x, a*b.y);}
 //Vertex operator*(const BigInt &a, const Vertex &b) { return Vertex(a*b.x, a*b.y);}
@@ -58,6 +59,7 @@ std::ostream& operator <<(std::ostream& os, const Vertex v)
     return os;
 }
 
+
 /** ============================================================================= */
 LineSegment::LineSegment( const Vertex v_start, const Vertex v_end): 
                         start(v_start), end(v_end) { assert(start != end);}
@@ -68,7 +70,7 @@ LineSegment::LineSegment( BigInt start_x, BigInt start_y, BigInt end_x, BigInt e
 
 bool LineSegment::isParallelTo( const LineSegment &other) const 
 { 
-    return (end.x- start.x)*(other.end.y - other.start.y) ==  (end.y- start.y)*(other.end.x - other.start.x);
+    return (end.get_x() - start.get_x() ) *( other.end.get_y() - other.start.get_y()) ==  (end.get_y() - start.get_y())*(other.end.get_x() - other.start.get_x());
 }
 
 std::ostream& operator <<(std::ostream &os, const LineSegment edge)
@@ -80,7 +82,7 @@ std::ostream& operator <<(std::ostream &os, const LineSegment edge)
 // @returns whether the vertex lies on the line (not necessarily on the line segment)
 bool LineSegment::isColinearWith(const Vertex v) const
 {
-    return  (( v.x-start.x)*(end.y - start.y) == ( v.y-start.y)*(end.x - start.x));
+    return  (( v.get_x() - start.get_x()) * (end.get_y() - start.get_y()) == ( v.get_y()-start.get_y())*(end.get_x() - start.get_x()) );
 }
 
 bool LineSegment::intersects( const LineSegment &other) const
@@ -95,8 +97,8 @@ bool LineSegment::intersects( const LineSegment &other, BigFraction &intersect_x
     if (! intersects(other, num1, denom)) return false;
     
     BigFraction alpha(num1, denom);
-    intersect_x_out = alpha * (end.x - start.x) + start.x;
-    intersect_y_out = alpha * (end.y - start.y) + start.y;
+    intersect_x_out = alpha * (end.get_x() - start.get_x()) + start.get_x();
+    intersect_y_out = alpha * (end.get_y() - start.get_y()) + start.get_y();
     return true;
 }
 
@@ -105,10 +107,10 @@ bool LineSegment::intersects( const LineSegment &other, BigFraction &intersect_x
 bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt &denom_out) const
 {
 
-    BigInt odx = other.end.x-other.start.x;
-    BigInt ody = other.end.y-other.start.y;
-    BigInt tdx =       end.x-      start.x;
-    BigInt tdy =       end.y-      start.y;
+    BigInt odx = other.end.get_x() - other.start.get_x();
+    BigInt ody = other.end.get_y() - other.start.get_y();
+    BigInt tdx =       end.get_x() -       start.get_x();
+    BigInt tdy =       end.get_y() -       start.get_y();
 
     BigInt denom= ody * tdx - odx * tdy;
     bool areParallel = (denom == 0);
@@ -117,9 +119,9 @@ bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt
     {
 
         // if the two parallel line segments do not lie on the same line, they cannot intersect
-        bool colinearWithStart = ( other.start.x-start.x)*(tdy) == ( other.start.y-start.y)*(tdx);
+        bool colinearWithStart = ( other.start.get_x() - start.get_x() )*(tdy) == ( other.start.get_y()-start.get_y())*(tdx);
         if (! colinearWithStart) return false;
-        assert( ( other.end.x-start.x)*(tdy) == ( other.end.y-start.y)*(tdx) );
+        assert( ( other.end.get_x() - start.get_x())*(tdy) == ( other.end.get_y() - start.get_y() )*(tdx) );
             
         // if they do lie on the same line, they intersect if they overlap
         static const BigFraction zero(0,1); // (0/1)
@@ -137,8 +139,8 @@ bool LineSegment::intersects( const LineSegment &other, BigInt &num1_out, BigInt
         BigInt denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);*/
 
         /*optimization: pre-computed all multiple-used differences */
-        BigInt dsx = start.x    -other.start.x;
-        BigInt dsy = start.y    -other.start.y;
+        BigInt dsx = start.get_x()    -other.start.get_x();
+        BigInt dsy = start.get_y()    -other.start.get_y();
 
         BigInt num1 = odx * dsy - ody * dsx;
         BigInt num2 = tdx * dsy - tdy * dsx;
@@ -183,8 +185,12 @@ void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &
         return;
     }
     //TODO: handle edge case that two line segments overlap
-    out_num = (other.end.x-other.start.x)*(start.y-other.start.y) - (other.end.y-other.start.y)*(start.x-other.start.x);
-    out_denom= (other.end.y-other.start.y)*(end.x  -      start.x) - (other.end.x-other.start.x)*(end.y  -      start.y);
+    
+    BigInt odx = other.end.get_x() - other.start.get_x();
+    BigInt ody = other.end.get_y() - other.start.get_y();
+    
+    out_num =  (odx)*(start.get_y()-other.start.get_y() ) - (ody)*(start.get_x() - other.start.get_x() );
+    out_denom= (ody)*(end.get_x()  -      start.get_x() ) - (odx)*(end.get_y()   -       start.get_y() );
     
     assert(out_denom != 0 && "Line segments are parallel or coincide" );
 
@@ -192,7 +198,7 @@ void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &
 
 static Vertex getRoundedIntersectionPoint(const LineSegment &A, const LineSegment &B)
 {
-    assert (A.start.x <= A.end.x && B.start.x <= B.end.x);
+    assert (A.start.get_x() <= A.end.get_x() && B.start.get_x() <= B.end.get_x() );
 
     BigInt num, denom;
     
@@ -203,7 +209,8 @@ static Vertex getRoundedIntersectionPoint(const LineSegment &A, const LineSegmen
     assert (iNum == num && iDenom == denom);*/
     
     
-    Vertex v( (A.start.x + num * (A.end.x - A.start.x) / denom), (A.start.y + num * (A.end.y - A.start.y) / denom) );
+    BigInt x = A.start.get_x() + num * (A.end.get_x() - A.start.get_x()) / denom;
+    BigInt y = A.start.get_y() + num * (A.end.get_y() - A.start.get_y()) / denom;
     /** make sure that the intersection position is rounded *up* to the next integer
       * first, this is only necessary if the division num/denom has a remainder - otherwise the result is already exact
       * second, it is only necessary if the slope in the respective direction is positive
@@ -211,13 +218,16 @@ static Vertex getRoundedIntersectionPoint(const LineSegment &A, const LineSegmen
       *     - if it was negative, the formula above already computed a value that is rounded up
       *
       **/
+      
+   
+      
     if (num % denom != 0)    
     {
-        if (A.end.x > A.start.x) v.x = v.x + 1;
-        if (A.end.y > A.start.y) v.y = v.y + 1;
+        if (A.end.get_x() > A.start.get_x() ) x = x + 1;
+        if (A.end.get_y() > A.start.get_y() ) y = y + 1;
     }
     
-    return v;
+    return Vertex(x,y);
 }
 
 
@@ -258,19 +268,19 @@ BigFraction LineSegment::getCoefficient(const Vertex v) const
 {
     assert (start != end);
     
-    if (start.x == end.x)
+    if (start.get_x() == end.get_x())
     {
-        assert( v.x == start.x && "vertex does not lie on line segment");
-        return BigFraction( v.y-start.y, end.y-start.y);
-    } else if (start.y == end.y)
+        assert( v.get_x() == start.get_x() && "vertex does not lie on line segment");
+        return BigFraction( v.get_y()-start.get_y(), end.get_y() - start.get_y() );
+    } else if (start.get_y() == end.get_y())
     {
-        assert( v.y == start.y && "vertex does not lie on line segment");
-        return BigFraction( v.x-start.x, end.x-start.x);
+        assert( v.get_y() == start.get_y() && "vertex does not lie on line segment");
+        return BigFraction( v.get_x() - start.get_x(), end.get_x() - start.get_x() );
     }
     
-    BigFraction c1(v.y-start.y, end.y-start.y);
+    BigFraction c1(v.get_y() - start.get_y(), end.get_y() - start.get_y() );
 #ifndef NDEBUG
-    BigFraction c2(v.x-start.x, end.x-start.x);
+    BigFraction c2(v.get_x() - start.get_x(), end.get_x() - start.get_x() );
     assert( c1 == c2 && "incorrect coefficient computation");
 #endif
     return c1;
@@ -281,10 +291,10 @@ BigFraction LineSegment::getCoefficient(const Vertex v) const
   * As a necessary condition for overlap, the two segments have to be parallel */
 bool LineSegment::overlapsWith(const LineSegment &other) const
 {
-    BigInt odx = other.end.x-other.start.x;
-    BigInt ody = other.end.y-other.start.y;
-    BigInt tdx =       end.x-      start.x;
-    BigInt tdy =       end.y-      start.y;
+    BigInt odx = other.end.get_x() - other.start.get_x();
+    BigInt ody = other.end.get_y() - other.start.get_y();
+    BigInt tdx =       end.get_x() -       start.get_x();
+    BigInt tdy =       end.get_y() -       start.get_y();
 
     BigInt denom= ody * tdx - odx * tdy;
     bool areParallel = (denom == 0);
@@ -292,10 +302,10 @@ bool LineSegment::overlapsWith(const LineSegment &other) const
 
     if (!areParallel) return false;
     
-    bool colinearWithStart = ( other.start.x-start.x)*(tdy) == ( other.start.y-start.y)*(tdx);
+    bool colinearWithStart = ( other.start.get_x() - start.get_x() )*(tdy) == ( other.start.get_y() - start.get_y() )*(tdx);
     if (! colinearWithStart) return false;
     // if parallel and one point is colinear to 'this', the other point has to be, too
-    assert( ( other.end.x-start.x)*(tdy) == ( other.end.y-start.y)*(tdx) );
+    assert( ( other.end.get_x() - start.get_x() )*(tdy) == ( other.end.get_y() - start.get_y() )*(tdx) );
 
     static const BigFraction zero(0,1); // (0/1)
     static const BigFraction one(1,1);  // (1/1)
@@ -313,7 +323,8 @@ bool LineSegment::overlapsWith(const LineSegment &other) const
 LineSegment::operator bool() const
 {
     //static const Vertex zero(0,0);
-    return (start.x != 0 || start.y != 0 || end.x != 0 || end.y != 0);;
+    //return (start.get_x() != 0 || start.get_y() != 0 || end.x != 0 || end.y != 0);;
+    return !(start.isZero() && end.isZero());
 }
 /** ============================================================================= */
 
@@ -805,7 +816,7 @@ std::ostream& operator <<(std::ostream& os, const AABoundingBox box)
 #ifndef NDEBUG
 static bool isNormalized( const AABoundingBox &box)
 {
-    return box.tl.x < box.br.x && box.tl.y < box.br.y;
+    return box.tl.get_x() < box.br.get_x() && box.tl.get_y() < box.br.get_y();
 }
 #endif
 

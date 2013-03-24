@@ -300,8 +300,8 @@ void QuadTreeNode::printHierarchy(int depth)
 
 QuadTreeNode::QuadTreeNode(AABoundingBox _box): tl(NULL), tr(NULL), bl(NULL), br(NULL), box(_box)
 {   
-    mid_x = (box.tl.x + box.br.x) / 2;
-    mid_y = (box.tl.y + box.br.y) / 2;
+    mid_x = (box.tl.get_x() + box.br.get_x()) / 2;
+    mid_y = (box.tl.get_y() + box.br.get_y()) / 2;
 }
 
 QuadTreeNode::~QuadTreeNode()
@@ -404,8 +404,8 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
 {
 /*    static int covers = 0;
     covers++;*/
-    BigInt mid_x = (box.tl.x + box.br.x) / 2;
-    BigInt mid_y = (box.tl.y + box.br.y) / 2;
+    BigInt mid_x = (box.tl.get_x() + box.br.get_x() ) / 2;
+    BigInt mid_y = (box.tl.get_y() + box.br.get_y() ) / 2;
     
     tl = tr = bl = br = false;
 
@@ -435,14 +435,14 @@ int QuadTreeNode::coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &b
       */
     if ((edge.start.x == edge.end.x)|| (edge.start.y == edge.end.y)) 
     {
-        BigInt min_x = edge.start.x < edge.end.x ? edge.start.x : edge.end.x;
-        BigInt max_x = edge.start.x > edge.end.x ? edge.start.x : edge.end.x;
+        int32_t min_x = edge.start.x < edge.end.x ? edge.start.x : edge.end.x;
+        int32_t max_x = edge.start.x > edge.end.x ? edge.start.x : edge.end.x;
 
         bool left =  (min_x <= mid_x) && (max_x >= box.tl.x); 
         bool right = (max_x >= mid_x) && (min_x <= box.br.x);
         
-        BigInt min_y = edge.start.y < edge.end.y ? edge.start.y : edge.end.y;
-        BigInt max_y = edge.start.y > edge.end.y ? edge.start.y : edge.end.y;
+        int32_t min_y = edge.start.y < edge.end.y ? edge.start.y : edge.end.y;
+        int32_t max_y = edge.start.y > edge.end.y ? edge.start.y : edge.end.y;
         
         bool top =   (min_y <= mid_y) && (max_y >= box.tl.y);
         bool bottom= (max_y >= mid_y) && (min_y <= box.br.y);

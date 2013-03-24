@@ -347,7 +347,7 @@ void extractGermany()
 }
 
 
-void foreach_relation()
+void extractCountries()
 {
     mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
     mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
@@ -413,7 +413,29 @@ void foreach_relation()
         //else
         //cout << rel << endl;
     }
-    clipRecursive( "output/coast/country", "", poly_storage);
+    clipRecursive( "output/coast/country", "", poly_storage);   
+}
+
+void extractBuildings()
+{
+    FILE *f = fopen("intermediate/buildings.dump", "rb");
+    int i = 0;
+    int ch;
+    while ( (ch = fgetc(f)) != EOF )
+    {
+        ungetc(ch, f);
+        //int d = fputc(ch, f);
+        //perror("fputc");
+        //assert(d == ch);
+        if (i++ % 100000 == 0) cout << (i/1000) << "k buildings read" << endl;
+        OSMIntegratedWay way(f, -1);
+        if (! (way.vertices.front() == way.vertices.back()))
+           way.vertices.push_back(way.vertices.front());
+        VertexChain tmp(way.vertices);
+        handlePolygon("dummy", tmp);
+        //cout << way << endl;        
+    } 
+    clipRecursive( "output/coast/building", "", poly_storage);   
     
 }
 
@@ -423,7 +445,8 @@ int main()
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    foreach_relation();
+    //extractCountries();
+    extractBuildings();
     //extractGermany();
     //FILE* f = fopen("coastline.dump", "rb");
     //if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }

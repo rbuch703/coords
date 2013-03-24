@@ -15,7 +15,12 @@
 
 using namespace std;
 
-struct Vertex
+class QuadTreeNode;
+
+
+/* there may be hundreds of millions of vertices in memory at a given time, so
+   memory consumption due to member alignment is a big concern. */
+struct __attribute__ ((aligned (4))) Vertex
 {
     Vertex();
     Vertex(BigInt v_x, BigInt v_y);
@@ -33,12 +38,21 @@ struct Vertex
     bool    operator> (const Vertex &other) const;
     Vertex  operator+(const Vertex &a) const;
     Vertex  operator-(const Vertex &a) const;
-public:    
-    /** just a safety precaution (wouldn't need to be BigInt, could just be int32_t): 
-      * having these as BigInt ensures that all operations on them will also be performed as BigInts)*/
-    BigInt x, y;    
-    
+public:
+    inline BigInt get_x() const { return BigInt(x);}
+    inline BigInt get_y() const { return BigInt(y);}
+    inline bool isZero() const { return (x == 0) && (y == 0); }
+private:    
+    int32_t x,y;
+    /*the following friend declarations are really just a whitelist of methods/classes that 
+      can guarantee that operations on int32_t values will not overflow */
+    friend void dumpPolygon(string file_base, const list<Vertex>& poly);
+    friend std::ostream& operator <<(std::ostream& os, const Vertex v);
+    friend struct AABoundingBox;
+    friend class QuadTreeNode;
 };
+
+
 
 /** semantics:  a line segment starts *at* its vertex 'start', and ends *at* its vertex 'end',
                 i.e. 'start' and 'end' are part of the segment.
@@ -108,10 +122,10 @@ struct AABoundingBox
     AABoundingBox getOverlap(const AABoundingBox &other) const;
     bool overlapsWith(const AABoundingBox &other) const;
     
-    BigInt left()   const { return tl.x; }
-    BigInt right()  const { return br.x; }
-    BigInt top()    const { return tl.y; }
-    BigInt bottom() const { return br.y; }
+    int32_t left()   const { return tl.x; }
+    int32_t right()  const { return br.x; }
+    int32_t top()    const { return tl.y; }
+    int32_t bottom() const { return br.y; }
     BigInt width()  const;
     BigInt height() const;
 

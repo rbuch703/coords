@@ -53,10 +53,8 @@ void dumpPolygon(string file_base, const list<Vertex>& poly)
     
     BOOST_FOREACH( const Vertex vertex, poly)
     {
-        int32_t val = (int32_t)vertex.x;
-        fwrite(&val, sizeof(val), 1, f);
-        val = (int32_t)vertex.y;
-        fwrite(&val, sizeof(val), 1, f);
+        fwrite(&vertex.x, sizeof(vertex.x), 1, f);
+        fwrite(&vertex.y, sizeof(vertex.y), 1, f);
     }
     
     fclose(f);

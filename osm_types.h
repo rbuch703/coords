@@ -18,6 +18,9 @@ struct OSMVertex
 {
     OSMVertex() {}
     OSMVertex( const int32_t pX, const int32_t pY): x(pX), y(pY) {}
+    
+    bool operator==(OSMVertex other) { return x == other.x && y == other.y; }
+    bool operator!=(OSMVertex other) { return x != other.x || y != other.y; }
 public:
     int32_t x,y;
 };

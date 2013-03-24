@@ -5,8 +5,8 @@
 #include <queue>
 #include <boost/foreach.hpp>
 
-static BigInt getXCoordinate(const Vertex &v) { return v.x;}
-static BigInt getYCoordinate(const Vertex &v) { return v.y;}
+static BigInt getXCoordinate(const Vertex &v) { return v.get_x();}
+static BigInt getYCoordinate(const Vertex &v) { return v.get_y();}
 
 /** 
     @brief: BASIC ALGORITHM (for clipping along the x-axis):
