@@ -50,7 +50,15 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 void handlePolygon(string, VertexChain& segment)
 {
     list<VertexChain> polys = segment.toSimplePolygon();
-    poly_storage.splice(poly_storage.end(), polys);
+    
+    for (list<VertexChain>::iterator it = polys.begin(); it != polys.end(); it = polys.erase(it))
+    {
+        it->canonicalize();
+        if (it->front() != it->back()) continue;
+        if (it->vertices().size() < 4) continue;
+        poly_storage.push_back(*it);
+    }
+    
      
     //dumpPolygon(file_base, segment);
 }
@@ -346,18 +354,67 @@ void foreach_relation()
     uint64_t* offset = (uint64_t*) idx_map.ptr;
     assert ( idx_map.size % sizeof(uint64_t) == 0);
     uint64_t num_rels = idx_map.size / sizeof(uint64_t);
+
+    mmap_t way_idx_map = init_mmap ( "ways.idx", true, false);
+    mmap_t way_data_map= init_mmap ( "ways_int.data",true, false);
+    uint64_t* way_offset = (uint64_t*) way_idx_map.ptr;
+    assert ( way_idx_map.size % sizeof(uint64_t) == 0);
+    uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
+
     
     for (uint64_t rel_id = 0; rel_id < num_rels; rel_id++)
     {
+        if (rel_id % 1000 == 0)
+            cout << (rel_id/1000) << "k relations read." << endl;   
         if (! offset[rel_id]) continue;
         OSMRelation rel( ((uint8_t*)data_map.ptr) + offset[rel_id], rel_id);
         
         //if (! rel.hasKey("boundary") || rel["boundary"] != "administrative") continue;
-        if (! rel.hasKey("left:country")) continue;
+        //if (! rel.hasKey("timezone")) continue;
+        if ( rel["admin_level"] != "2") continue;
+        
         
         //if (! rel.tags.count( OSMKeyValuePair("boundary", "administrative"))) continue;
-        cout << rel << endl;
+        
+        //cout << rel["ISO3166-1"] << ";" << rel["int_name"] << ";" << rel["name:en"] << ";" << rel["iso3166-1:alpha2"] << endl;
+        if ( rel.hasKey("ISO3166-1"))
+            cout <<  rel["ISO3166-1"] << endl;
+        else if (rel.hasKey("iso3166-1") )
+            cout <<  rel["iso3166-1"] << endl;
+        //else 
+        //    continue;
+        if (!rel.hasKey("ISO3166-1") && !rel.hasKey("iso3166-1")) continue;
+            
+        PolygonReconstructor recon;
+        
+        for (list<OSMRelationMember>::const_iterator way = rel.members.begin(); way != rel.members.end(); way++)
+        {
+            if (way->type != WAY) continue;
+            if (way->role != "outer") continue;
+            
+            if (way->ref == 0) continue;
+            assert(way->ref < num_ways);
+            
+            if (way_offset[ way->ref ] == 0) continue;
+            OSMIntegratedWay iw( (uint8_t*)way_data_map.ptr + way_offset[ way->ref], way->ref);
+            VertexChain ch(iw.vertices);
+            recon.add(ch);
+        }
+        
+        recon.forceClosePolygons();
+        list<VertexChain> polys = recon.getClosedPolygons();
+        recon.clear();
+        for (list<VertexChain>::iterator it = polys.begin(); it != polys.end(); it++)
+        {
+            handlePolygon("dummy", *it);
+        }
+        
+        
+        //else
+        //cout << rel << endl;
     }
+    clipRecursive( "output/coast/country", "", poly_storage);
+    
 }
 
 int main()
@@ -366,7 +423,8 @@ int main()
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    extractGermany();
+    foreach_relation();
+    //extractGermany();
     //FILE* f = fopen("coastline.dump", "rb");
     //if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
     //reconstructCoastline(f, poly_storage);

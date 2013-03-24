@@ -111,5 +111,6 @@ struct OSMRelation
 };
 
 ostream& operator<<(ostream &out, const OSMRelation &relation);
+ostream& operator<<(ostream &out, const list<OSMKeyValuePair> &tags);
 
 #endif
