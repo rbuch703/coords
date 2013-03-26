@@ -312,55 +312,6 @@ void reconstructCoastline(FILE * src, list<VertexChain> &poly_storage)
     //    poly_storage.push_back(s);
 }
 
-/*
-void extractGermany()
-{
-    mmap_t idx_map = init_mmap ( "intermediate/ways.idx", true, false);
-    mmap_t data_map= init_mmap ( "intermediate/ways_int.data",true, false);
-    uint64_t* offset = (uint64_t*) idx_map.ptr;
-    assert ( idx_map.size % sizeof(uint64_t) == 0);
-    uint64_t num_ways = idx_map.size / sizeof(uint64_t);
-    
-    
-    PolygonReconstructor recon;
-    
-    for (uint64_t way_id = 0; way_id < num_ways; way_id++)
-    {
-        if (! offset[way_id]) continue;
-        OSMIntegratedWay way( ((uint8_t*)data_map.ptr) + offset[way_id], way_id);
-        
-        if (! way.hasKey("boundary") || way["boundary"] != "administrative") continue;
-        if (! way.hasKey("admin_level") || way["admin_level"] != "2") continue;
-        if (! way.hasKey("left:country") && ! way.hasKey("right:country")) continue;
-        
-        bool match = false;
-        if (way.hasKey("left:country") && way["left:country"] == "Germany") match = true;
-        if (way.hasKey("right:country") && way["right:country"] == "Germany") match = true;
-        
-        if (!match) continue;
-        
-        recon.add( VertexChain(way.vertices));
-        
-        //if (! rel.hasKey("left:country")) continue;
-        
-        //if (! rel.tags.count( OSMKeyValuePair("boundary", "administrative"))) continue;
-        cout << way.id << endl;
-    }
-    recon.forceClosePolygons();
-
-    list<VertexChain> polys = recon.getClosedPolygons();
-    
-    for (list<VertexChain>::const_iterator it = polys.begin(); it != polys.end(); it++)
-    {
-        cout << "polygon with " << it->size() << "vertices" << endl;
-    }
-    
-
-    clipRecursive( "output/coast/country", "", polys);
-
-}*/
-
-
 void extractCountries()
 {
     mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
@@ -387,12 +338,13 @@ void extractCountries()
         
         //if (! rel.hasKey("boundary") || rel["boundary"] != "administrative") continue;
         //if (! rel.hasKey("timezone")) continue;
-        if ( rel["admin_level"] != "2") continue;
+        if ( rel["admin_level"] != "4") continue;
         
         
         //if (! rel.tags.count( OSMKeyValuePair("boundary", "administrative"))) continue;
         
         //cout << rel["ISO3166-1"] << ";" << rel["int_name"] << ";" << rel["name:en"] << ";" << rel["iso3166-1:alpha2"] << endl;
+        /*
         if ( rel.hasKey("ISO3166-1"))
             cout <<  rel["ISO3166-1"] << endl;
         else if (rel.hasKey("iso3166-1") )
@@ -400,7 +352,7 @@ void extractCountries()
         //else 
         //    continue;
         if (!rel.hasKey("ISO3166-1") && !rel.hasKey("iso3166-1")) continue;
-            
+          */  
         PolygonReconstructor recon;
         
         for (list<OSMRelationMember>::const_iterator way = rel.members.begin(); way != rel.members.end(); way++)
@@ -412,7 +364,7 @@ void extractCountries()
             assert(way->ref < num_ways);
             
             if (way_offset[ way->ref ] == 0) continue;
-            const uint8_t * ptr =  (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
+            const uint8_t * ptr = (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
             OSMIntegratedWay iw(ptr , way->ref);
             VertexChain ch(iw.vertices);
             recon.add(ch);
@@ -430,7 +382,7 @@ void extractCountries()
         //else
         //cout << rel << endl;
     }
-    clipRecursive( "output/coast/country", "", poly_storage);   
+    clipRecursive( "output/coast/state", "", poly_storage);   
 }
 
 void extractBuildings()

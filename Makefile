@@ -16,11 +16,11 @@ GEO_OBJ  = $(GEO_SRC:.cc=.o) math64.o
 # integer overflow
 # WARNING: the gcc option -O2 appears to negate the effects of -ftrapv ! 
 #FLAGS = -g -Wall -Wextra -DNDEBUG -O2
-#FLAGS = -ftrapv -g -Wall -Wextra 
-FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
+FLAGS = -ftrapv -g -Wall -Wextra 
+#FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = -fprofile-arcs#--as-needed
+LD_FLAGS = #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
 all: make.dep conv_osmxml data_converter simplifier gl_test tests
@@ -58,7 +58,7 @@ tests/quadtree_test: tests/quadtree_test.cc geometric_types.o vertexchain.o int1
 	
 tests/triangulation: tests/triangulation.cc geometric_types.o vertexchain.o int128.o math64.o quadtree.o
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) `pkg-config --cflags --libs cairo` $(LD_FLAGS) -o $@ $^ 
+	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ `pkg-config --cflags --libs cairo`
 
 math64.o: math64.asm
 	@echo [ASM] $<

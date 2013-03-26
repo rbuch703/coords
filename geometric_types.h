@@ -25,6 +25,8 @@ struct __attribute__ ((aligned (4))) Vertex
 {
     Vertex();
     Vertex(BigInt v_x, BigInt v_y);
+    inline Vertex(int32_t v_x, int32_t v_y): x(v_x), y(v_y) {};
+    Vertex(bool valid); //readable way of creating an invalidated Vertex
     //uint64_t squaredDistanceTo(const Vertex other) const;
     BigInt squaredLength() const;
     double squaredDistanceToLine(const Vertex &A, const Vertex &B) const;

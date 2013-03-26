@@ -318,7 +318,9 @@ bool VertexChain::isCanonicalPolygon()
     This property is a necessary prerequisite for many advanced algorithms */
 void VertexChain::canonicalize()
 {
-    #warning FIXME: for open vertex chains, this method is incorrect; For these, colinearity must not be checked among first and last vertex
+    //for open vertex chains, this method is incorrect; For these, colinearity must not be checked among first and last vertex
+    assert ( m_vertices.front() == m_vertices.back() && "incomplete implementation");
+    
     
     if (size() == 0) return;
     
@@ -603,14 +605,19 @@ template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinat
 static void clip( const vector<Vertex> & polygon, BigInt clip_pos, list<VertexChain*> &above, list<VertexChain*> &below)
 {
     assert( polygon.front() == polygon.back());
-    #warning TODO: handle the edge case that front() and back() both lie on the split line
 
     VertexChain *current_seg = new VertexChain();
     vector<Vertex>::const_iterator v2 = polygon.begin();
 
     do { current_seg->append( *v2 ); v2++;}
-    while (significantCoordinate (current_seg->back()) == clip_pos);
-
+    while ((significantCoordinate (current_seg->back()) == clip_pos) && (v2 != polygon.end()));
+    
+    if (v2 == polygon.end())    //edge case: all vertices lie on the clip line --> degenerate case, output is not a polygon
+    {
+        delete current_seg;
+        return;    
+    }
+    
     bool isAbove = significantCoordinate( current_seg->back() ) <= clip_pos;
     vector<Vertex>::const_iterator v1 = v2;
     for ( v1--; v2 != polygon.end(); v1++, v2++)
@@ -631,7 +638,7 @@ static void clip( const vector<Vertex> & polygon, BigInt clip_pos, list<VertexCh
         
         BigInt clip_other = (int64_t)( (int64_t)otherCoordinate(*v1) + (num+ 0.5)/denom);
         
-        Vertex vClip;
+        Vertex vClip(false);
         if      (significantCoordinate == getXCoordinate) vClip = Vertex(clip_pos, clip_other);
         else if (significantCoordinate == getYCoordinate) vClip = Vertex(clip_other, clip_pos);
         else  {assert(false && "unsupported coordinate accessor"); exit(0);}
@@ -699,7 +706,6 @@ void VertexChain::clipFirstComponent( BigInt clip_x, list<VertexChain> &out_left
     ensureOrientation(tmp_right, out_right, clockwise);
 }
 
-#warning TODO: rewrite using modulus arithmetic
 bool VertexChain::isClockwise() { 
     /*static int i = 0;
     i++;
@@ -733,7 +739,6 @@ bool VertexChain::isClockwise() {
     Vertex vPred = m_vertices[ (min_pos - 1 + m_vertices.size()) % m_vertices.size()  ];   // '+ m_vertices.size()' for the edge case min_pos = 0;
     Vertex vSucc = m_vertices[ (min_pos + 1)                     % m_vertices.size()  ];
     
-//#error simplifier: vertexchain.cc:534: bool VertexChain::isClockwise(): Assertion `v.pseudoDistanceToLine( vPred, vSucc) != 0 && "colinear vertices detected"' failed.
     /*if (v.pseudoDistanceToLine( vPred, vSucc) == 0)
     {
         cout << i << endl;

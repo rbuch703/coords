@@ -10,8 +10,10 @@
 #include <stdlib.h> //for llabs
 #include <math.h>
 
-Vertex::Vertex(): x(0), y(0) {}
+Vertex::Vertex() {}
 Vertex::Vertex(BigInt v_x, BigInt v_y): x((int32_t)v_x), y((int32_t)v_y) {}
+Vertex::Vertex(bool): x(0), y(0) { }
+
 
 double Vertex::squaredDistanceToLine(const Vertex &A, const Vertex &B) const
 {
@@ -797,7 +799,7 @@ void findIntersections(const list<Vertex> &path, list<LineSegment> &intersection
 
 // ====================================================================
 
-AABoundingBox::AABoundingBox(const Vertex v) { tl.x = br.x = v.x; tl.y = br.y =v.y;}
+AABoundingBox::AABoundingBox(const Vertex v): tl(v), br(v) { /*tl.x = br.x = v.x; tl.y = br.y =v.y;*/}
 AABoundingBox::AABoundingBox(Vertex tl_, Vertex br_): tl(tl_), br(br_) { assert(tl.x < br.x); assert(tl.y < br.y); }
 AABoundingBox & AABoundingBox::operator+=(const Vertex v) {
     if (v.x < tl.x) tl.x = v.x;

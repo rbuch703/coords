@@ -314,6 +314,8 @@ int main () {
         rect_t world={ 900000000, -1800000000, -900000000, 1800000000};
         glColor3f(1,1,1);
         render( "output/coast/seg#", view, world, "");
+        glColor3f(0,1,0);
+        render( "output/coast/state#", view, world, "");
         glColor3f(0,0,0);
         render( "output/coast/country#", view, world, "");
         glColor3f(1,0,0);
