@@ -5,6 +5,9 @@
 #include "../quadtree.h" // for toSimplePolygons()
 #include <boost/foreach.hpp>
 
+#include <cairo.h>
+#include <cairo-pdf.h>
+
 /**
     Data Structures:
         - priority queue of events (new segment, end of segment, intersection), 
@@ -18,25 +21,12 @@
             - ability to remove edges in O(log(n)) (when they no longer intersec the sweep line)
 */
 
-BigInt getRandom()
-{
-    BigInt a = 0;
-    int i = 8;
-    do
-    {
-        a = (a << 16)  | (rand() % 0xFFFF);
-    } while (--i);
-    
-    return rand() % 2 ? a : -a;
-    
-}
-
 int main()
 {
     VertexChain p; 
 
     srand(24);
-    for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 200; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
 
@@ -56,6 +46,46 @@ int main()
     MonotonizeEventQueue events;
     for (uint64_t i = 0; i < verts.size(); i++)
         events.add( verts, i);
+        
+    cairo_surface_t *surface = cairo_pdf_surface_create ("debug.pdf", 200, 200);
+    cairo_t *cr = cairo_create (surface);
+    //cairo_translate( cr, 500, 500);
+    //cairo_scale (cr, 1/1000.0, -1/1000.0);
+    
+    cairo_set_line_width (cr, 0.2);
+    
+    while (events.size() != 0)
+    {
+        SimpEvent event = events.pop();
+        switch (event.type)
+        {
+            case START: cairo_set_source_rgb(cr, 1,0,0); break;
+            case END:   cairo_set_source_rgb(cr, 0,0,1); break;
+            case SPLIT: cairo_set_source_rgb(cr, 1,1,1); break;
+            case MERGE: cairo_set_source_rgb(cr, 0,1,0); break;
+            case REGULAR:cairo_set_source_rgb(cr,0,0,0);break;
+        }
+        static const double M_PI = 3.141592;
+        cairo_arc(cr, asDouble(event.pos.get_y()), asDouble( event.pos.get_x() ), 1, 0, 2 * M_PI); //'Center'
+        cairo_fill (cr);
+        
+        cairo_arc(cr, asDouble(event.pos.get_y()), asDouble( event.pos.get_x() ), 1, 0, 2 * M_PI); //'Center'
+        cairo_set_source_rgb (cr, 0,0,0);
+        cairo_stroke(cr);
+    }
+        
+    cairo_set_source_rgb (cr, 0, 0, 0);
+    cairo_move_to(cr, asDouble(verts[0].get_y()), asDouble(verts[0].get_x()) );
+    
+    for (uint64_t i = 0; i < verts.size(); i++)
+        cairo_line_to(cr, asDouble(verts[i].get_y()), asDouble(verts[i].get_x()) );
+    cairo_line_to(cr, asDouble(verts[0].get_y()), asDouble(verts[0].get_x()) );
+    cairo_stroke(cr);
+
+    cairo_destroy(cr);
+    cairo_surface_finish (surface);
+    cairo_surface_destroy(surface);
+        
 }
 
 

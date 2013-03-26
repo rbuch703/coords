@@ -17,27 +17,57 @@
  * order this enumeration is defined. With this order, it is ensured that all
  * intersections for a point are found event if some line segements also start 
  * or end at that point. */
-enum EventType { START, STOP, SPLIT, MERGE, REGULAR };
+enum EventType { START, END, SPLIT, MERGE, REGULAR };
 
 // ===========================================================
 
 //#error CONTINUEHERE determine algorithm sweep direction, verify classification, especially for cases with identical x/y-values
-//#warning handle edge case than two adjacent vertices share the same x/y value and thus none is a start/stop/split/merge vertex
+//#warning handle edge case than two adjacent vertices share the same x/y value and thus none is a start/end/split/merge vertex
 #warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
 
-//#warning TODO: handle special cases where line segments share their x-coordinate (and thus either none or both vertices would be stop/split/stop/merge vertices)
+//#warning TODO: handle special cases where line segments share their x-coordinate (and thus either none or both vertices would be end/split/stop/merge vertices)
 //TODO: if two adjacent vertices share the same x coordinate 
 #warning TODO: change to direct vertex data access (non-int128_t)
 EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id)
 {
+    /* algorithms to deal with edge cases (two subsequent vertices have the same x-value):
+     *  - wlog, define the vertex with the higher y-coordinate as always being REGULAR
+     *  - 
+     */
+
 //    assert (isClockwise(vertices));
     Vertex pos = vertices[vertex_id];
     Vertex pred= vertices[ (vertex_id + vertices.size() - 1) % vertices.size()];
     Vertex succ= vertices[ (vertex_id                   + 1) % vertices.size()];
     
+    if (pos.get_x() == pred.get_x()) // edge case
+    {
+        assert (pos.get_y() != pred.get_y());
+        if (pos.get_y() > pred.get_y()) return REGULAR;
+        else
+        {
+            // replace 'pred' by its predecessor
+            pred = vertices[ (vertex_id + vertices.size() - 2) % vertices.size()];
+            assert (pos.get_x() != pred.get_x());
+            //assert(false && "Not implemented");
+        }
+    }
+    
+    if (pos.get_x() == succ.get_x()) // edge case
+    {
+        assert (pos.get_y() != succ.get_y());
+        if (pos.get_y() > succ.get_y()) return REGULAR;
+        else
+        {
+            // replace 'succ' by its successor
+            succ = vertices[ (vertex_id + vertices.size() + 2) % vertices.size()];
+            assert (pos.get_x() != pred.get_x());
+        }
+    }
+    
     assert( pos != pred && pos != succ && pred != succ);
-    /* colinear successive vertices would cause additional special cases --> forbid them
-     * they should have been removed by canonicalize() anyway */
+    /* Colinear successive vertices would cause additional special cases --> forbid them.
+     * They should have been removed by canonicalize() anyway */
     assert( ! LineSegment(pred, succ).isColinearWith(pos)); 
     
     if (pos.get_x() < pred.get_x() && pos.get_x() < succ.get_x())    //is either a START or a SPLIT vertex
@@ -49,43 +79,21 @@ EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id)
         else    //right turn
             return EventType::START;
     
-    } else if (pos.get_x() > pred.get_x() && pos.get_x() > succ.get_x()) //is either a STOP or a MERGE vertex
+    } else if (pos.get_x() > pred.get_x() && pos.get_x() > succ.get_x()) //is either an END or a MERGE vertex
     {
         int128_t dist = succ.pseudoDistanceToLine(pred, pos);
         assert (dist != 0 && "colinear vertices");
         if (dist < 0) //left turn
             return EventType::MERGE;
         else
-            return EventType::STOP;
+            return EventType::END;
         
     } else if ((pos.get_x() > pred.get_x() && pos.get_x() < succ.get_x()) || //one above, one below
                (pos.get_x() < pred.get_x() && pos.get_x() > succ.get_x()) )
     {
         return EventType::REGULAR;
-    } else
-    {
-        int num_equal = 0;
-        if (pos.get_x() == pred.get_x()) num_equal++;
-        if (pos.get_x() == succ.get_x()) num_equal++;
-        assert (num_equal == 1);
-        
-        if (pos.get_x() == pred.get_x())
-        {
-            Vertex ppred = vertices[ (vertex_id + vertices.size() - 2) % vertices.size() ];
-            assert (ppred.get_x() != pos.get_x && "colinear sequential vertices");        
-            if (ppred.get_x() < pos.get_x() && succ.get_x() > pos.get_x()) return EventType::REGULAR;
-            if (ppred.get_x() > pos.get_x() && succ.get_x() < pos.get_x()) return EventType::REGULAR;
-            
-            if (ppred.get_x() > pos.get_x() && succ.get_x() > pos.get_x()) return EventType::MERGE;
-            
-        } else if (pos.get_x() == succ.get_x())
-        {
-        } else assert(false);
-        
-        
-        
+    } else  // all edge cases where either 'pred' xor 'succ' has the same x-value as 'pos'
         assert(false && "uncategorized vertex");
-    }
 }
 
 class SimpEvent
@@ -104,7 +112,7 @@ public:
     bool operator==(const SimpEvent & other) const {return pos == other.pos; }
     bool operator!=(const SimpEvent & other) const {return pos != other.pos; }
     bool operator <(const SimpEvent &other) const  {return pos <  other.pos; }
-private:
+public:
     Vertex pos;//, pred, succ;
     EventType type;
 };
@@ -138,7 +146,7 @@ public:
 	    return *begin();
     }
 
-    void remove(SimpEvent ev) { this->remove(ev); }
+    void remove(SimpEvent ev) { AVLTree<SimpEvent>::remove(ev); }
     
   
     void remove(Vertex v)

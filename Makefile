@@ -3,7 +3,7 @@ CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.c
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc# validatingbigint.cc  
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
-
+TEST_SRC = tests/arithmetic_test.cc tests/geometry_test.cc tests/quadtree_test.cc tests/triangulation.cc
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
 CONV_OBJ = $(CONV_SRC:.cc=.o)
@@ -16,11 +16,11 @@ GEO_OBJ  = $(GEO_SRC:.cc=.o) math64.o
 # integer overflow
 # WARNING: the gcc option -O2 appears to negate the effects of -ftrapv ! 
 #FLAGS = -g -Wall -Wextra -DNDEBUG -O2
-FLAGS = -ftrapv -g -Wall -Wextra 
-#FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
+#FLAGS = -ftrapv -g -Wall -Wextra 
+FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = #-fprofile-arcs#--as-needed
+LD_FLAGS = -fprofile-arcs#--as-needed
 .PHONY: all clean
 
 all: make.dep conv_osmxml data_converter simplifier gl_test tests
@@ -58,7 +58,7 @@ tests/quadtree_test: tests/quadtree_test.cc geometric_types.o vertexchain.o int1
 	
 tests/triangulation: tests/triangulation.cc geometric_types.o vertexchain.o int128.o math64.o quadtree.o
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ 
+	@g++ $(CCFLAGS) `pkg-config --cflags --libs cairo` $(LD_FLAGS) -o $@ $^ 
 
 math64.o: math64.asm
 	@echo [ASM] $<
@@ -66,7 +66,8 @@ math64.o: math64.asm
 
 %.o: %.cc
 	@echo [C++] $<
-	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
+#	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
+	@g++ $(CCFLAGS) $< -c -o $@
 
 	
 clean:
@@ -78,7 +79,7 @@ clean:
 	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests 
 	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation
 
-make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC)
+make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(TEST_SRC)
 	@echo [DEP]
 	@g++ -MM $^ > make.dep
 
