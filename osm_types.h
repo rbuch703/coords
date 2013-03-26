@@ -69,7 +69,8 @@ ostream& operator<<(ostream &out, const OSMWay &way);
 struct OSMIntegratedWay
 {
     OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags);
-    OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id);
+    OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id);
+    //OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id);
     OSMIntegratedWay( FILE* src, uint64_t way_id = -1);
 
     void serialize( FILE* data_file, mmap_t *index_map= NULL, const map<OSMKeyValuePair, uint8_t> *tag_symbols = NULL) const;

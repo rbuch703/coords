@@ -2,26 +2,15 @@
 #ifndef SIMPLIFYPOLYGON_H
 #define SIMPLIFYPOLYGON_H
 
-#include "geometric_types.h"
-#include "vertexchain.h"
-#include "avltree.h"
+#include "../config.h"
+#include "../geometric_types.h"
+#include "../vertexchain.h"
+#include "../avltree.h"
+
 #include <list>
 
-#include "config.h"
 
-
-/** necessary properties:
-    ActiveEdge:
-        - left vertex, right vertex
-        - left collision event, right collision event
-        - left adjacent edge
-        - right adjacent edge
- 
-**/
-
-//void simplifyPolygon(const PolygonSegment &seg, list<PolygonSegment> &res);
-
-typedef list<Vertex> OpenPolygon;
+//typedef list<Vertex> OpenPolygon;
 
 
 /* Order is important, since events for the same 2D-Point are processed in the
@@ -32,38 +21,70 @@ enum EventType { START, STOP, SPLIT, MERGE, REGULAR };
 
 // ===========================================================
 
-#error CONTINUEHERE determine algorithm sweep direction, verify classification, especially for cases with identical x/y-values
-#warning handle edge case than two adjacent vertices share the same x/y value and thus none is a start/stop/split/merge vertex
+//#error CONTINUEHERE determine algorithm sweep direction, verify classification, especially for cases with identical x/y-values
+//#warning handle edge case than two adjacent vertices share the same x/y value and thus none is a start/stop/split/merge vertex
 #warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
-#warning TODO: handle special cases where line segments share their x-coordinate (and thus either none or both vertices would be stop/split/stop/merge vertices)
+
+//#warning TODO: handle special cases where line segments share their x-coordinate (and thus either none or both vertices would be stop/split/stop/merge vertices)
 //TODO: if two adjacent vertices share the same x coordinate 
-EventType classifyVertex(Vertex pos, Vertex pred, Vertex succ)
+#warning TODO: change to direct vertex data access (non-int128_t)
+EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id)
 {
-    //FIXME set event type based on spacial relation between the three vertices
+//    assert (isClockwise(vertices));
+    Vertex pos = vertices[vertex_id];
+    Vertex pred= vertices[ (vertex_id + vertices.size() - 1) % vertices.size()];
+    Vertex succ= vertices[ (vertex_id                   + 1) % vertices.size()];
+    
     assert( pos != pred && pos != succ && pred != succ);
-    // colinear successive vertices could cause additional special cases
-    assert( ! LineSegment(pred, succ).isColinearWith(pos)); //should have been removed by canonicalize()
-    if (pos.x < pred.x && pos.x < succ.x)    //is either a START or a SPLIT vertex
+    /* colinear successive vertices would cause additional special cases --> forbid them
+     * they should have been removed by canonicalize() anyway */
+    assert( ! LineSegment(pred, succ).isColinearWith(pos)); 
+    
+    if (pos.get_x() < pred.get_x() && pos.get_x() < succ.get_x())    //is either a START or a SPLIT vertex
     {
         int128_t dist = succ.pseudoDistanceToLine(pred, pos);
         assert (dist != 0 && "colinear vertices");
-        if (dist < lo) //left turn
+        if (dist < 0) //left turn
             return EventType::SPLIT;
         else    //right turn
             return EventType::START;
     
-    } else if (pos.x > pred.x && pos.x > succ.x) //is either a STOP or a MERGE vertex
+    } else if (pos.get_x() > pred.get_x() && pos.get_x() > succ.get_x()) //is either a STOP or a MERGE vertex
     {
         int128_t dist = succ.pseudoDistanceToLine(pred, pos);
         assert (dist != 0 && "colinear vertices");
-        if (dist < lo) //left turn
+        if (dist < 0) //left turn
             return EventType::MERGE;
         else
             return EventType::STOP;
         
-    } else //is a regular vertex
+    } else if ((pos.get_x() > pred.get_x() && pos.get_x() < succ.get_x()) || //one above, one below
+               (pos.get_x() < pred.get_x() && pos.get_x() > succ.get_x()) )
     {
         return EventType::REGULAR;
+    } else
+    {
+        int num_equal = 0;
+        if (pos.get_x() == pred.get_x()) num_equal++;
+        if (pos.get_x() == succ.get_x()) num_equal++;
+        assert (num_equal == 1);
+        
+        if (pos.get_x() == pred.get_x())
+        {
+            Vertex ppred = vertices[ (vertex_id + vertices.size() - 2) % vertices.size() ];
+            assert (ppred.get_x() != pos.get_x && "colinear sequential vertices");        
+            if (ppred.get_x() < pos.get_x() && succ.get_x() > pos.get_x()) return EventType::REGULAR;
+            if (ppred.get_x() > pos.get_x() && succ.get_x() < pos.get_x()) return EventType::REGULAR;
+            
+            if (ppred.get_x() > pos.get_x() && succ.get_x() > pos.get_x()) return EventType::MERGE;
+            
+        } else if (pos.get_x() == succ.get_x())
+        {
+        } else assert(false);
+        
+        
+        
+        assert(false && "uncategorized vertex");
     }
 }
 
@@ -73,32 +94,32 @@ public:
     SimpEvent();
     SimpEvent( Vertex pPos, EventType t ): pos(pPos), type(t) {}
 
-    SimpEvent( Vertex pPos, Vertex pPred, Vertex pSucc ): 
-        pos(pPos)
+    SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id): 
+        pos(vertices[vertex_id])
     {
-        //TODO: do we need 'pred' and 'succ' after the event type has been determined?
-        type = classifyVertex(pos, pPred, pSucc);
+        assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
+        type = classifyVertex(vertices, vertex_id);
     }
     
     bool operator==(const SimpEvent & other) const {return pos == other.pos; }
     bool operator!=(const SimpEvent & other) const {return pos != other.pos; }
     bool operator <(const SimpEvent &other) const  {return pos <  other.pos; }
 private:
-    EventType type;
     Vertex pos;//, pred, succ;
+    EventType type;
 };
 
 
-//:TODO replace by a heap
+//:TODO replace by a heap, don't need the complexity of an AVLTree
 class MonotonizeEventQueue : protected AVLTree<SimpEvent> 
 {
 public:
 
     int size() const { return AVLTree<SimpEvent>::size(); }
 
-    void add( Vertex pos, Vertex pred, Vertex succ )
+    void add( const vector<Vertex> &vertices, uint64_t vertex_id )
     {
-        insert( SimpEvent( pos, pred, succ));
+        insert( SimpEvent( vertices, vertex_id) );
     }
 
     bool containsEvents() const { return size();}

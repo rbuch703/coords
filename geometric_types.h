@@ -17,7 +17,7 @@
 using namespace std;
 
 class QuadTreeNode;
-
+//enum EventType;
 
 /* there may be hundreds of millions of vertices in memory at a given time, so
    memory consumption due to member alignment is a big concern. */
@@ -51,6 +51,7 @@ private:
     friend std::ostream& operator <<(std::ostream& os, const Vertex v);
     friend struct AABoundingBox;
     friend class QuadTreeNode;
+//    friend EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id);
 };
 
 

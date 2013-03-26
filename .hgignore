@@ -13,7 +13,8 @@ simplifier
 stats_xmlosm
 gl_test
 tests/arithmetic_test
-tests/geometric_test
+tests/geometry_test
+tests/quadtree_test
 
 #ignore compiled objects
 *.o
@@ -28,6 +29,9 @@ tests/geometric_test
 *.gcno
 html
 coverage.info
+
+# ignore debug outputs
+*.txt
 
 # oprofile data
 oprofile_data

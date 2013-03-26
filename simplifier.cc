@@ -30,7 +30,7 @@ void writePolygonToDisk(std::string path, VertexChain segment)
     }
 
     if (segment.size() < 4) return; // can't be a polygon with less than four vertices (first and last are identical)
-    list<VertexChain> simples = segment.toSimplePolygon( );
+    list<VertexChain> simples = toSimplePolygons( segment );
     
     if (segment.size() > 1000)
         std::cout << "\ttook " << (getWallTime() - secs) << " seconds" << endl;
@@ -49,7 +49,7 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 
 void handlePolygon(string, VertexChain& segment)
 {
-    list<VertexChain> polys = segment.toSimplePolygon();
+    list<VertexChain> polys = toSimplePolygons( segment );
     
     for (list<VertexChain>::iterator it = polys.begin(); it != polys.end(); it = polys.erase(it))
     {
@@ -312,6 +312,7 @@ void reconstructCoastline(FILE * src, list<VertexChain> &poly_storage)
     //    poly_storage.push_back(s);
 }
 
+/*
 void extractGermany()
 {
     mmap_t idx_map = init_mmap ( "intermediate/ways.idx", true, false);
@@ -357,7 +358,7 @@ void extractGermany()
 
     clipRecursive( "output/coast/country", "", polys);
 
-}
+}*/
 
 
 void extractCountries()
@@ -411,7 +412,8 @@ void extractCountries()
             assert(way->ref < num_ways);
             
             if (way_offset[ way->ref ] == 0) continue;
-            OSMIntegratedWay iw( (uint8_t*)way_data_map.ptr + way_offset[ way->ref], way->ref);
+            const uint8_t * ptr =  (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
+            OSMIntegratedWay iw(ptr , way->ref);
             VertexChain ch(iw.vertices);
             recon.add(ch);
         }

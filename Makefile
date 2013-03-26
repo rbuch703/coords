@@ -42,7 +42,7 @@ simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
 	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
-tests: tests/arithmetic_test tests/geometry_test tests/quadtree_test
+tests: tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation
 
 tests/arithmetic_test: math64.o validatingbigint.o int128.o tests/arithmetic_test.cc
 	@echo [LD ] $@
@@ -55,7 +55,11 @@ tests/geometry_test: math64.o int128.o quadtree.o vertexchain.o geometric_types.
 tests/quadtree_test: tests/quadtree_test.cc geometric_types.o vertexchain.o int128.o quadtree.o math64.o
 	@echo [LD ] $@
 	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ 
-	 
+	
+tests/triangulation: tests/triangulation.cc geometric_types.o vertexchain.o int128.o math64.o quadtree.o
+	@echo [LD ] $@
+	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ 
+
 math64.o: math64.asm
 	@echo [ASM] $<
 	@nasm -f elf64 -o $@ $<
@@ -71,7 +75,8 @@ clean:
 	@rm -rf *~
 	@rm -rf *gcda
 	@rm -rf *gcno
-	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests gl_test tests/arithmetic_test tests/geometry_test
+	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests 
+	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC)
 	@echo [DEP]

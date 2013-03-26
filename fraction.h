@@ -123,7 +123,7 @@ private:
 };
 
 template<typename int_type> 
-ostream & operator<<(ostream &out, const Fraction<int_type> &val)
+std::ostream & operator<<(std::ostream &out, const Fraction<int_type> &val)
 {
     //std::cout << "(" << val.get_num() << "/" << val.get_denom() << ")";
     std::cout << val.toDouble();

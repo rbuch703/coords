@@ -747,10 +747,10 @@ bool VertexChain::isClockwise() {
     return v.pseudoDistanceToLine( vPred, vSucc) < 0;
 }
 
-list<VertexChain> VertexChain::toSimplePolygon()
+/*list<VertexChain> VertexChain::toSimplePolygon()
 {
     return toSimplePolygons(*this);
-}
+}*/
 
 
 std::ostream& operator <<(std::ostream& os, const VertexChain &seg)

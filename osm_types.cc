@@ -81,7 +81,7 @@ void fread( void* dest, uint64_t size, FILE* file)
     { perror("[ERR] fread"); exit(0);}
 }
 
-list<OSMKeyValuePair> deserializeTags(const uint8_t* data_ptr)
+list<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
 {
     list<OSMKeyValuePair> tags;
     
@@ -97,13 +97,13 @@ list<OSMKeyValuePair> deserializeTags(const uint8_t* data_ptr)
     }
     if (num_verbose_tags == 0) return tags;
     
-    const char* str = (const char*)data_ptr;
+    //const char* str = (const char*)data_ptr;
     while (num_verbose_tags--)
     {
-        const char* key = str;
-        str += strlen(str)+1;
-        tags.push_back( OSMKeyValuePair( key, str));
-        str += strlen(str)+1;
+        const char* key = (const char*)data_ptr;
+        data_ptr += strlen( (const char*)data_ptr)+1;
+        tags.push_back( OSMKeyValuePair( key, (const char*)data_ptr));
+        data_ptr += strlen( (const char*)data_ptr)+1;
     }
     
     return tags;
@@ -302,7 +302,7 @@ ostream& operator<<(ostream &out, const OSMWay &way)
 OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags):
         id(way_id), vertices(way_vertices), tags(way_tags) {}
 
-OSMIntegratedWay::OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
+OSMIntegratedWay::OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id): id(way_id)
 {
     uint32_t num_vertices = *(uint32_t*)data_ptr;
     data_ptr+=4;

@@ -50,7 +50,10 @@ typedef pair<list<OSMKeyValuePair>, FILE*> OSMFilterConfig;
 OSMIntegratedWay    getWay(uint64_t way_id)      
 {
     if (way_index[way_id]) 
-        return OSMIntegratedWay(&way_data[way_index[way_id]], way_id);
+    {
+        const uint8_t *data_ptr = &way_data[way_index[way_id]];
+        return OSMIntegratedWay(data_ptr, way_id);
+    }
 
     cerr << "[WARN] trying to access not-existing way " << way_id << ", skipping" << endl;
         
