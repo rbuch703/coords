@@ -55,10 +55,11 @@ tests/geometry_test: math64.o int128.o quadtree.o vertexchain.o geometric_types.
 tests/quadtree_test: tests/quadtree_test.cc geometric_types.o vertexchain.o int128.o quadtree.o math64.o
 	@echo [LD ] $@
 	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ 
-	
+
 tests/triangulation: tests/triangulation.cc geometric_types.o vertexchain.o int128.o math64.o quadtree.o
 	@echo [LD ] $@
 	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ `pkg-config --cflags --libs cairo`
+
 
 math64.o: math64.asm
 	@echo [ASM] $<

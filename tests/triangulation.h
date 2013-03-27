@@ -157,29 +157,71 @@ public:
 
 // ===========================================================
 
-#if 0
+/** returns whether the line 'a' has a smaller or equal y-value at xPos than the line 'b'.
+    The method silently assumes that both segments actually intersect the vertical line at xPos.
+    Do not make this a method os the LineSegment class, as it has nothing to do with it semantically
+  */
+bool leq(const LineSegment a, const LineSegment b, BigInt xPos)
+{
+    assert(a.start.get_x() != a.end.get_x());
+    assert(b.start.get_x() != b.end.get_x());
+    
+    BigInt dbx = b.end.get_x() - b.start.get_x();
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    
+    BigInt dby = b.end.get_y() - b.start.get_y();
+    BigInt day = a.end.get_y() - a.start.get_y();
+    
+    bool flipSign = (dax < 0) != (dbx < 0);
+    
+    BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
+    BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
+    
+    return (left < right) != flipSign;
+}
+
+bool eq(const LineSegment a, const LineSegment b, BigInt xPos)
+{
+    assert(a.start.get_x() != a.end.get_x());
+    assert(b.start.get_x() != b.end.get_x());
+    
+    BigInt dbx = b.end.get_x() - b.start.get_x();
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    
+    BigInt dby = b.end.get_y() - b.start.get_y();
+    BigInt day = a.end.get_y() - a.start.get_y();
+    
+    BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
+    BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
+    
+    return left == right;
+}
+
 typedef AVLTreeNode<LineSegment> *EdgeContainer;
+
  // protected inheritance to hide detail of AVLTree, since for a LineArrangement, AVLTree::insert must never be used
 class LineArrangement: protected AVLTree<LineSegment>
 {
 public:
     EdgeContainer addEdge(const LineSegment &a, const BigFraction xPosition);
-
-    bool isConsistent(EdgeContainer node, BigFraction xPos) const
+#ifndef NDEBUG
+    bool isConsistent(EdgeContainer node, BigInt xPos) const
     {
         bool left = !node->m_pLeft || 
-                    (node->m_pLeft->m_Data.isLessOrEqual(node->m_Data, xPos) 
+                    (leq( node->m_pLeft->m_Data, node->m_Data, xPos)
                     && isConsistent(node->m_pLeft, xPos));
                     
         bool right= !node->m_pRight ||
-                    (node->m_Data.isLessOrEqual(node->m_pRight->m_Data, xPos) && 
+                    (leq( node->m_Data, node->m_pRight->m_Data, xPos) && 
                     isConsistent(node->m_pRight, xPos));
         return left && right;
     }
     
+    bool isConsistent(BigInt xPos) const { return !m_pRoot || isConsistent(m_pRoot, xPos); }
+#endif
+
     int size() const { return AVLTree<LineSegment>::size(); }
     
-    bool isConsistent(BigFraction xPos) const { return !m_pRoot || isConsistent(m_pRoot, xPos); }
     
     bool hasPredecessor( EdgeContainer node)
     {
@@ -187,7 +229,7 @@ public:
         return it != begin();
     }
 
-    ActiveEdge getPredecessor( EdgeContainer node)
+    LineSegment getPredecessor( EdgeContainer node)
     {
         iterator it(node, *this);
         assert (it != begin());
@@ -200,43 +242,94 @@ public:
         return ++it != end();
     }
     
-    ActiveEdge getSuccessor( EdgeContainer node)
+    LineSegment getSuccessor( EdgeContainer node)
     {
         iterator it(node, *this);
         assert (++it != end());
         return *it;
     }
   
-    void remove(ActiveEdge item, const BigFraction xPos)
+    void remove(LineSegment item, const BigInt xPos)
     {
-        AVLTreeNode<ActiveEdge> *node = findPos(item, xPos);
+        AVLTreeNode<LineSegment> *node = findPos(item, xPos);
         assert( node && "Node to be removed does not exist");
-        AVLTree<ActiveEdge>::remove(node);
+        assert( node->m_Data == item);
+        AVLTree<LineSegment>::remove(node);
     }
     
-    EdgeContainer findPos(ActiveEdge item, const BigFraction xPos)
+    EdgeContainer findPos(LineSegment item, const BigInt xPos)
     {
     	if (! m_pRoot) return NULL;
 
-	    BigFraction yVal = item.getYValueAt(xPos);
+	    //BigFraction yVal = item.getYValueAt(xPos);
 
-	    AVLTreeNode<ActiveEdge>* pPos = m_pRoot;
+	    AVLTreeNode<LineSegment>* pPos = m_pRoot;
 	    while (pPos)
 	    {
-	        BigFraction yVal2 = pPos->m_Data.getYValueAt(xPos);
-	        if (yVal == yVal2) return pPos;
-	        pPos = yVal < yVal2 ? pPos->m_pLeft : pPos->m_pRight;
+	        //BigFraction yVal2 = pPos->m_Data.getYValueAt(xPos);
+	        if ( eq(item, pPos->m_Data,xPos) ) return pPos;
+	        pPos = leq(item, pPos->m_Data, xPos) ? pPos->m_pLeft : pPos->m_pRight;
 	    }
 	    return pPos;
     }
     
-    list<EdgeContainer> findAllIntersectingEdges(ActiveEdge item, const BigFraction xPos)
+    EdgeContainer insert(const LineSegment &item, BigInt xPos)
     {
-        /* findPos will return any ActiveEdge that intersects 'item' at xPos, not necessarily xPos itself*/
-	    AVLTreeNode<ActiveEdge> *pPos = findPos(item, xPos);    
-	    if (!pPos) return list<AVLTreeNode<ActiveEdge>*>();
+        EdgeContainer parent = findParent(item, xPos);
+        
+	    AVLTreeNode<LineSegment>* pPos = new AVLTreeNode<LineSegment>(0,0, parent, item);
+	
+	    if (!parent)
+	    {
+	        m_pRoot = pPos;
+	        pPos->m_dwDepth = 0;    //no children --> depth=0
+	        return pPos;   //no parent --> this is the root, nothing more to do
+	    }
+	
+	    assert (!eq(item, parent->m_Data, xPos));
 	    
-	    list<AVLTreeNode<ActiveEdge>*> res;
+	    if ( leq(item, parent->m_Data, xPos) )
+	    {
+	        assert( ! parent->m_pLeft);
+	        parent->m_pLeft = pPos;
+	    } else
+	    {
+	        assert( ! parent->m_pRight);
+	        parent->m_pRight = pPos;
+	    }
+	
+	    updateDepth( pPos);//, NULL, NULL);
+	    return pPos;
+    }
+    
+protected:
+
+    /* returns the tree node whose one direct child would be 'item' (if 'item' was in the tree).
+     * This method assumes that 'item' is not actually present in the tree */
+    EdgeContainer findParent(const LineSegment &item, BigInt xPos) const
+    {
+	    EdgeContainer parent = NULL;
+	    if (! m_pRoot) return NULL;
+
+	    EdgeContainer pPos = m_pRoot;
+	    while ( ! eq( pPos->m_Data, item, xPos) )
+	    {
+		    parent = pPos;
+		    pPos = leq(item, pPos->m_Data, xPos) ? pPos->m_pLeft : pPos->m_pRight;
+		    if (! pPos) return parent;
+	    }
+	    assert(false && "duplicate entry found");
+	    
+	    return pPos->m_pParent;
+    }
+    /*
+    list<EdgeContainer> findAllIntersectingEdges(LineSegment item, const BigFraction xPos)
+    {
+        // findPos will return any LineSegment that intersects 'item' at xPos, not necessarily xPos itself
+	    AVLTreeNode<LineSegment> *pPos = findPos(item, xPos);    
+	    if (!pPos) return list<AVLTreeNode<LineSegment>*>();
+	    
+	    list<AVLTreeNode<LineSegment>*> res;
 	    //res.push_back(pPos);
 	    iterator it(pPos, *this);
 	    
@@ -254,19 +347,20 @@ public:
             res.push_back( it.getNode() );
 	    
 	    return res;
-   
     }
-    /*
-	AVLTree::iterator getIterator(ActiveEdge e, const BigInt xPos)
+    */
+    
+    
+	AVLTree::iterator getIterator(LineSegment e, const BigInt xPos)
 	{
-	    AVLTreeNode<ActiveEdge>* p = findPos(e, xPos);
+	    AVLTreeNode<LineSegment>* p = findPos(e, xPos);
 	    assert(p);
+	    assert(p->m_Data == e);
 	    return AVLTree::iterator(p, *this);
-	}*/
+	}
 
-    /*void swapEdges(ActiveEdge &e1, ActiveEdge &e2, const int64_t xPosition)*/
+    /*void swapEdges(LineSegment &e1, LineSegment &e2, const int64_t xPosition)*/
 };
-#endif
 
 #endif
 
