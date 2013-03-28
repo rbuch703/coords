@@ -239,7 +239,7 @@ public:
 	    bool operator!=(const const_iterator &other) const { return m_pCurrent != other.m_pCurrent;}
     private:
 	    const AVLTreeNode<t> *m_pCurrent;
-	    AVLTree<t>     *m_tree;
+	    AVLTree<t>     &m_tree;
     };
 	
 	//friend class iterator<t>;

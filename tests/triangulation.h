@@ -21,13 +21,8 @@ enum EventType { START, END, SPLIT, MERGE, REGULAR };
 
 // ===========================================================
 
-//#error CONTINUEHERE determine algorithm sweep direction, verify classification, especially for cases with identical x/y-values
-//#warning handle edge case than two adjacent vertices share the same x/y value and thus none is a start/end/split/merge vertex
-#warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
 
-//#warning TODO: handle special cases where line segments share their x-coordinate (and thus either none or both vertices would be end/split/stop/merge vertices)
-//TODO: if two adjacent vertices share the same x coordinate 
-#warning TODO: change to direct vertex data access (non-int128_t)
+//TODO: change to direct vertex data access (non-int128_t)
 EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id)
 {
     /* algorithms to deal with edge cases (two subsequent vertices have the same x-value):
@@ -100,10 +95,12 @@ class SimpEvent
 {
 public:
     SimpEvent();
-    SimpEvent( Vertex pPos, EventType t ): pos(pPos), type(t) {}
+    //SimpEvent( Vertex pPos, EventType t ): pos(pPos), type(t) {}
 
     SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id): 
-        pos(vertices[vertex_id])
+        pos(  vertices[  vertex_id]), 
+        pred( vertices[ (vertex_id + vertices.size() -1) % vertices.size() ]), 
+        succ( vertices[ (vertex_id                  + 1) % vertices.size() ])
     {
         assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
         type = classifyVertex(vertices, vertex_id);
@@ -113,7 +110,7 @@ public:
     bool operator!=(const SimpEvent & other) const {return pos != other.pos; }
     bool operator <(const SimpEvent &other) const  {return pos <  other.pos; }
 public:
-    Vertex pos;//, pred, succ;
+    Vertex pos, pred, succ;
     EventType type;
 };
 
@@ -149,10 +146,10 @@ public:
     void remove(SimpEvent ev) { AVLTree<SimpEvent>::remove(ev); }
     
   
-    void remove(Vertex v)
+/*    void remove(Vertex v)
     {
         this->remove( SimpEvent(v, REGULAR));   //uses arbitrary event type 'REGULAR', which remove() ignores anyway
-    }    
+    }    */
 };
 
 // ===========================================================
@@ -195,6 +192,41 @@ bool eq(const LineSegment a, const LineSegment b, BigInt xPos)
     BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
     
     return left == right;
+}
+
+//=====================================
+
+// returns whether the line segment 'a' at x-value xPos has a y-value less than or equal to yPos
+bool leq(const LineSegment a, BigInt xPos, BigInt yPos)
+{
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
+             ( a.end.get_y()   >= xPos && a.start.get_x()<= xPos)) &&
+             "position not inside x range of segment");
+             
+    assert (dax != 0 && "edge case vertical line segment");
+    
+    bool flipSign = (dax < 0);
+    
+    BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
+    BigInt right= (yPos - a.start.get_y()) * dax;
+    
+    return (left < right) != flipSign;
+}
+
+bool eq(const LineSegment a, BigInt xPos, BigInt yPos)
+{
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
+             ( a.end.get_y()   >= xPos && a.start.get_x()<= xPos)) &&
+             "position not inside x range of segment");
+             
+    assert (dax != 0 && "edge case vertical line segment");
+    
+    BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
+    BigInt right= (yPos - a.start.get_y()) * dax;
+    
+    return (left == right);
 }
 
 typedef AVLTreeNode<LineSegment> *EdgeContainer;
@@ -249,8 +281,31 @@ public:
         return *it;
     }
   
+    LineSegment getEdgeLeftOf( Vertex pos )
+    {
+        EdgeContainer e = findAdjacentEdge( pos );
+        LineSegment edge = e->m_Data;
+        assert (! eq( edge, pos.get_x(), pos.get_y() ));
+        bool edgeLeftOfPos = leq(edge, pos.get_x(), pos.get_y());
+        
+        if (!edgeLeftOfPos)
+        {
+            assert( hasPredecessor(e) );
+            edge = getPredecessor( e );
+            assert( leq(edge, pos.get_x(), pos.get_y()));
+        }
+        
+        return edge;
+    }
+    
     void remove(LineSegment item, const BigInt xPos)
     {
+#ifndef NDEBUG
+        #warning expensive debug checks
+        for (const_iterator it = this->begin(); it != end(); it++)
+            assert( it->start.get_x() <= xPos && it->end.get_x() >= xPos && "line arrangement contains outdated edge");
+#endif
+
         AVLTreeNode<LineSegment> *node = findPos(item, xPos);
         assert( node && "Node to be removed does not exist");
         assert( node->m_Data == item);
@@ -273,8 +328,41 @@ public:
 	    return pPos;
     }
     
+    
+    /* returns an adjacent edge to (xPos, yPos), i.e. an edge that is closest to (xPos, yPos)
+       either to the left or to the right.
+       If any edge passes directly through (xPos, yPos), the method is guaranteed to return said edge.
+       Otherwise, the method makes no guarantee on which of the two adjacent edges it returns. In
+       particular, it need not return the closest of the two edges.
+   */
+    EdgeContainer findAdjacentEdge(const BigInt xPos, const BigInt yPos)
+    {
+    	if (! m_pRoot) return NULL;
+    	
+        EdgeContainer parent=m_pRoot;
+	    EdgeContainer pPos = m_pRoot;
+	    while (pPos)
+	    {
+	        parent = pPos;
+	        if ( eq(pPos->m_Data,xPos, yPos) ) return pPos;
+	        pPos = leq(pPos->m_Data, xPos, yPos) ? pPos->m_pRight : pPos->m_pLeft;
+	    }
+	    return parent;
+    }
+
+    EdgeContainer findAdjacentEdge(Vertex v)
+    {
+        return findAdjacentEdge( v.get_x(), v.get_y() );
+    }
+    
     EdgeContainer insert(const LineSegment &item, BigInt xPos)
     {
+#ifndef NDEBUG
+        #warning expensive debug checks
+        for (LineArrangement::const_iterator it = begin(); it != end(); it++)
+            assert( it->start.get_x() <= xPos && it->end.get_x() >= xPos && "line arrangement contains outdated edge");
+#endif
+    
         EdgeContainer parent = findParent(item, xPos);
         
 	    AVLTreeNode<LineSegment>* pPos = new AVLTreeNode<LineSegment>(0,0, parent, item);
