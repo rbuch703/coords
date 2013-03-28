@@ -32,6 +32,11 @@ void createCairoDebugOutput( vector<Vertex> verts )
     cairo_t *cr = cairo_create (surface);
     //cairo_translate( cr, 500, 500);
     //cairo_scale (cr, 1/1000.0, -1/1000.0);
+    cairo_set_line_width (cr, 0.1);
+
+    cairo_rectangle(cr,1, 200-1, 1, -1);
+    
+    cairo_stroke(cr);
     
     cairo_set_line_width (cr, 0.2);
     
@@ -44,23 +49,23 @@ void createCairoDebugOutput( vector<Vertex> verts )
             case END:    cairo_set_source_rgb(cr, 0,0,1); break;
             case SPLIT:  cairo_set_source_rgb(cr, 1,1,1); break;
             case MERGE:  cairo_set_source_rgb(cr, 0,1,0); break;
-            case REGULAR:cairo_set_source_rgb(cr, 0,0,0);break;
+            case REGULAR:cairo_set_source_rgb(cr, 0,0,0); break;
         }
         static const double M_PI = 3.141592;
-        cairo_arc(cr, asDouble(event.pos.get_y()), asDouble( event.pos.get_x() ), 1, 0, 2 * M_PI); 
+        cairo_arc(cr, asDouble(event.pos.get_x()), 200-asDouble( event.pos.get_y() ), 1, 0, 2 * M_PI); 
         cairo_fill (cr);
         
-        cairo_arc(cr, asDouble(event.pos.get_y()), asDouble( event.pos.get_x() ), 1, 0, 2 * M_PI); 
+        cairo_arc(cr, asDouble(event.pos.get_x()), 200-asDouble( event.pos.get_y() ), 1, 0, 2 * M_PI); 
         cairo_set_source_rgb (cr, 0,0,0);
         cairo_stroke(cr);
     }
         
     cairo_set_source_rgb (cr, 0, 0, 0);
-    cairo_move_to(cr, asDouble(verts[0].get_y()), asDouble(verts[0].get_x()) );
+    cairo_move_to(cr, asDouble(verts[0].get_x()), 200-asDouble(verts[0].get_y()) );
     
     for (uint64_t i = 0; i < verts.size(); i++)
-        cairo_line_to(cr, asDouble(verts[i].get_y()), asDouble(verts[i].get_x()) );
-    cairo_line_to(cr, asDouble(verts[0].get_y()), asDouble(verts[0].get_x()) );
+        cairo_line_to(cr, asDouble(verts[i].get_x()), 200-asDouble(verts[i].get_y()) );
+    cairo_line_to(    cr, asDouble(verts[0].get_x()), 200-asDouble(verts[0].get_y()) );
     cairo_stroke(cr);
 
     cairo_destroy(cr);
@@ -97,6 +102,7 @@ int main()
     assert(verts.size() > 3 && "TODO: handle special case were polygon is already a triangle (or degenerated)");
       
     createCairoDebugOutput( verts);
+    cout << "==========================================" << endl;
     // prepare the graph representation of the polygon, into which the additional edges can be inserted
     //map<Vertex,vector<Vertex>> graph;
     /*
@@ -117,9 +123,11 @@ int main()
     for (uint64_t i = 0; i < verts.size(); i++)
     {
         events.add( verts, i);
+        cout << "Vertex " << verts[i] << endl;
         //vertex_pos.insert( pair<Vertex, uint64_t>( verts[i], i ));
     }
     
+    cout << "=============================" << endl;
     map<LineSegment, Vertex> helpers;
     LineArrangement status;
     list<LineSegment> newDiagonals;
@@ -127,6 +135,7 @@ int main()
     while (events.size() != 0)
     {
         SimpEvent ev = events.pop();
+        cout << "handling event " << ev << endl;
         switch (ev.type)
         {
             case START: 
@@ -180,6 +189,7 @@ int main()
                 {   //pred below succ (and polygon is clockwise) --> polygon must be *right* of REGULAR vertex
                     assert (ev.pred.get_x() != ev.pos.get_x() && ev.succ.get_x() != ev.pos.get_x() && "Not Implemented");
                     EdgeContainer e = status.findAdjacentEdge( ev.pos );
+                    std::cout << "retrieved edge " << e->m_Data << endl;
                     assert (e && (e->m_Data.start == ev.pos || e->m_Data.end == ev.pos));
                     assert (helpers.count(e->m_Data));
                     helpers.erase( e->m_Data);

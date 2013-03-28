@@ -104,6 +104,7 @@ public:
     {
         assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
         type = classifyVertex(vertices, vertex_id);
+        cout << "creating event " << pred << "/" << pos << "/" << succ << endl;
     }
     
     bool operator==(const SimpEvent & other) const {return pos == other.pos; }
@@ -151,6 +152,20 @@ public:
         this->remove( SimpEvent(v, REGULAR));   //uses arbitrary event type 'REGULAR', which remove() ignores anyway
     }    */
 };
+
+ostream &operator<<( ostream &os, SimpEvent ev)
+{
+    switch (ev.type)
+    {
+        case START:  os << "START";  break;
+        case END:    os << "END";    break;
+        case SPLIT:  os << "SPLIT";  break;
+        case MERGE:  os << "MERGE";  break;
+        case REGULAR:os << "REGULAR";break;
+    }
+    os << " " << ev.pred <<" / *" << ev.pos << "* / " << ev.succ;
+    return os;
+}
 
 // ===========================================================
 
@@ -201,7 +216,7 @@ bool leq(const LineSegment a, BigInt xPos, BigInt yPos)
 {
     BigInt dax = a.end.get_x() - a.start.get_x();
     assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
-             ( a.end.get_y()   >= xPos && a.start.get_x()<= xPos)) &&
+             ( a.end.get_x()   >= xPos && a.start.get_x()<= xPos)) &&
              "position not inside x range of segment");
              
     assert (dax != 0 && "edge case vertical line segment");
@@ -218,7 +233,7 @@ bool eq(const LineSegment a, BigInt xPos, BigInt yPos)
 {
     BigInt dax = a.end.get_x() - a.start.get_x();
     assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
-             ( a.end.get_y()   >= xPos && a.start.get_x()<= xPos)) &&
+             ( a.end.get_x()   >= xPos && a.start.get_x()<= xPos)) &&
              "position not inside x range of segment");
              
     assert (dax != 0 && "edge case vertical line segment");
@@ -300,6 +315,9 @@ public:
     
     void remove(LineSegment item, const BigInt xPos)
     {
+        cout << "removing edge " << item << endl;
+    
+        assert( item.start.get_x() <= item.end.get_x());
 #ifndef NDEBUG
         #warning expensive debug checks
         for (const_iterator it = this->begin(); it != end(); it++)
@@ -357,6 +375,9 @@ public:
     
     EdgeContainer insert(const LineSegment &item, BigInt xPos)
     {
+        cout << "inserting edge " << item << endl;
+        assert( item.start.get_x() <= item.end.get_x());
+    
 #ifndef NDEBUG
         #warning expensive debug checks
         for (LineArrangement::const_iterator it = begin(); it != end(); it++)
