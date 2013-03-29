@@ -104,7 +104,7 @@ public:
     {
         assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
         type = classifyVertex(vertices, vertex_id);
-        cout << "creating event " << pred << "/" << pos << "/" << succ << endl;
+        //cout << "creating event " << pred << "/" << pos << "/" << succ << endl;
     }
     
     bool operator==(const SimpEvent & other) const {return pos == other.pos; }
@@ -189,7 +189,7 @@ bool leq(const LineSegment a, const LineSegment b, BigInt xPos)
     BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
     BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
     
-    return (left < right) != flipSign;
+    return (left == right)|| ((left < right) != flipSign);
 }
 
 bool eq(const LineSegment a, const LineSegment b, BigInt xPos)
@@ -226,7 +226,7 @@ bool leq(const LineSegment a, BigInt xPos, BigInt yPos)
     BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
     BigInt right= (yPos - a.start.get_y()) * dax;
     
-    return (left < right) != flipSign;
+    return (left == right) || ((left < right) != flipSign);
 }
 
 bool eq(const LineSegment a, BigInt xPos, BigInt yPos)
@@ -247,7 +247,8 @@ bool eq(const LineSegment a, BigInt xPos, BigInt yPos)
 typedef AVLTreeNode<LineSegment> *EdgeContainer;
 
  // protected inheritance to hide detail of AVLTree, since for a LineArrangement, AVLTree::insert must never be used
-class LineArrangement: protected AVLTree<LineSegment>
+#warning TODO: switch back to protected inheritance
+class LineArrangement: public AVLTree<LineSegment>
 {
 public:
     EdgeContainer addEdge(const LineSegment &a, const BigFraction xPosition);
@@ -299,23 +300,18 @@ public:
     LineSegment getEdgeLeftOf( Vertex pos )
     {
         EdgeContainer e = findAdjacentEdge( pos );
-        LineSegment edge = e->m_Data;
-        assert (! eq( edge, pos.get_x(), pos.get_y() ));
-        bool edgeLeftOfPos = leq(edge, pos.get_x(), pos.get_y());
+        if ( leq(e->m_Data, pos.get_x(), pos.get_y()) )
+            return e->m_Data;
         
-        if (!edgeLeftOfPos)
-        {
-            assert( hasPredecessor(e) );
-            edge = getPredecessor( e );
-            assert( leq(edge, pos.get_x(), pos.get_y()));
-        }
-        
+        assert( hasPredecessor(e) );
+        LineSegment edge = getPredecessor( e );
+        assert( leq(edge, pos.get_x(), pos.get_y()));
         return edge;
     }
     
     void remove(LineSegment item, const BigInt xPos)
     {
-        cout << "removing edge " << item << endl;
+        //cout << "removing edge " << item << endl;
     
         assert( item.start.get_x() <= item.end.get_x());
 #ifndef NDEBUG
@@ -375,8 +371,13 @@ public:
     
     EdgeContainer insert(const LineSegment &item, BigInt xPos)
     {
-        cout << "inserting edge " << item << endl;
-        assert( item.start.get_x() <= item.end.get_x());
+        //cout << "inserting edge " << item << endl;
+        
+        // Must not be equal because LineArrangement internally sorts these lines by x-coordinate
+        // and a segment with identical x-values at its entpoints does not have a unique x coordinate.
+        // Must not be bigger, because our canonical form for status edges is define as having a start
+        // with a smaller x-coordinate than the end. This reduced the numbers of necessary checks elsewhere
+        assert( item.start.get_x() < item.end.get_x());
     
 #ifndef NDEBUG
         #warning expensive debug checks
@@ -392,6 +393,7 @@ public:
 	    {
 	        m_pRoot = pPos;
 	        pPos->m_dwDepth = 0;    //no children --> depth=0
+	        num_items++;
 	        return pPos;   //no parent --> this is the root, nothing more to do
 	    }
 	
@@ -408,6 +410,7 @@ public:
 	    }
 	
 	    updateDepth( pPos);//, NULL, NULL);
+	    num_items++;
 	    return pPos;
     }
     
