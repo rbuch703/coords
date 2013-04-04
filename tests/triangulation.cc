@@ -57,10 +57,11 @@ void createCairoDebugOutput( vector<Vertex> verts, list<LineSegment> &newDiagona
     cairo_stroke(cr);
 
 
-    cairo_set_source_rgb(cr, 1,0,0);
     for ( list<LineSegment>::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
     //for ( LineArrangement::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
     {
+        cairo_set_source_rgb(cr, 1,rand()/(double)RAND_MAX,0);
+    
         cairo_move_to(cr, asDouble(it->start.get_x()), 200-asDouble(it->start.get_y()));
         cairo_line_to(cr, asDouble(it->end.get_x()), 200-asDouble(it->end.get_y()));
         cairo_stroke( cr);
@@ -251,6 +252,7 @@ int main()
         }
     }
     
+
     cout << "========== remaining status edges ========" << endl; 
     for (LineArrangement::const_iterator it = status.begin(); it != status.end(); it++)
         cout << *it << endl;
@@ -266,7 +268,82 @@ int main()
         cout << seg << endl;
         
     createCairoDebugOutput( verts, /*status*/newDiagonals);
+
+    cout << "==========================================" << endl;
+    map<Vertex, vector<Vertex> > graph;
+    vector<Vertex> endVertices;
+    // prepare the graph representation of the polygon, into which the additional edges can be inserted
+    
+    for (uint64_t i = 0; i < verts.size(); i++)
+    {
+        Vertex v1 = verts[i];
+        Vertex v2 = verts[ (i+1) % verts.size() ];
         
+        if ( graph.count(v1) == 0) graph.insert( pair<Vertex, vector<Vertex> >(v1, vector<Vertex>() ));
+        if ( graph.count(v2) == 0) graph.insert( pair<Vertex, vector<Vertex> >(v2, vector<Vertex>() ));
+        
+        graph[v1].push_back(v2);
+        graph[v2].push_back(v1);
+        if (classifyVertex(verts, i) == END)
+            endVertices.push_back(verts[i]);
+            
+    }
+    
+    for (list<LineSegment>::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
+    {
+        assert(graph.count(it->start)); //diagonals should only connect to vertices already presend in the 
+        assert(graph.count(it->end));   //original polygon
+        
+        graph[it->start].push_back(it->end);
+        graph[it->end].push_back(it->start);
+    }
+
+    for (vector<Vertex>::const_iterator it = endVertices.begin(); it != endVertices.end(); it++)
+    {
+        list<Vertex> chain;
+        chain.push_back(*it);
+        assert(graph[*it].size() == 2);
+        
+        Vertex v1 = graph[*it][0];
+        Vertex v2 = graph[*it][1];
+        
+        Vertex top = v1.get_y() > v2.get_y() ? v1 : v2;
+        Vertex bottom=v1.get_y()> v2.get_y() ? v2 : v1;
+        
+        while (top != bottom)
+        {
+            Vertex &update = (top.get_x() >= bottom.get_x()) ? top : bottom;
+            Vertex v = update;
+            Vertex pred;
+            if (top.get_x() >= bottom.get_x()) 
+            {
+                pred = chain.front();
+                chain.push_front(top);
+            }
+            else
+            {
+                pred = chain.back();
+                chain.push_back(bottom);
+            }
+            
+            assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
+            
+            if (graph[v].size() == 2)
+            {
+                Vertex next1 = graph[v][0];
+                Vertex next2 = graph[v][1];
+                assert( (next1 == pred) != (next2 == pred)); //exactly one of the connected vertices has to be the predecessor
+                update = (next1 == pred) ? next2 : next1;
+            } else
+            {
+                //CONTINUEHERE: add case for vertices that are connected to a diagonal
+            }
+            
+        }
+        
+        
+        
+    }
 }
 
 
