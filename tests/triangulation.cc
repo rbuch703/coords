@@ -60,7 +60,7 @@ void createCairoDebugOutput( vector<Vertex> verts, list<LineSegment> &newDiagona
     for ( list<LineSegment>::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
     //for ( LineArrangement::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
     {
-        cairo_set_source_rgb(cr, 1,rand()/(double)RAND_MAX,0);
+        cairo_set_source_rgb(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
     
         cairo_move_to(cr, asDouble(it->start.get_x()), 200-asDouble(it->start.get_y()));
         cairo_line_to(cr, asDouble(it->end.get_x()), 200-asDouble(it->end.get_y()));
@@ -73,79 +73,151 @@ void createCairoDebugOutput( vector<Vertex> verts, list<LineSegment> &newDiagona
     cairo_surface_destroy(surface);
 }
 
-int main()
+list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &graph, vector<Vertex> endVertices)
 {
-    VertexChain p; 
-
-    srand(24);
-    for (int i = 0; i < 400; i++)
-        p.append(Vertex(rand() % 200, rand() % 200));
-    p.append(p.front()); //close polygon*/
-
-    list<VertexChain> simples = toSimplePolygons( p );
-    VertexChain poly = simples.front();
-    BOOST_FOREACH( VertexChain c, simples)
-        if ( c.size() > poly.size())
-            poly = c;
+    list<VertexChain> res;
+    for (vector<Vertex>::const_iterator it = endVertices.begin(); it != endVertices.end(); it++)
+    {
+        list<Vertex> chain;
+        chain.push_back(*it);
+        assert(graph[*it].size() == 2);
+        
+        Vertex v1 = graph[*it][0];
+        Vertex v2 = graph[*it][1];
+        
+        Vertex top = v1.get_y() > v2.get_y() ? v1 : v2;
+        Vertex bottom=v1.get_y()> v2.get_y() ? v2 : v1;
+        
+        while (top != bottom)
+        {
+            bool updateTop = top.get_x() >= bottom.get_x();
+            //Vertex &update = () ? top : bottom;
+            Vertex v = updateTop ? top : bottom;
+            Vertex pred;
+            if (updateTop)
+            {
+                pred = chain.front();
+                chain.push_front(top);
+            }
+            else
+            {
+                pred = chain.back();
+                chain.push_back(bottom);
+            }
             
-    std::cout << "generated simple polygon with " << poly.size() << " vertices" << std::endl;
-    poly.canonicalize();
-    
-    //#warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
-    assert(poly.isClockwise());
-        
-    vector<Vertex> verts = poly.data();
-    assert( verts.front() == verts.back() );
-    verts.pop_back();
-    
-    assert(verts.size() > 3 && "TODO: handle special case were polygon is already a triangle (or degenerated)");
+            assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
+            Vertex vSucc;
+            bool hasSucc = false;
+            
+            if (graph[v].size() == 2)
+            {
+                Vertex next1 = graph[v][0];
+                Vertex next2 = graph[v][1];
+                assert( (next1 == pred) != (next2 == pred)); //exactly one of the connected vertices has to be the predecessor
+                vSucc = (next1 == pred) ? next2 : next1;
+                hasSucc = true;
+            } else
+            {
+                vector<Vertex> &candidates = graph[v];
 
-    //createCairoDebugOutput( verts, list<LineSegment>() );
-      
-    cout << "==========================================" << endl;
-    // prepare the graph representation of the polygon, into which the additional edges can be inserted
-    //map<Vertex,vector<Vertex>> graph;
-    /*
-    for (uint64_t i = 0; i < verts.size(); i++)
-    {
-        Vertex v1 = verts[i];
-        Vertex v2 = verts[ (i+1) % verts.size() ];
-        
-        if ( graph.count(v1) == 0) graph.insert( pair<Vertex, vector<Vertex> >(v1, vector<Vertex>() ));
-        if ( graph.count(v2) == 0) graph.insert( pair<Vertex, vector<Vertex> >(v2, vector<Vertex>() ));
-        
-        graph[v1].push_back(v2);
-        graph[v2].push_back(v1);
-    }*/
+                for ( vector<Vertex>::const_iterator it = candidates.begin(); it != candidates.end(); it++)
+                {
+                    if (*it == pred) continue;
+                    if (it->get_x() > v.get_x()) continue; // otherwise polygon would get a second END-vertex, but each polygon can only have one
+                    
+                    if (!hasSucc)
+                    {
+                        hasSucc = true;
+                        vSucc = *it;
+                        continue;
+                    }
+                    
+                    BigInt dist = it->pseudoDistanceToLine(v , vSucc);
+                    if (!updateTop) dist = -dist;   //top vertex chain needs leftmost continuation, bottom chain needs rightmost continuation
+                    
+                    if (dist < 0)
+                    {
+                        vSucc = *it;
+                    } else if (dist == 0)   //edge case: current vertex and two possible successors lie on a single line
+                    {
+                        //assert( false && "This code has never been tested");
+                        assert( (vSucc.get_x() == v.get_x()) && (it->get_x() == v.get_x()));
+                        
+                        if ( (updateTop && (it->get_y() < vSucc.get_y())) ||
+                            (!updateTop && (it->get_y() > vSucc.get_y())))
+                            vSucc = *it;
+                    }
+                }
+            }
+            assert(hasSucc);
 
-    MonotonizeEventQueue events;
-    //map<Vertex, uint64_t> vertex_pos;
-    for (uint64_t i = 0; i < verts.size(); i++)
-    {
-        events.add( verts, i);
-        cout << "Vertex " << verts[i] << endl;
-        //vertex_pos.insert( pair<Vertex, uint64_t>( verts[i], i ));
+            if (updateTop)
+                top = vSucc;
+            else
+                bottom= vSucc;                
+            
+        }
+        chain.push_back(top);   //add the final vertex, top == bottom
+        chain.push_front(top);  //... and duplicate it to mark it as a closes polygon
+        
+        res.push_back(VertexChain(chain));        
     }
+    return res;
+}
+
+void cairo_render_polygons(const list<VertexChain> &polygons)
+{
+
+    cairo_surface_t *surface = cairo_pdf_surface_create ("debug1.pdf", 200, 200);
+    cairo_t *cr = cairo_create (surface);
+    cairo_set_line_width (cr, 0.1);
+    cairo_rectangle(cr,1, 200-1, 1, -1);
+    cairo_stroke(cr);
+    cairo_set_line_width (cr, 0.2);
+
 
     
-    cout << "=============================" << endl;
+    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
+    {
+        vector<Vertex> chain = it->data();
+        
+        cairo_move_to(cr, asDouble(chain.front().get_x()), 200-asDouble(chain.front().get_y()) );
+        for (vector<Vertex>::const_iterator it = chain.begin(); it != chain.end(); it++)
+            if (*it != chain.front())
+                cairo_line_to(cr, asDouble(it->get_x()), 200-asDouble(it->get_y()) );
+                
+        cairo_close_path(cr);
+        cairo_set_source_rgb(cr, 0,0,0);
+        cairo_stroke_preserve(cr);
+        //cairo_set_source_rgba(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX, 0.5);
+        cairo_set_source_rgba(cr, 1,0,0, 0.5);
+        cairo_fill(cr);
+    }
+    
+    cairo_destroy(cr);
+    cairo_surface_finish (surface);
+    cairo_surface_destroy(surface);
+
+}
+
+list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
+{
+    MonotonizeEventQueue events;
+    for (uint64_t i = 0; i < verts.size(); i++)
+        events.add( verts, i);
+
     map<LineSegment, Vertex> helpers;
     LineArrangement status;
     list<LineSegment> newDiagonals;
-    //static int i = 0;
     while (events.size() != 0)
     {
-        //i++;
-        //if (i == 81)
-        //    createCairoDebugOutput(verts, status);
         SimpEvent ev = events.pop();
-        cout << "handling event " << ev << endl;
+        //cout << "handling event " << ev << endl;
         switch (ev.type)
         {
             case START: 
             {
                 assert ( ev.succ.pseudoDistanceToLine(ev.pred, ev.pos) > 0);
-                //Vertex left = v1.pseudoDistanceToLine(v2, ev.pos) < 0 ? v1 : v2;
                 status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
                 helpers.insert( pair<LineSegment, Vertex>( LineSegment(ev.pos, ev.pred), ev.pos));
                 break;
@@ -187,10 +259,10 @@ int main()
             case MERGE:
             {
                 /* A MERGE event merges two ranges to yield one. It occurs at the vertex connecting the two ranges.
-                   TODO: 1. remove the right sub-range from 'status' and 'helpers' (since we now only have a single merged range)
-                            This will be a 'status' edge that (in non-degenerate cases) ends at ev.pos
-                         2. set ev.pos as the new helper for the 'status' edge of the left sub-range (now the complete range)
-                            as ev.pos is not the knwon vertex with the highest x-value inside the range */
+                   algorithm: 1. remove the right sub-range from 'status' and 'helpers' (since we now only have a single merged range)
+                                 This will be a 'status' edge that (in non-degenerate cases) ends at ev.pos
+                              2. set ev.pos as the new helper for the 'status' edge of the left sub-range (now the complete range)
+                                 as ev.pos is not the knwon vertex with the highest x-value inside the range */
                 assert( ev.succ.pseudoDistanceToLine( ev.pos, ev.pred) > 0);
                 
                 Vertex incidentAt = ev.succ.get_x() != ev.pos.get_x() ?
@@ -251,29 +323,15 @@ int main()
                 break;
         }
     }
-    
-
-    cout << "========== remaining status edges ========" << endl; 
-    for (LineArrangement::const_iterator it = status.begin(); it != status.end(); it++)
-        cout << *it << endl;
-    
-    cout << "========== remaining helpers =============" << endl;
-    for (map<LineSegment,Vertex>::const_iterator it = helpers.begin(); it != helpers.end(); it++)
-        cout << it->first << ", " << it->second << endl;
         
-    //assert(status.size() == 0);
-    //assert(helpers.size()== 0);
-    cout << "========== new edges ==========" << endl;
-    BOOST_FOREACH( LineSegment seg, newDiagonals)
-        cout << seg << endl;
-        
-    createCairoDebugOutput( verts, /*status*/newDiagonals);
+    assert(status.size() == 0);
+    assert(helpers.size()== 0);
+    return newDiagonals;
+}
 
-    cout << "==========================================" << endl;
-    map<Vertex, vector<Vertex> > graph;
-    vector<Vertex> endVertices;
-    // prepare the graph representation of the polygon, into which the additional edges can be inserted
-    
+map<Vertex, vector<Vertex> > toGraph(vector<Vertex> verts, const list<LineSegment> newDiagonals)
+{
+    map<Vertex, vector<Vertex> >  graph;
     for (uint64_t i = 0; i < verts.size(); i++)
     {
         Vertex v1 = verts[i];
@@ -284,9 +342,6 @@ int main()
         
         graph[v1].push_back(v2);
         graph[v2].push_back(v1);
-        if (classifyVertex(verts, i) == END)
-            endVertices.push_back(verts[i]);
-            
     }
     
     for (list<LineSegment>::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
@@ -297,53 +352,55 @@ int main()
         graph[it->start].push_back(it->end);
         graph[it->end].push_back(it->start);
     }
+    return graph;
+}
 
-    for (vector<Vertex>::const_iterator it = endVertices.begin(); it != endVertices.end(); it++)
-    {
-        list<Vertex> chain;
-        chain.push_back(*it);
-        assert(graph[*it].size() == 2);
-        
-        Vertex v1 = graph[*it][0];
-        Vertex v2 = graph[*it][1];
-        
-        Vertex top = v1.get_y() > v2.get_y() ? v1 : v2;
-        Vertex bottom=v1.get_y()> v2.get_y() ? v2 : v1;
-        
-        while (top != bottom)
-        {
-            Vertex &update = (top.get_x() >= bottom.get_x()) ? top : bottom;
-            Vertex v = update;
-            Vertex pred;
-            if (top.get_x() >= bottom.get_x()) 
-            {
-                pred = chain.front();
-                chain.push_front(top);
-            }
-            else
-            {
-                pred = chain.back();
-                chain.push_back(bottom);
-            }
+int main()
+{
+    VertexChain p; 
+
+    srand(24);
+    for (int i = 0; i < 400; i++)
+        p.append(Vertex(rand() % 200, rand() % 200));
+    p.append(p.front()); //close polygon*/
+
+    list<VertexChain> simples = toSimplePolygons( p );
+    VertexChain poly = simples.front();
+    BOOST_FOREACH( VertexChain c, simples)
+        if ( c.size() > poly.size())
+            poly = c;
             
-            assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
-            
-            if (graph[v].size() == 2)
-            {
-                Vertex next1 = graph[v][0];
-                Vertex next2 = graph[v][1];
-                assert( (next1 == pred) != (next2 == pred)); //exactly one of the connected vertices has to be the predecessor
-                update = (next1 == pred) ? next2 : next1;
-            } else
-            {
-                //CONTINUEHERE: add case for vertices that are connected to a diagonal
-            }
-            
-        }
+    std::cout << "generated simple polygon with " << poly.size() << " vertices" << std::endl;
+    poly.canonicalize();
+    
+    //#warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
+    assert(poly.isClockwise());
         
+    vector<Vertex> verts = poly.data();
+    assert( verts.front() == verts.back() );
+    verts.pop_back();
+    
+    assert(verts.size() > 3 && "TODO: handle special case were polygon is already a triangle (or degenerated)");
+
+    list<LineSegment> newDiagonals = createEndMonotoneDiagonals(verts);
+    cout << "========== new edges ==========" << endl;
+    BOOST_FOREACH( LineSegment seg, newDiagonals)
+        cout << seg << endl;
         
-        
-    }
+    createCairoDebugOutput( verts, /*status*/newDiagonals);
+
+    cout << "==========================================" << endl;
+    map<Vertex, vector<Vertex> > graph = toGraph(verts, newDiagonals);
+    vector<Vertex> endVertices;
+    
+    for (uint64_t i = 0; i < verts.size(); i++)
+        if (classifyVertex(verts, i) == END)
+            endVertices.push_back(verts[i]);  
+    
+    list<VertexChain> polygons = polygonsFromEndMonotoneGraph(graph, endVertices);
+    cairo_render_polygons(polygons);
+
+    
 }
 
 

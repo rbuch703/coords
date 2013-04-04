@@ -74,7 +74,7 @@ bool VertexChain::simplifyArea(double allowedDeviation)
         so we need to test the number of vertices here. Also, a segment cannot be a polygon
         if its vertex count is less than four (since the polygon of smallest order is a triangle,
         and first and last vertex are identical. Since simplification cannot add vertices,
-        We can safely terminate the simplification here, if we are short of four vertices. */
+        we can safely terminate the simplification here, if we are short of four vertices. */
     if ( m_vertices.size() < 4) { m_vertices.clear(); return false; }
 
 
