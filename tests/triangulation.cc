@@ -9,16 +9,21 @@
 #include <cairo-pdf.h>
 
 //void createCairoDebugOutput( vector<Vertex> verts, LineArrangement &newDiagonals )
-void createCairoDebugOutput( vector<Vertex> verts, list<LineSegment> &newDiagonals )
+void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDiagonals, bool shift=false )
 {
-    MonotonizeEventQueue events;
-    for (uint64_t i = 0; i < verts.size(); i++)
-        events.add( verts, i);
+    assert(chain.data().front() == chain.data().back());
+    vector<Vertex> verts(chain.data());
+    verts.pop_back();
+
+    MonotonizeEventQueue events(verts);
+    /*for (uint64_t i = 0; i < verts.size(); i++)
+        events.add( verts, i);*/
 
 
     cairo_surface_t *surface = cairo_pdf_surface_create ("debug.pdf", 200, 200);
     cairo_t *cr = cairo_create (surface);
-    //cairo_translate( cr, 500, 500);
+    if (shift)
+        cairo_translate( cr, 200, 0);
     //cairo_scale (cr, 1/1000.0, -1/1000.0);
     cairo_set_line_width (cr, 0.1);
 
@@ -73,7 +78,7 @@ void createCairoDebugOutput( vector<Vertex> verts, list<LineSegment> &newDiagona
     cairo_surface_destroy(surface);
 }
 
-list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &graph, vector<Vertex> endVertices)
+list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> graph, vector<Vertex> endVertices)
 {
     list<VertexChain> res;
     for (vector<Vertex>::const_iterator it = endVertices.begin(); it != endVertices.end(); it++)
@@ -85,8 +90,13 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &gra
         Vertex v1 = graph[*it][0];
         Vertex v2 = graph[*it][1];
         
-        Vertex top = v1.get_y() > v2.get_y() ? v1 : v2;
-        Vertex bottom=v1.get_y()> v2.get_y() ? v2 : v1;
+        BigInt dist = v2.pseudoDistanceToLine(*it, v1);
+        assert(dist != 0 && "colinear Vertices");
+        
+        Vertex top =  dist > 0 ? v2 : v1;
+        Vertex bottom=dist > 0 ? v1 : v2;
+
+        cout << "\tstarting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
         
         while (top != bottom)
         {
@@ -104,6 +114,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &gra
                 pred = chain.back();
                 chain.push_back(bottom);
             }
+            cout << "\tfinding " << ( updateTop ? "top" : "bottom") <<" successor vertex to " << v << endl;
             
             assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
             Vertex vSucc;
@@ -140,7 +151,6 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &gra
                         vSucc = *it;
                     } else if (dist == 0)   //edge case: current vertex and two possible successors lie on a single line
                     {
-                        //assert( false && "This code has never been tested");
                         assert( (vSucc.get_x() == v.get_x()) && (it->get_x() == v.get_x()));
                         
                         if ( (updateTop && (it->get_y() < vSucc.get_y())) ||
@@ -150,6 +160,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &gra
                 }
             }
             assert(hasSucc);
+            cout << "\t\tfound "<< vSucc << endl;
 
             if (updateTop)
                 top = vSucc;
@@ -160,7 +171,12 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> &gra
         chain.push_back(top);   //add the final vertex, top == bottom
         chain.push_front(top);  //... and duplicate it to mark it as a closes polygon
         
-        res.push_back(VertexChain(chain));        
+        VertexChain c(chain);
+        c.canonicalize();
+        //std::cout << c.isClockwise() << endl;
+        //std::cout << c.data() << endl;
+        assert(c.isClockwise());
+        res.push_back(c);        
     }
     return res;
 }
@@ -200,11 +216,17 @@ void cairo_render_polygons(const list<VertexChain> &polygons)
 
 }
 
-list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
+list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
 {
-    MonotonizeEventQueue events;
-    for (uint64_t i = 0; i < verts.size(); i++)
-        events.add( verts, i);
+    assert( chain.data().front() == chain.data().back());
+    vector<Vertex> verts(chain.data());
+    verts.pop_back();
+    
+    assert( verts.size() >= 3);
+    MonotonizeEventQueue events(verts);
+
+    /*for (uint64_t i = 0; i < verts.size(); i++)
+        events.add( verts, i);*/
 
     map<LineSegment, Vertex> helpers;
     LineArrangement status;
@@ -212,7 +234,7 @@ list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
     while (events.size() != 0)
     {
         SimpEvent ev = events.pop();
-        //cout << "handling event " << ev << endl;
+        cout << "handling event " << ev << endl;
         switch (ev.type)
         {
             case START: 
@@ -225,7 +247,15 @@ list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
             case END: 
             {
                 EdgeContainer e = status.findAdjacentEdge(ev.pos.get_x(), ev.pos.get_y());
-                assert( e->m_Data.start == ev.pos || e->m_Data.end == ev.pos);
+#ifndef NDEBUG
+                if (ev.succ.get_x() == ev.pos.get_x())
+                    /* in this edge case the status edge would have to be a horizontal one, which the status BBST cannot deal with.
+                     * As a work-around, the horizontal edge was therefore replaced by a dummy edge that passes through the vertex
+                     * that caused the previous event (the successor in clockwise vertex order) */
+                    assert( e->m_Data.start == ev.succ || e->m_Data.end == ev.succ);
+                else
+                    assert( e->m_Data.start == ev.pos  || e->m_Data.end == ev.pos);
+#endif
                 helpers.erase( e->m_Data);
                 status.remove( e->m_Data, ev.pos.get_x());
                 
@@ -235,6 +265,7 @@ list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
             {
                 LineSegment edge = status.getEdgeLeftOf( ev.pos);
                 assert( helpers.count( edge ));
+                assert(helpers[edge].get_x() <= ev.pos.get_x());
                 newDiagonals.push_back( LineSegment( helpers[edge], ev.pos ));
                 
                 helpers[edge] = ev.pos;
@@ -246,7 +277,7 @@ list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
                     //the dummy will not be accessed and will be replaced by the REGULAR event
                     LineSegment dummy_edge = LineSegment( Vertex(ev.pos.get_x()-1, ev.pos.get_y()), ev.pos);
                     status.insert( dummy_edge, ev.pos.get_x() );
-                    helpers.insert( pair<LineSegment, Vertex>( dummy_edge, ev.pos) );
+                    helpers.insert( pair<LineSegment, Vertex>( dummy_edge, Vertex(0,0)) );
                     
                 } else
                 {
@@ -329,13 +360,15 @@ list<LineSegment> createEndMonotoneDiagonals(const vector<Vertex> verts)
     return newDiagonals;
 }
 
-map<Vertex, vector<Vertex> > toGraph(vector<Vertex> verts, const list<LineSegment> newDiagonals)
+map<Vertex, vector<Vertex> > toGraph(const VertexChain &chain, const list<LineSegment> newDiagonals)
 {
     map<Vertex, vector<Vertex> >  graph;
-    for (uint64_t i = 0; i < verts.size(); i++)
+    assert( chain.data().front() == chain.data().back());
+    
+    for (uint64_t i = 0; i < chain.size()-1; i++)   //don't need to traverse the last vertex, it's identical to the first one
     {
-        Vertex v1 = verts[i];
-        Vertex v2 = verts[ (i+1) % verts.size() ];
+        Vertex v1 = chain.data()[i];
+        Vertex v2 = chain.data()[i+1];
         
         if ( graph.count(v1) == 0) graph.insert( pair<Vertex, vector<Vertex> >(v1, vector<Vertex>() ));
         if ( graph.count(v2) == 0) graph.insert( pair<Vertex, vector<Vertex> >(v2, vector<Vertex>() ));
@@ -355,12 +388,102 @@ map<Vertex, vector<Vertex> > toGraph(vector<Vertex> verts, const list<LineSegmen
     return graph;
 }
 
+vector<Vertex> getEndVertices(const VertexChain &chain)
+{
+    vector<Vertex> poly( chain.data() );
+    assert( poly.front() == poly.back());
+    poly.pop_back();    //required for the modulus arithmetic in the event classification to work correctly
+    
+    vector<Vertex> res;
+    MonotonizeEventQueue events(poly);
+    while (events.containsEvents())
+    {
+        SimpEvent ev = events.pop();
+        if (ev.type == END)
+            res.push_back(ev.pos);
+    }
+    
+    /*
+    for (uint64_t i = 0; i < poly.size(); i++)
+        if (classifyVertex(poly, i) == END)
+            res.push_back(poly[i]);  */
+ 
+    return res;
+}
+
+list<VertexChain> toMonotonePolygons( const VertexChain &chain)
+{
+    if (chain.size() == 4) //triangle
+    {
+        list<VertexChain> res;
+        res.push_back( chain );
+        return res;
+    }
+    
+
+/*    cout << "========== new edges ==========" << endl;
+    BOOST_FOREACH( LineSegment seg, newDiagonals)
+        cout << seg << endl;*/
+        
+
+    //cout << "==========================================" << endl;
+    //list<LineSegment> dummy;
+    //createCairoDebugOutput( chain, dummy);
+
+    list<LineSegment> newDiagonals = createEndMonotoneDiagonals(chain);
+    createCairoDebugOutput( chain, newDiagonals);
+
+    list<VertexChain> polygons = polygonsFromEndMonotoneGraph(toGraph(chain, newDiagonals), getEndVertices(chain));
+
+    //createCairoDebugOutput( chain, newDiagonals);
+    //cairo_render_polygons(polygons);
+    
+    list<VertexChain> res;
+    for ( list<VertexChain>::iterator poly = polygons.begin(); poly != polygons.end(); poly++)
+    {
+        static int i = 0;
+        i++;
+        assert(poly->size() > 3);
+        assert(poly->data().front() == poly->data().back());
+        if (poly->size() == 4) // edge case: is a triangle (with duplicte end vertex), no further subdivision necessary
+        {
+            res.push_back( *poly);
+            continue;
+        }
+
+        //invert x values so that the next execution of createEndMonotoneDiagonals() eliminates MERGE instead of SPLIT vertices
+        poly->mirrorX();
+        poly->reverse(); // mirroring also inverts the orientation, but this needs to be clockwise for createEndMonotoneDiagonals();
+        assert(poly->isClockwise());
+
+        //cout << poly->data() << endl;
+        //cout << "===========================" << endl;
+
+        //createCairoDebugOutput( *poly,  dummy, true);
+        
+        list<LineSegment> diags = createEndMonotoneDiagonals( *poly );
+        list<VertexChain> tmp = polygonsFromEndMonotoneGraph(toGraph(*poly, diags), getEndVertices(*poly));
+
+        for ( list<VertexChain>::iterator it = tmp.begin(); it != tmp.end(); it++)
+        {
+            assert(it->size() > 3); //algorithm should not be able to create degenerate polygons
+
+            it->mirrorX();
+            poly->reverse();
+            res.push_back( *it );
+        }
+        
+    }
+    cairo_render_polygons(res);
+    return res;
+}
+
 int main()
 {
     VertexChain p; 
 
     srand(24);
-    for (int i = 0; i < 400; i++)
+    for (int i = 0; i < 500; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon*/
 
@@ -369,36 +492,14 @@ int main()
     BOOST_FOREACH( VertexChain c, simples)
         if ( c.size() > poly.size())
             poly = c;
-            
+        
     std::cout << "generated simple polygon with " << poly.size() << " vertices" << std::endl;
     poly.canonicalize();
-    
-    //#warning ensure that polygon is oriented clockwise. Otherwise the classification will be incorrect
     assert(poly.isClockwise());
-        
-    vector<Vertex> verts = poly.data();
-    assert( verts.front() == verts.back() );
-    verts.pop_back();
-    
-    assert(verts.size() > 3 && "TODO: handle special case were polygon is already a triangle (or degenerated)");
 
-    list<LineSegment> newDiagonals = createEndMonotoneDiagonals(verts);
-    cout << "========== new edges ==========" << endl;
-    BOOST_FOREACH( LineSegment seg, newDiagonals)
-        cout << seg << endl;
-        
-    createCairoDebugOutput( verts, /*status*/newDiagonals);
-
-    cout << "==========================================" << endl;
-    map<Vertex, vector<Vertex> > graph = toGraph(verts, newDiagonals);
-    vector<Vertex> endVertices;
-    
-    for (uint64_t i = 0; i < verts.size(); i++)
-        if (classifyVertex(verts, i) == END)
-            endVertices.push_back(verts[i]);  
-    
-    list<VertexChain> polygons = polygonsFromEndMonotoneGraph(graph, endVertices);
-    cairo_render_polygons(polygons);
+    //#warning: TODO: add test cases with very small (3-5 vertices) irregular polygons
+    list<VertexChain> polys = toMonotonePolygons (poly.data());   
+    std::cout << "generated " << polys.size() << " polygons" << endl;
 
     
 }

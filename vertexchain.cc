@@ -752,6 +752,16 @@ bool VertexChain::isClockwise() {
     return v.pseudoDistanceToLine( vPred, vSucc) < 0;
 }
 
+
+void VertexChain::mirrorX()
+{
+    for (uint64_t i = 0; i < m_vertices.size(); i++)
+    {
+        assert( m_vertices[i].get_x() != 0x80000000);
+        m_vertices[i] = Vertex( -m_vertices[i].get_x(), m_vertices[i].get_y());
+    }
+}
+
 /*list<VertexChain> VertexChain::toSimplePolygon()
 {
     return toSimplePolygons(*this);

@@ -25,6 +25,7 @@ public:
     void append(const Vertex& node);
     void append(list<Vertex>::const_iterator begin,  list<Vertex>::const_iterator end );
     void append(const VertexChain &other, bool shareEndpoint);
+    void mirrorX();
     
     AABoundingBox getBoundingBox() const;    
     void canonicalize();    //remove successive identical and colinear vertices
