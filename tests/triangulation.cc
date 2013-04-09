@@ -22,6 +22,7 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
 
     cairo_surface_t *surface = cairo_pdf_surface_create ("debug.pdf", 200, 200);
     cairo_t *cr = cairo_create (surface);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
     if (shift)
         cairo_translate( cr, 200, 0);
     //cairo_scale (cr, 1/1000.0, -1/1000.0);
@@ -96,7 +97,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
         Vertex top =  dist > 0 ? v2 : v1;
         Vertex bottom=dist > 0 ? v1 : v2;
 
-        cout << "\tstarting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
+        //cout << "\tstarting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
         
         while (top != bottom)
         {
@@ -114,7 +115,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
                 pred = chain.back();
                 chain.push_back(bottom);
             }
-            cout << "\tfinding " << ( updateTop ? "top" : "bottom") <<" successor vertex to " << v << endl;
+            //cout << "\tfinding " << ( updateTop ? "top" : "bottom") <<" successor vertex to " << v << endl;
             
             assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
             Vertex vSucc;
@@ -160,7 +161,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
                 }
             }
             assert(hasSucc);
-            cout << "\t\tfound "<< vSucc << endl;
+            //cout << "\t\tfound "<< vSucc << endl;
 
             if (updateTop)
                 top = vSucc;
@@ -186,6 +187,8 @@ void cairo_render_polygons(const list<VertexChain> &polygons)
 
     cairo_surface_t *surface = cairo_pdf_surface_create ("debug1.pdf", 200, 200);
     cairo_t *cr = cairo_create (surface);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
+    
     cairo_set_line_width (cr, 0.1);
     cairo_rectangle(cr,1, 200-1, 1, -1);
     cairo_stroke(cr);
@@ -216,6 +219,40 @@ void cairo_render_polygons(const list<VertexChain> &polygons)
 
 }
 
+void cairo_render_triangles(const vector<int32_t> &triangles)
+{
+
+    cairo_surface_t *surface = cairo_pdf_surface_create ("debug2.pdf", 200, 200);
+    cairo_t *cr = cairo_create (surface);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
+    
+    cairo_set_line_width (cr, 0.1);
+    cairo_rectangle(cr,1, 200-1, 1, -1);
+    cairo_stroke(cr);
+    cairo_set_line_width (cr, 0.2);
+
+    assert(triangles.size() % 6 == 0);
+    
+    for (uint64_t i = 0; i +5 < triangles.size(); i+=6)
+    {
+        cairo_move_to(cr, triangles[i  ], 200-triangles[i+1] );
+        cairo_line_to(cr, triangles[i+2], 200-triangles[i+3] );
+        cairo_line_to(cr, triangles[i+4], 200-triangles[i+5] );
+        cairo_close_path(cr);
+        cairo_set_source_rgb(cr, 0,0,0);
+        cairo_stroke_preserve(cr);
+        //cairo_set_source_rgba(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX, 0.5);
+        cairo_set_source_rgba(cr, 0,0.5,1, 0.5);
+        cairo_fill(cr);
+    }
+    
+    cairo_destroy(cr);
+    cairo_surface_finish (surface);
+    cairo_surface_destroy(surface);
+
+}
+
+
 list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
 {
     assert( chain.data().front() == chain.data().back());
@@ -234,7 +271,7 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
     while (events.size() != 0)
     {
         SimpEvent ev = events.pop();
-        cout << "handling event " << ev << endl;
+        //cout << "handling event " << ev << endl;
         switch (ev.type)
         {
             case START: 
@@ -403,11 +440,6 @@ vector<Vertex> getEndVertices(const VertexChain &chain)
             res.push_back(ev.pos);
     }
     
-    /*
-    for (uint64_t i = 0; i < poly.size(); i++)
-        if (classifyVertex(poly, i) == END)
-            res.push_back(poly[i]);  */
- 
     return res;
 }
 
@@ -478,14 +510,170 @@ list<VertexChain> toMonotonePolygons( const VertexChain &chain)
     return res;
 }
 
+//typedef int32_t Triangle[6]; //x/y for three vertices
+
+
+
+void addTriangle(vector<int32_t> &triangles_out, Vertex v1, Vertex v2, Vertex v3)
+{
+    triangles_out.push_back( (int32_t)v1.get_x() );
+    triangles_out.push_back( (int32_t)v1.get_y() );
+    triangles_out.push_back( (int32_t)v2.get_x() );
+    triangles_out.push_back( (int32_t)v2.get_y() );
+    triangles_out.push_back( (int32_t)v3.get_x() );
+    triangles_out.push_back( (int32_t)v3.get_y() );
+}
+
+struct TriangulationVertex
+{
+    TriangulationVertex(Vertex p_Vertex, bool p_onTopChain): vertex(p_Vertex), onTopChain(p_onTopChain) {}
+
+    Vertex vertex;
+    bool onTopChain;
+};
+
+ostream& operator<<(ostream &os, TriangulationVertex v)
+{
+    os << (v.onTopChain? "top": "bottom") << ": " << v.vertex;
+    return os;
+}
+
+static void triangulate( vector<Vertex> &topChain, vector<Vertex> &bottomChain, vector<int32_t> &res)
+{
+    //cout << topChain.size() << ";" << bottomChain.size() << endl;
+    
+    //vector<int32_t> res;
+    assert(topChain.front() == bottomChain.front() );
+    assert(topChain.back() == bottomChain.back() );
+    assert(topChain.size() >= 2 && bottomChain.size() >= 2);
+    
+    vector<TriangulationVertex> stack;  //is mostly used as a stack, but we need access to the up to three most recent elements
+    stack.push_back( TriangulationVertex( topChain[0], true));    // == bottomChain[0]
+    Vertex final = topChain.back(); //==botomChain.back(); must be handled individually, because it belongs to both chains at the same time
+    topChain.pop_back();
+    bottomChain.pop_back();
+    assert( topChain[1] != bottomChain[1]);
+    uint64_t i1 = 1;
+    uint64_t i2 = 1;
+    
+    if (topChain[1].get_x() > bottomChain[1].get_x())
+        stack.push_back( TriangulationVertex( topChain[i1++], true));
+    else
+        stack.push_back( TriangulationVertex( bottomChain[i2++], false));
+
+    //cout << stack[0] << endl;
+    //cout << stack[1] << endl;
+    assert( ((Vertex)topChain[1]).pseudoDistanceToLine(bottomChain[0], bottomChain[1]) > 0);
+    
+    while ( i1 != topChain.size() || i2 != bottomChain.size())
+    {
+        bool next1 = (i2 == bottomChain.size()) || (( i1 != topChain.size()) && (topChain[i1].get_x() > bottomChain[i2].get_x()) );
+        TriangulationVertex vNext = next1 ? TriangulationVertex(topChain[i1++], true) : TriangulationVertex(bottomChain[i2++], false);
+
+        assert(stack.size() >= 2);
+        if ( stack.back().onTopChain == vNext.onTopChain)
+        {
+            stack.push_back( vNext );
+            while ( stack.size() >= 3)
+            {
+                uint64_t num = stack.size();
+                assert( stack[num-1].onTopChain == stack[num-2].onTopChain);
+                bool onTop = stack[num-1].onTopChain;
+                BigInt dist = stack[num-3].vertex.pseudoDistanceToLine(stack[num-2].vertex, stack[num-1].vertex);
+                if (dist == 0)
+                    cout << "\t" << stack[num-3] << "\n\t" << stack[num-2] << "\n\t" << stack[num-3] << endl;
+                assert(dist != 0 && "colinear vertices");
+                if ( (onTop && dist < 0)|| (!onTop && dist > 0) ) // form a triangle inside the polygon --> output the triangle and remove it from the stack
+                {
+                    addTriangle( res, stack[num-3].vertex, stack[num-2].vertex, stack[num-1].vertex);
+                    stack[num-2] = stack[num-1];
+                    stack.pop_back();
+                } 
+                else break;
+            }
+        } else
+        {
+            for (uint64_t j = 0; j < stack.size()-1; j++)
+                addTriangle( res, stack[j].vertex, stack[j+1].vertex, vNext.vertex);
+
+            TriangulationVertex topOfStack = stack.back();
+            stack.clear();
+            stack.push_back(topOfStack);
+            stack.push_back(vNext);   
+        }
+        
+    }
+
+    #warning validate this code
+    for (uint64_t j = 0; j < stack.size()-1; j++)
+        addTriangle( res, stack[j].vertex, stack[j+1].vertex, final);
+    
+    //cout << "==============" << endl;    
+    //cout << "stack size: " << stack.size() << endl;
+    //#warning TODO: handle vertex 'final'
+//    return res;
+
+}
+
+
+void triangulate( const VertexChain &monotone_polygon, vector<int32_t> &res)
+{
+
+    assert(monotone_polygon.data().front() == monotone_polygon.data().back() );
+    const vector<Vertex> &poly = monotone_polygon.data();
+
+    if (poly.size() == 4)   //edge case: already a triangle
+    {
+        addTriangle(res, poly[0], poly[1], poly[2]);
+        return;
+    }
+
+    
+    vector<Vertex> chain1;
+    Vertex prev = poly[0];
+    int64_t i = 0;
+    while (i < (int64_t)poly.size() && poly[i].get_x() <= prev.get_x())
+    {
+        prev = poly[i++];
+        chain1.push_back(prev);
+    }
+    
+    vector<Vertex> chain2;
+    int64_t j =  poly.size()-1;
+    prev = poly[j];
+    while (j>= 0 && poly[j].get_x() <= prev.get_x())
+    {
+        prev = poly[j--];
+        chain2.push_back(prev);
+    }
+    // Both must have passed the vertex with smallest x-value, and moved one step beyond it (in their respective direction)
+    assert( j < i); 
+    
+    /* Chains only end when the x-coordinates are no longer monotone decreasing.
+     * If the two final vertices have identical x-values, then both chains contain
+     * both vertices, but in inverse order, instead of ending at the same vertex.
+     * This edge case code sorts that out*/
+    if (chain1[chain1.size()-1].get_x() == chain1[chain1.size()-2].get_x())
+    {
+        assert (chain2[chain2.size()-1].get_x() == chain2[chain2.size()-2].get_x());
+        assert (chain2[chain2.size()-1].get_x() == chain1[chain1.size()-2].get_x());
+        assert (chain1[chain1.size()-1].get_x() == chain2[chain2.size()-2].get_x());
+        chain2.pop_back();
+    }
+    assert( chain1.back() == chain2.back() );
+
+    return triangulate(chain1, chain2, res);
+}
+
 int main()
 {
+    
     VertexChain p; 
 
     srand(24);
     for (int i = 0; i < 500; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
-    p.append(p.front()); //close polygon*/
+    p.append(p.front()); //close polygon
 
     list<VertexChain> simples = toSimplePolygons( p );
     VertexChain poly = simples.front();
@@ -493,15 +681,45 @@ int main()
         if ( c.size() > poly.size())
             poly = c;
         
-    std::cout << "generated simple polygon with " << poly.size() << " vertices" << std::endl;
+    std::cout << "generated simple polygon with " << (poly.size()-1) << " vertices" << std::endl;
     poly.canonicalize();
     assert(poly.isClockwise());
 
     //#warning: TODO: add test cases with very small (3-5 vertices) irregular polygons
     list<VertexChain> polys = toMonotonePolygons (poly.data());   
-    std::cout << "generated " << polys.size() << " polygons" << endl;
+    std::cout << "generated " << polys.size() << " sub-polygons" << endl;
 
+    //poly = VertexChain();
+    vector<int32_t> triangles;
     
+    BOOST_FOREACH( VertexChain c, polys)
+    {
+        //cout << "processing vertex chain " << endl << c;
+        //static int i = 0;
+        //i++;
+        triangulate(c, triangles);
+    }
+
+    cout << "generated " << (triangles.size() / 6) << " triangles" << endl;
+        
+//        if ( c.size() > poly.size())
+//            poly = c;
+    
+//    cout << "biggest polygon has " << poly.size()-1 << " vertices: " << endl;
+    //cout << poly << endl;
+    
+
+    cairo_render_triangles(triangles);
+    /*
+    VertexChain q;  // tests the case of two adjacent vertices with identical x-value forming a REGULAR-START pair
+    q.append( Vertex(0,0));
+    q.append( Vertex(0,1));
+    q.append( Vertex(2,2));
+    q.append( Vertex(3,1));
+    q.append( Vertex(3,0));
+    q.append( Vertex(0,0));
+    toMonotonePolygons (q.data());   
+    */
 }
 
 

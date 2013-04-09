@@ -15,7 +15,7 @@ enum EventType { START, END, SPLIT, MERGE, REGULAR };
 class SimpEvent
 {
 public:
-    SimpEvent();
+    //SimpEvent();
     //SimpEvent( Vertex pPos, EventType t ): pos(pPos), type(t) {}
     
     SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id, EventType p_type): 
@@ -77,11 +77,11 @@ public:
 	    return item;
     }
     
-	SimpEvent top() 
+/*	SimpEvent top() 
 	{
 	    assert ( size() >0 );
 	    return *begin();
-    }
+    }*/
 
     void remove(SimpEvent ev) { AVLTree<SimpEvent>::remove(ev); }
     
@@ -132,6 +132,7 @@ private:
                 return pair<EventType, EventType>( REGULAR, SPLIT); //pos2 is the earlier event (= lower y-value) vertex
         } else assert(false);
         
+        return pair<EventType, EventType>( REGULAR, REGULAR); //dummy
     }
 
     //TODO: change to direct vertex data access (non-int128_t)
@@ -178,6 +179,7 @@ private:
             return EventType::REGULAR;
         } else
             assert(false && "uncategorized vertex");
+        return REGULAR;
     }
 /*    void remove(Vertex v)
     {
@@ -283,6 +285,7 @@ class LineArrangement: protected AVLTree<LineSegment>
 {
 public:
     EdgeContainer addEdge(const LineSegment &a, const BigFraction xPosition);
+/*
 #ifndef NDEBUG
     bool isConsistent(EdgeContainer node, BigInt xPos) const
     {
@@ -297,7 +300,7 @@ public:
     }
     
     bool isConsistent(BigInt xPos) const { return !m_pRoot || isConsistent(m_pRoot, xPos); }
-#endif
+#endif */
 
     int size() const { return AVLTree<LineSegment>::size(); }
     
@@ -315,6 +318,7 @@ public:
         return *(--it);
     }
     
+    /*
     bool hasSuccessor( EdgeContainer node )
     {
         iterator it(node, *this);
@@ -326,7 +330,7 @@ public:
         iterator it(node, *this);
         assert (++it != end());
         return *it;
-    }
+    }*/
   
     LineSegment getEdgeLeftOf( Vertex pos )
     {
@@ -466,7 +470,7 @@ protected:
 	    
 	    return pPos->m_pParent;
     }
-    
+/*    
 	AVLTree::iterator getIterator(LineSegment e, const BigInt xPos)
 	{
 	    AVLTreeNode<LineSegment>* p = findPos(e, xPos);
@@ -474,7 +478,7 @@ protected:
 	    assert(p->m_Data == e);
 	    return AVLTree::iterator(p, *this);
 	}
-
+*/
 };
 
 #endif
