@@ -674,9 +674,28 @@ static void ensureOrientation( list<VertexChain> &in, list<VertexChain> &out, bo
 
 }
 
+//FIXME: notion of above/below is inverted
 void VertexChain::clipSecondComponent( BigInt clip_y, list<VertexChain> &out_above, list<VertexChain> &out_below)
 {
     list<VertexChain*> above, below;
+
+    bool allAbove = true;
+    bool allBelow= true;
+    
+    for (uint64_t i = 0; i < m_vertices.size(); i++)
+    {
+        allAbove &= m_vertices[i].get_y() <= clip_y;
+        allBelow &= m_vertices[i].get_y() >= clip_y;
+    }
+
+    if (allAbove)
+        out_above.push_back(*this);
+
+    if (allBelow)
+        out_below.push_back(*this);
+
+    if (allAbove || allBelow)
+        return;
 
     bool clockwise = isClockwise();
     
@@ -694,8 +713,25 @@ void VertexChain::clipFirstComponent( BigInt clip_x, list<VertexChain> &out_left
 {
     list<VertexChain*> left, right;
     
+    bool allLeft = true;
+    bool allRight= true;
+    for (uint64_t i = 0; i < m_vertices.size(); i++)
+    {
+        allLeft &= m_vertices[i].get_x() <= clip_x;
+        allRight&= m_vertices[i].get_x() >= clip_x;
+    }
+
+    if (allLeft)
+        out_left.push_back(*this);
+
+    if (allRight)
+        out_right.push_back(*this);
+
+    if (allLeft || allRight)
+        return;
+
     bool clockwise = isClockwise();
-    
+
     clip<getXCoordinate, getYCoordinate>( m_vertices, clip_x, left, right);
 
     list<VertexChain> tmp_left, tmp_right;

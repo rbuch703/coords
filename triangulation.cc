@@ -1,83 +1,329 @@
 
 #include "triangulation.h"
 
-#include "../vertexchain.h"
-#include "../quadtree.h" // for toSimplePolygons()
+#include "vertexchain.h"
 #include <boost/foreach.hpp>
 
-#include <cairo.h>
-#include <cairo-pdf.h>
 
-//void createCairoDebugOutput( vector<Vertex> verts, LineArrangement &newDiagonals )
-void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDiagonals, bool shift=false )
+#include "config.h"
+#include "geometric_types.h"
+#include "vertexchain.h"
+#include "helpers.h"
+
+#include <list>
+
+
+SimpEvent::SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id, EventType p_type): 
+        pos(  vertices[  vertex_id]), 
+        pred( vertices[ (vertex_id + vertices.size() -1) % vertices.size() ]), 
+        succ( vertices[ (vertex_id                  + 1) % vertices.size() ]),
+        type(p_type)
 {
-    assert(chain.data().front() == chain.data().back());
-    vector<Vertex> verts(chain.data());
-    verts.pop_back();
-
-    MonotonizeEventQueue events(verts);
-    /*for (uint64_t i = 0; i < verts.size(); i++)
-        events.add( verts, i);*/
-
-
-    cairo_surface_t *surface = cairo_pdf_surface_create ("debug.pdf", 200, 200);
-    cairo_t *cr = cairo_create (surface);
-    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
-    if (shift)
-        cairo_translate( cr, 200, 0);
-    //cairo_scale (cr, 1/1000.0, -1/1000.0);
-    cairo_set_line_width (cr, 0.1);
-
-    cairo_rectangle(cr,1, 200-1, 1, -1);
-    
-    cairo_stroke(cr);
-    
-    cairo_set_line_width (cr, 0.2);
-    
-    while (events.size() != 0)
-    {
-        SimpEvent event = events.pop();
-        switch (event.type)
-        {
-            case START:  cairo_set_source_rgb(cr, 1,0,0); break;
-            case END:    cairo_set_source_rgb(cr, 0,0,1); break;
-            case SPLIT:  cairo_set_source_rgb(cr, 1,1,1); break;
-            case MERGE:  cairo_set_source_rgb(cr, 0,1,0); break;
-            case REGULAR:cairo_set_source_rgb(cr, .2,.2,.2); break;
-        }
-        static const double M_PI = 3.141592;
-        cairo_arc(cr, asDouble(event.pos.get_x()), 200-asDouble( event.pos.get_y() ), 1, 0, 2 * M_PI); 
-        cairo_fill (cr);
-        
-        cairo_arc(cr, asDouble(event.pos.get_x()), 200-asDouble( event.pos.get_y() ), 1, 0, 2 * M_PI); 
-        cairo_set_source_rgb (cr, 0,0,0);
-        cairo_stroke(cr);
-    }
-        
-    cairo_set_source_rgb (cr, 0, 0, 0);
-    cairo_move_to(cr, asDouble(verts[0].get_x()), 200-asDouble(verts[0].get_y()) );
-    
-    for (uint64_t i = 0; i < verts.size(); i++)
-        cairo_line_to(cr, asDouble(verts[i].get_x()), 200-asDouble(verts[i].get_y()) );
-    cairo_line_to(    cr, asDouble(verts[0].get_x()), 200-asDouble(verts[0].get_y()) );
-    cairo_stroke(cr);
-
-
-    for ( list<LineSegment>::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
-    //for ( LineArrangement::const_iterator it = newDiagonals.begin(); it != newDiagonals.end(); it++)
-    {
-        cairo_set_source_rgb(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
-    
-        cairo_move_to(cr, asDouble(it->start.get_x()), 200-asDouble(it->start.get_y()));
-        cairo_line_to(cr, asDouble(it->end.get_x()), 200-asDouble(it->end.get_y()));
-        cairo_stroke( cr);
-    }
-
-
-    cairo_destroy(cr);
-    cairo_surface_finish (surface);
-    cairo_surface_destroy(surface);
+    assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
+    //cout << "creating event " << pred << "/" << pos << "/" << succ << endl;
 }
+    
+bool SimpEvent::operator==(const SimpEvent & other) const {return pos == other.pos; }
+bool SimpEvent::operator!=(const SimpEvent & other) const {return pos != other.pos; }
+bool SimpEvent::operator <(const SimpEvent &other) const  {return pos <  other.pos; }
+
+
+ostream &operator<<( ostream &os, SimpEvent ev)
+{
+    switch (ev.type)
+    {
+        case START:  os << "START";  break;
+        case END:    os << "END";    break;
+        case SPLIT:  os << "SPLIT";  break;
+        case MERGE:  os << "MERGE";  break;
+        case REGULAR:os << "REGULAR";break;
+    }
+    os << " " << ev.pred <<" / *" << ev.pos << "* / " << ev.succ;
+    return os;
+}
+
+
+
+// ===========================================================
+
+/** returns whether the line 'a' has a smaller or equal y-value at xPos than the line 'b'.
+    The method silently assumes that both segments actually intersect the vertical line at xPos.
+    Do not make this a method os the LineSegment class, as it has nothing to do with it semantically
+  */
+bool leq(const LineSegment a, const LineSegment b, BigInt xPos)
+{
+    assert(a.start.get_x() != a.end.get_x());
+    assert(b.start.get_x() != b.end.get_x());
+    
+    BigInt dbx = b.end.get_x() - b.start.get_x();
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    
+    BigInt dby = b.end.get_y() - b.start.get_y();
+    BigInt day = a.end.get_y() - a.start.get_y();
+    
+    bool flipSign = (dax < 0) != (dbx < 0);
+    
+    BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
+    BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
+    
+    return (left == right)|| ((left < right) != flipSign);
+}
+
+bool eq(const LineSegment a, const LineSegment b, BigInt xPos)
+{
+    assert(a.start.get_x() != a.end.get_x());
+    assert(b.start.get_x() != b.end.get_x());
+    
+    BigInt dbx = b.end.get_x() - b.start.get_x();
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    
+    BigInt dby = b.end.get_y() - b.start.get_y();
+    BigInt day = a.end.get_y() - a.start.get_y();
+    
+    BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
+    BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
+    
+    return left == right;
+}
+
+//=====================================
+
+// returns whether the line segment 'a' at x-value xPos has a y-value less than or equal to yPos
+bool leq(const LineSegment a, BigInt xPos, BigInt yPos)
+{
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
+             ( a.end.get_x()   >= xPos && a.start.get_x()<= xPos)) &&
+             "position not inside x range of segment");
+             
+    assert (dax != 0 && "edge case vertical line segment");
+    
+    bool flipSign = (dax < 0);
+    
+    BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
+    BigInt right= (yPos - a.start.get_y()) * dax;
+    
+    return (left == right) || ((left < right) != flipSign);
+}
+
+bool eq(const LineSegment a, BigInt xPos, BigInt yPos)
+{
+    BigInt dax = a.end.get_x() - a.start.get_x();
+    assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
+             ( a.end.get_x()   >= xPos && a.start.get_x()<= xPos)) &&
+             "position not inside x range of segment");
+             
+    assert (dax != 0 && "edge case vertical line segment");
+    
+    BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
+    BigInt right= (yPos - a.start.get_y()) * dax;
+    
+    return (left == right);
+}
+
+typedef AVLTreeNode<LineSegment> *EdgeContainer;
+
+ // protected inheritance to hide detail of AVLTree, since for a LineArrangement, AVLTree::insert must never be used
+class LineArrangement: protected AVLTree<LineSegment>
+{
+public:
+    EdgeContainer addEdge(const LineSegment &a, const BigFraction xPosition);
+/*
+#ifndef NDEBUG
+    bool isConsistent(EdgeContainer node, BigInt xPos) const
+    {
+        bool left = !node->m_pLeft || 
+                    (leq( node->m_pLeft->m_Data, node->m_Data, xPos)
+                    && isConsistent(node->m_pLeft, xPos));
+                    
+        bool right= !node->m_pRight ||
+                    (leq( node->m_Data, node->m_pRight->m_Data, xPos) && 
+                    isConsistent(node->m_pRight, xPos));
+        return left && right;
+    }
+    
+    bool isConsistent(BigInt xPos) const { return !m_pRoot || isConsistent(m_pRoot, xPos); }
+#endif */
+
+    int size() const { return AVLTree<LineSegment>::size(); }
+    
+    
+    bool hasPredecessor( EdgeContainer node)
+    {
+        iterator it(node, *this);
+        return it != begin();
+    }
+
+    LineSegment getPredecessor( EdgeContainer node)
+    {
+        iterator it(node, *this);
+        assert (it != begin());
+        return *(--it);
+    }
+    
+    /*
+    bool hasSuccessor( EdgeContainer node )
+    {
+        iterator it(node, *this);
+        return ++it != end();
+    }
+    
+    LineSegment getSuccessor( EdgeContainer node)
+    {
+        iterator it(node, *this);
+        assert (++it != end());
+        return *it;
+    }*/
+  
+    LineSegment getEdgeLeftOf( Vertex pos )
+    {
+        EdgeContainer e = findAdjacentEdge( pos );
+        assert( e );
+        if ( leq(e->m_Data, pos.get_x(), pos.get_y()) )
+            return e->m_Data;
+        
+        assert( hasPredecessor(e) );
+        LineSegment edge = getPredecessor( e );
+        assert( leq(edge, pos.get_x(), pos.get_y()));
+        return edge;
+    }
+    
+    void remove(LineSegment item, const BigInt xPos)
+    {
+        //cout << "removing edge " << item << endl;
+    
+        assert( item.start.get_x() <= item.end.get_x());
+#ifndef NDEBUG
+        #warning expensive debug checks (that change the time complexity)
+        for (const_iterator it = this->begin(); it != end(); it++)
+            assert( it->start.get_x() <= xPos && it->end.get_x() >= xPos && "line arrangement contains outdated edge");
+#endif
+
+        AVLTreeNode<LineSegment> *node = findPos(item, xPos);
+        assert( node && "Node to be removed does not exist");
+        assert( node->m_Data == item);
+        AVLTree<LineSegment>::remove(node);
+    }
+    
+    EdgeContainer findPos(LineSegment item, const BigInt xPos)
+    {
+    	if (! m_pRoot) return NULL;
+
+	    //BigFraction yVal = item.getYValueAt(xPos);
+
+	    AVLTreeNode<LineSegment>* pPos = m_pRoot;
+	    while (pPos)
+	    {
+	        //BigFraction yVal2 = pPos->m_Data.getYValueAt(xPos);
+	        if ( eq(item, pPos->m_Data,xPos) ) return pPos;
+	        pPos = leq(item, pPos->m_Data, xPos) ? pPos->m_pLeft : pPos->m_pRight;
+	    }
+	    return pPos;
+    }
+    
+    
+    /* returns an adjacent edge to (xPos, yPos), i.e. an edge that is closest to (xPos, yPos)
+       either to the left or to the right.
+       If any edge passes directly through (xPos, yPos), the method is guaranteed to return said edge.
+       Otherwise, the method makes no guarantee on which of the two adjacent edges it returns. In
+       particular, it need not return the closest of the two edges.
+   */
+    EdgeContainer findAdjacentEdge(const BigInt xPos, const BigInt yPos)
+    {
+    	if (! m_pRoot) return NULL;
+    	
+        EdgeContainer parent=m_pRoot;
+	    EdgeContainer pPos = m_pRoot;
+	    while (pPos)
+	    {
+	        parent = pPos;
+	        if ( eq(pPos->m_Data,xPos, yPos) ) return pPos;
+	        pPos = leq(pPos->m_Data, xPos, yPos) ? pPos->m_pRight : pPos->m_pLeft;
+	    }
+	    return parent;
+    }
+
+    EdgeContainer findAdjacentEdge(Vertex v)
+    {
+        return findAdjacentEdge( v.get_x(), v.get_y() );
+    }
+    
+    EdgeContainer insert(const LineSegment &item, BigInt xPos)
+    {
+        //cout << "inserting edge " << item << endl;
+        
+        // Must not be equal because LineArrangement internally sorts these lines by x-coordinate
+        // and a segment with identical x-values at its entpoints does not have a unique x coordinate.
+        // Must not be bigger, because our canonical form for status edges is define as having a start
+        // with a smaller x-coordinate than the end. This reduced the numbers of necessary checks elsewhere
+        assert( item.start.get_x() < item.end.get_x());
+    
+#ifndef NDEBUG
+        #warning expensive debug checks (that change the time complexity)
+        for (LineArrangement::const_iterator it = begin(); it != end(); it++)
+            assert( it->start.get_x() <= xPos && it->end.get_x() >= xPos && "line arrangement contains outdated edge");
+#endif
+    
+        EdgeContainer parent = findParent(item, xPos);
+        
+	    AVLTreeNode<LineSegment>* pPos = new AVLTreeNode<LineSegment>(0,0, parent, item);
+	
+	    if (!parent)
+	    {
+	        m_pRoot = pPos;
+	        pPos->m_dwDepth = 0;    //no children --> depth=0
+	        num_items++;
+	        return pPos;   //no parent --> this is the root, nothing more to do
+	    }
+	
+	    assert (!eq(item, parent->m_Data, xPos));
+	    
+	    if ( leq(item, parent->m_Data, xPos) )
+	    {
+	        assert( ! parent->m_pLeft);
+	        parent->m_pLeft = pPos;
+	    } else
+	    {
+	        assert( ! parent->m_pRight);
+	        parent->m_pRight = pPos;
+	    }
+	
+	    updateDepth( pPos);//, NULL, NULL);
+	    num_items++;
+	    return pPos;
+    }
+    
+protected:
+
+    /* returns the tree node whose one direct child would be 'item' (if 'item' was in the tree).
+     * This method assumes that 'item' is not actually present in the tree */
+    EdgeContainer findParent(const LineSegment &item, BigInt xPos) const
+    {
+	    EdgeContainer parent = NULL;
+	    if (! m_pRoot) return NULL;
+
+	    EdgeContainer pPos = m_pRoot;
+	    while ( ! eq( pPos->m_Data, item, xPos) )
+	    {
+		    parent = pPos;
+		    pPos = leq(item, pPos->m_Data, xPos) ? pPos->m_pLeft : pPos->m_pRight;
+		    if (! pPos) return parent;
+	    }
+	    assert(false && "duplicate entry found");
+	    
+	    return pPos->m_pParent;
+    }
+/*    
+	AVLTree::iterator getIterator(LineSegment e, const BigInt xPos)
+	{
+	    AVLTreeNode<LineSegment>* p = findPos(e, xPos);
+	    assert(p);
+	    assert(p->m_Data == e);
+	    return AVLTree::iterator(p, *this);
+	}
+*/
+};
+
 
 list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> graph, vector<Vertex> endVertices)
 {
@@ -180,76 +426,6 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
         res.push_back(c);        
     }
     return res;
-}
-
-void cairo_render_polygons(const list<VertexChain> &polygons)
-{
-
-    cairo_surface_t *surface = cairo_pdf_surface_create ("debug1.pdf", 200, 200);
-    cairo_t *cr = cairo_create (surface);
-    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
-    
-    cairo_set_line_width (cr, 0.1);
-    cairo_rectangle(cr,1, 200-1, 1, -1);
-    cairo_stroke(cr);
-    cairo_set_line_width (cr, 0.2);
-
-
-    
-    for (list<VertexChain>::const_iterator it = polygons.begin(); it != polygons.end(); it++)
-    {
-        vector<Vertex> chain = it->data();
-        
-        cairo_move_to(cr, asDouble(chain.front().get_x()), 200-asDouble(chain.front().get_y()) );
-        for (vector<Vertex>::const_iterator it = chain.begin(); it != chain.end(); it++)
-            if (*it != chain.front())
-                cairo_line_to(cr, asDouble(it->get_x()), 200-asDouble(it->get_y()) );
-                
-        cairo_close_path(cr);
-        cairo_set_source_rgb(cr, 0,0,0);
-        cairo_stroke_preserve(cr);
-        //cairo_set_source_rgba(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX, 0.5);
-        cairo_set_source_rgba(cr, 1,0,0, 0.5);
-        cairo_fill(cr);
-    }
-    
-    cairo_destroy(cr);
-    cairo_surface_finish (surface);
-    cairo_surface_destroy(surface);
-
-}
-
-void cairo_render_triangles(const vector<int32_t> &triangles)
-{
-
-    cairo_surface_t *surface = cairo_pdf_surface_create ("debug2.pdf", 200, 200);
-    cairo_t *cr = cairo_create (surface);
-    cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
-    
-    cairo_set_line_width (cr, 0.1);
-    cairo_rectangle(cr,1, 200-1, 1, -1);
-    cairo_stroke(cr);
-    cairo_set_line_width (cr, 0.2);
-
-    assert(triangles.size() % 6 == 0);
-    
-    for (uint64_t i = 0; i +5 < triangles.size(); i+=6)
-    {
-        cairo_move_to(cr, triangles[i  ], 200-triangles[i+1] );
-        cairo_line_to(cr, triangles[i+2], 200-triangles[i+3] );
-        cairo_line_to(cr, triangles[i+4], 200-triangles[i+5] );
-        cairo_close_path(cr);
-        cairo_set_source_rgb(cr, 0,0,0);
-        cairo_stroke_preserve(cr);
-        //cairo_set_source_rgba(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX, 0.5);
-        cairo_set_source_rgba(cr, 0,0.5,1, 0.5);
-        cairo_fill(cr);
-    }
-    
-    cairo_destroy(cr);
-    cairo_surface_finish (surface);
-    cairo_surface_destroy(surface);
-
 }
 
 
@@ -463,7 +639,7 @@ list<VertexChain> toMonotonePolygons( const VertexChain &chain)
     //createCairoDebugOutput( chain, dummy);
 
     list<LineSegment> newDiagonals = createEndMonotoneDiagonals(chain);
-    createCairoDebugOutput( chain, newDiagonals);
+    //createCairoDebugOutput( chain, newDiagonals);
 
     list<VertexChain> polygons = polygonsFromEndMonotoneGraph(toGraph(chain, newDiagonals), getEndVertices(chain));
 
@@ -506,7 +682,7 @@ list<VertexChain> toMonotonePolygons( const VertexChain &chain)
         }
         
     }
-    cairo_render_polygons(res);
+    //cairo_render_polygons(res);
     return res;
 }
 
@@ -538,7 +714,7 @@ ostream& operator<<(ostream &os, TriangulationVertex v)
     return os;
 }
 
-static void triangulate( vector<Vertex> &topChain, vector<Vertex> &bottomChain, vector<int32_t> &res)
+static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> &bottomChain, vector<int32_t> &res)
 {
     //cout << topChain.size() << ";" << bottomChain.size() << endl;
     
@@ -616,7 +792,7 @@ static void triangulate( vector<Vertex> &topChain, vector<Vertex> &bottomChain, 
 }
 
 
-void triangulate( const VertexChain &monotone_polygon, vector<int32_t> &res)
+void triangulateMonotonePolygon( const VertexChain &monotone_polygon, vector<int32_t> &res)
 {
 
     assert(monotone_polygon.data().front() == monotone_polygon.data().back() );
@@ -662,68 +838,41 @@ void triangulate( const VertexChain &monotone_polygon, vector<int32_t> &res)
     }
     assert( chain1.back() == chain2.back() );
 
-    return triangulate(chain1, chain2, res);
+    return triangulateMonotoneChains(chain1, chain2, res);
 }
 
-int main()
+vector<int32_t> triangulate( const VertexChain &c)
 {
-    
-    VertexChain p; 
-
-    srand(24);
-    for (int i = 0; i < 500; i++)
-        p.append(Vertex(rand() % 200, rand() % 200));
-    p.append(p.front()); //close polygon
-
-    list<VertexChain> simples = toSimplePolygons( p );
-    VertexChain poly = simples.front();
-    BOOST_FOREACH( VertexChain c, simples)
-        if ( c.size() > poly.size())
-            poly = c;
-        
-    std::cout << "generated simple polygon with " << (poly.size()-1) << " vertices" << std::endl;
-    poly.canonicalize();
-    assert(poly.isClockwise());
-
-    //#warning: TODO: add test cases with very small (3-5 vertices) irregular polygons
-    list<VertexChain> polys = toMonotonePolygons (poly.data());   
-    std::cout << "generated " << polys.size() << " sub-polygons" << endl;
-
-    //poly = VertexChain();
-    vector<int32_t> triangles;
-    
-    BOOST_FOREACH( VertexChain c, polys)
+    double t = getWallTime();
+    static int i = 0;
+    i++;
+    cout << "triangulating polygon " << i << endl;
+    if (i == 22)
     {
-        //cout << "processing vertex chain " << endl << c;
-        //static int i = 0;
-        //i++;
-        triangulate(c, triangles);
-    }
-
-    cout << "generated " << (triangles.size() / 6) << " triangles" << endl;
+        FILE* f = fopen("poly.bin", "wb");
+        BOOST_FOREACH( Vertex v, c.data())
+        {
+            int32_t i = (int32_t)v.get_x();
+            fwrite( &i, sizeof(i), 1, f);
+            i = (int32_t)v.get_y();
+            fwrite( &i, sizeof(i), 1, f);
+        }
+        fclose(f);
         
-//        if ( c.size() > poly.size())
-//            poly = c;
-    
-//    cout << "biggest polygon has " << poly.size()-1 << " vertices: " << endl;
-    //cout << poly << endl;
-    
+        cout << c << endl;
+    }
+    if (c.size() > 100)
+        cout << "triangulating a polygon with " << c.size() << " vertices" << endl;
 
-    cairo_render_triangles(triangles);
-    /*
-    VertexChain q;  // tests the case of two adjacent vertices with identical x-value forming a REGULAR-START pair
-    q.append( Vertex(0,0));
-    q.append( Vertex(0,1));
-    q.append( Vertex(2,2));
-    q.append( Vertex(3,1));
-    q.append( Vertex(3,0));
-    q.append( Vertex(0,0));
-    toMonotonePolygons (q.data());   
-    */
+    vector<int32_t> res;
+    list<VertexChain> polys = toMonotonePolygons (c.data());
+    BOOST_FOREACH( const VertexChain &chain, polys)
+        triangulateMonotonePolygon(chain, res);
+        
+    if (c.size() > 100)
+        cout << "\t ... took" << (getWallTime() - t)  << "seconds" << endl;
+
+    return res;
 }
-
-
-
-
 
 

@@ -13,6 +13,7 @@
 #include "polygonreconstructor.h"
 #include "helpers.h"
 #include "quadtree.h"
+#include "triangulation.h"
 
 
 list<VertexChain> poly_storage;
@@ -50,13 +51,16 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 void handlePolygon(string, VertexChain& segment)
 {
     list<VertexChain> polys = toSimplePolygons( segment );
-    
+    //cout << "#" << endl;
     for (list<VertexChain>::iterator it = polys.begin(); it != polys.end(); it = polys.erase(it))
     {
         it->canonicalize();
+        
+        triangulate( *it);
+        
         if (it->front() != it->back()) continue;
         if (it->size() < 4) continue;
-        poly_storage.push_back(*it);
+        //poly_storage.push_back(*it);
     }
     
      
@@ -272,14 +276,15 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     
 }
 
-void reconstructCoastline(FILE * src, list<VertexChain> &poly_storage)
+void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
 {
     PolygonReconstructor recon;
     int idx = 0;
     uint64_t num_self_closed = 0;
     while (! feof(src))
     {
-        if (++idx % 100000 == 0) std::cout << idx/1000 << "k ways read, " << std::endl;
+        //if (++idx % 1 == 0) 
+        std::cout << ++idx << " ways read, " << std::endl;
         int i = fgetc(src);
         if (i == EOF) break;
         ungetc(i, src);
@@ -405,8 +410,7 @@ void extractBuildings()
         //tmp.isClockwise();
         //cout << way << endl;        
     } 
-    clipRecursive( "output/coast/building", "", poly_storage);   
-    
+    clipRecursive( "output/coast/building", "", poly_storage);      
 }
 
 int main()
@@ -416,11 +420,11 @@ int main()
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
     //extractCountries();
-    extractBuildings();
+    //extractBuildings();
     //extractGermany();
-    //FILE* f = fopen("coastline.dump", "rb");
+    FILE* f = fopen("coastline.dump", "rb");
     //if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
-    //reconstructCoastline(f, poly_storage);
+    reconstructCoastline(f);//, poly_storage);
     //cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
     //clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);
 }

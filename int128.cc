@@ -309,30 +309,37 @@ int128_t operator-(int128_t a, int128_t b)
     if (a.isPositive == b.isPositive)
     {
         int128_t res;
-        res.isPositive = (a > b);
-        a.isPositive = b.isPositive = true; //HACK: so that the next line computes the relation of the *absolute* values
-        if (b > a)
+        
+        if ((a.hi > b.hi) || ((a.hi == b.hi) && (a.lo > b.lo)) )
         {
-            int128_t tmp = b;
-            b = a;
-            a = tmp;
-        }
-        
-        assert( b <= a);
-        
-        //int64_t diff;
+            res.isPositive = a.isPositive;
 #ifndef NDEBUG
-        uint64_t carry = 
+            uint64_t carry = 
 #endif
-        sub128(a.hi, a.lo, b.hi, b.lo, &res.hi, &res.lo);
-                    
-        assert( carry == 0 && "buggy arithmetic" );
-        return res;
-
+            sub128(a.hi, a.lo, b.hi, b.lo, &res.hi, &res.lo);
+            assert( carry == 0 && "buggy arithmetic" );
+            return res;
+            
+        } else
+        {
+            res.isPositive = ! a.isPositive;
+#ifndef NDEBUG
+            uint64_t carry = 
+#endif
+            sub128(b.hi, b.lo, a.hi, a.lo, &res.hi, &res.lo);
+            assert( carry == 0 && "buggy arithmetic" );
+            return res;
+        }
     } else if (a.isPositive) //'b' negative
         return a + (-b);    
     else //'a' negative
-        return - ( (-a) + b );
+    {
+        //return - ( (-a) + b );
+        a.isPositive = !a.isPositive;
+        int128_t res = a+b;
+        res.isPositive = !res.isPositive;
+        return res;
+    }
 }
 
 int128_t operator| (int128_t a, int128_t b)

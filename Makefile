@@ -1,9 +1,9 @@
 
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
-SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc# validatingbigint.cc  
+SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc triangulation.cc
 GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
-TEST_SRC = tests/arithmetic_test.cc tests/geometry_test.cc tests/quadtree_test.cc tests/triangulation.cc
+TEST_SRC = tests/arithmetic_test.cc tests/geometry_test.cc tests/quadtree_test.cc tests/triangulation_test.cc
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
 CONV_OBJ = $(CONV_SRC:.cc=.o)
@@ -42,7 +42,7 @@ simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
 	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
-tests: tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation
+tests: tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation_test
 
 tests/arithmetic_test: math64.o validatingbigint.o int128.o tests/arithmetic_test.cc
 	@echo [LD ] $@
@@ -56,7 +56,7 @@ tests/quadtree_test: tests/quadtree_test.cc geometric_types.o vertexchain.o int1
 	@echo [LD ] $@
 	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ 
 
-tests/triangulation: tests/triangulation.cc geometric_types.o vertexchain.o int128.o math64.o quadtree.o
+tests/triangulation_test: tests/triangulation_test.cc geometric_types.o vertexchain.o int128.o math64.o quadtree.o triangulation.o helpers.o
 	@echo [LD ] $@
 	@g++ $(CCFLAGS) $(LD_FLAGS) -o $@ $^ `pkg-config --cflags --libs cairo`
 
@@ -75,10 +75,11 @@ clean:
 	@echo [CLEAN]
 	@rm -rf *.o
 	@rm -rf *~
+	@rm -rf tests/*~
 	@rm -rf *gcda
 	@rm -rf *gcno
 	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests 
-	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation
+	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation_test
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(TEST_SRC)
 	@echo [DEP]
