@@ -58,6 +58,9 @@ private:
 //    friend EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id);
 };
 
+Vertex getLeftMostContinuation( const vector<Vertex> &vertices, Vertex start, Vertex end);
+Vertex getRightMostContinuation( const vector<Vertex> &vertices, Vertex start, Vertex end);
+
 
 
 /** semantics:  a line segment starts *at* its vertex 'start', and ends *at* its vertex 'end',

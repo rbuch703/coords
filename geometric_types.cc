@@ -61,6 +61,110 @@ std::ostream& operator <<(std::ostream& os, const Vertex v)
     return os;
 }
 
+/* the set 'vertices' may contain 'start', which will only be returned if it is the only vertex*/
+Vertex getLeftMostContinuation( const vector<Vertex> &vertices, Vertex start, Vertex end)
+{
+    bool hasMinLeft = false;
+    bool hasMinRight = false;
+    
+    Vertex minLeft, minRight;
+    //cout << "finding continuation for " << start << " - " << end << endl;
+    for (vector<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
+    {
+        //cout << "\t testing " << *it << endl;
+        BigInt dist = it->pseudoDistanceToLine(start, end);
+        //cout << "\t\t pseudodistance is " << dist << endl;
+        if (dist < 0) //lies left of line (start-end)
+        {
+            //cout << "\t\t left " << endl;
+            if (!hasMinLeft)
+            {
+                hasMinLeft = true;
+                minLeft = *it;
+                //cout << "\t\t is new minleft" << endl;
+                continue;
+            }
+            if (it->pseudoDistanceToLine(end, minLeft) < 0)
+                minLeft = *it;
+        } else if (dist > 0)    //lies right of line (start-end)
+        {
+            if (!hasMinRight)
+            {
+                hasMinRight = true;
+                minRight = *it;
+                continue;
+            }
+            if (it->pseudoDistanceToLine(end, minRight) < 0)
+                minRight = *it;
+        } else  //dist == 0
+        {
+            if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
+            assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
+            assert(!hasMinRight || minRight.pseudoDistanceToLine(end, *it) != 0); //there should only be continuation straight ahead
+            hasMinRight = true;
+            minRight = *it;
+        }
+    }
+    if (hasMinLeft) return minLeft;
+    if (hasMinRight) return minRight;
+    
+    //assert( vertices.count(start) == 1);
+    return start;
+}
+
+
+
+/* the set 'vertices' may contain 'start', which will only be returned if it is the only vertex*/
+Vertex getRightMostContinuation( const vector<Vertex> &vertices, Vertex start, Vertex end)
+{
+    bool hasMaxLeft = false;
+    bool hasMaxRight = false;
+    
+    Vertex maxLeft, maxRight;
+    //cout << "finding continuation for " << start << " - " << end << endl;
+    for (vector<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
+    {
+        //cout << "\t testing " << *it << endl;
+        BigInt dist = it->pseudoDistanceToLine(start, end);
+        //cout << "\t\t pseudodistance is " << dist << endl;
+        if (dist < 0) //lies left of line (start-end)
+        {
+            //cout << "\t\t left " << endl;
+            if (!hasMaxLeft)
+            {
+                hasMaxLeft = true;
+                maxLeft = *it;
+                //cout << "\t\t is new minleft" << endl;
+                continue;
+            }
+            if (it->pseudoDistanceToLine(end, maxLeft) > 0)
+                maxLeft = *it;
+        } else if (dist > 0)    //lies right of line (start-end)
+        {
+            if (!hasMaxRight)
+            {
+                hasMaxRight = true;
+                maxRight = *it;
+                continue;
+            }
+            if (it->pseudoDistanceToLine(end, maxRight) > 0)
+                maxRight = *it;
+        } else  //dist == 0
+        {
+            if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
+            assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
+            assert(!hasMaxLeft || maxLeft.pseudoDistanceToLine(end, *it) != 0); //there should only be one continuation straight ahead
+            hasMaxLeft = true;
+            maxLeft = *it;
+        }
+    }
+    if (hasMaxRight) return maxRight;
+    if (hasMaxLeft) return maxLeft;
+    
+    //assert( vertices.count(start) == 1);
+    return start;
+}
+
 
 /** ============================================================================= */
 LineSegment::LineSegment( const Vertex v_start, const Vertex v_end): 

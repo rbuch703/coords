@@ -72,56 +72,6 @@ void moveIntersectionsToIntegerCoordinates3(list<LineSegment> &segments)
 
 }
 
-Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Vertex end)
-{
-    bool hasMinLeft = false;
-    bool hasMinRight = false;
-    
-    Vertex minLeft, minRight;
-    //cout << "finding continuation for " << start << " - " << end << endl;
-    for (set<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
-    {
-        //cout << "\t testing " << *it << endl;
-        BigInt dist = it->pseudoDistanceToLine(start, end);
-        //cout << "\t\t pseudodistance is " << dist << endl;
-        if (dist < 0) //lies left of line (start-end)
-        {
-            //cout << "\t\t left " << endl;
-            if (!hasMinLeft) 
-            {
-                hasMinLeft = true;
-                minLeft = *it;
-                //cout << "\t\t is new minleft" << endl;
-                continue;
-            }
-            if (it->pseudoDistanceToLine(end, minLeft) < 0)
-                minLeft = *it;
-        } else if (dist > 0)    //lies right of line (start-end)
-        {
-            if (!hasMinRight)
-            {
-                hasMinRight = true;
-                minRight = *it;
-                continue;
-            }
-            if (it->pseudoDistanceToLine(end, minRight) < 0)
-                minRight = *it;
-        } else  //dist == 0
-        {
-            if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
-            assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
-            assert(!hasMinRight || minRight.pseudoDistanceToLine(end, *it) != 0); //there should only be continuation straight ahead
-            hasMinRight = true;
-            minRight = *it;
-        }
-    }
-    if (hasMinLeft) return minLeft;
-    if (hasMinRight) return minRight;
-    
-    assert( vertices.count(start) == 1);
-    return start;
-}
-
 /*
     Returns the polygons that give the outline of the connected graph 'graph'
     Basic idea of the algorithm:
@@ -135,15 +85,15 @@ Vertex getLeftMostContinuation( const set<Vertex> &vertices, Vertex start, Verte
         4. The algorithm terminates when the starting edge (not just the starting vertex) is visited again.
         
 */
-list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
+list<VertexChain> getPolygons(map<Vertex,vector<Vertex> > &graph)
 {
     list<VertexChain> res;
 
     Vertex initial_start = graph.begin()->first;
-    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
+    for (map<Vertex,vector<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
     {
         if (it->first < initial_start) initial_start = it->first;
-        assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
+        //assert( it->second.count(it->first) == 0); //no vertex must be connected to itself
         /*if (it->second.size() == 1)
             std::cout << "warning: vertex " << it->first << " is only connected to one other vertex" << endl;*/
     }
@@ -152,7 +102,7 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
 
     assert( graph.count(initial_start) && (graph[initial_start].size() > 0));
     Vertex initial_end = *graph[initial_start].begin();
-    for ( set<Vertex>::const_iterator it = graph[initial_start].begin(); it != graph[initial_start].end(); it++)
+    for ( vector<Vertex>::const_iterator it = graph[initial_start].begin(); it != graph[initial_start].end(); it++)
     {
         BigInt dist = it->pseudoDistanceToLine(initial_start, initial_end);
         if (dist  < 0) initial_end = *it;
@@ -221,17 +171,17 @@ list<VertexChain> getPolygons(map<Vertex,set<Vertex> > &graph)
     return res;
 }
 
-map<Vertex,set<Vertex> > getConnectivityGraph(const list<LineSegment> &segments )
+map<Vertex,vector<Vertex> > getConnectivityGraph(const list<LineSegment> &segments )
 {
-    map<Vertex, set<Vertex> > graph;
+    map<Vertex, vector<Vertex> > graph;
     
     for (list<LineSegment>::const_iterator seg = segments.begin(); seg != segments.end(); seg++)
     {
-        if (graph.count( seg->start ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->start, set<Vertex>()));
-        if (graph.count( seg->end   ) == 0) graph.insert( pair<Vertex, set<Vertex>>(seg->end,   set<Vertex>()));
+        if (graph.count( seg->start ) == 0) graph.insert( pair<Vertex, vector<Vertex>>(seg->start, vector<Vertex>()));
+        if (graph.count( seg->end   ) == 0) graph.insert( pair<Vertex, vector<Vertex>>(seg->end,   vector<Vertex>()));
         
-        graph[seg->start].insert( seg->end);
-        graph[seg->end].insert( seg->start);
+        graph[seg->start].push_back( seg->end);
+        graph[seg->end].push_back( seg->start);
     }
     
     return graph;
@@ -254,7 +204,7 @@ list<VertexChain> toSimplePolygons(VertexChain &polygon/*, bool canDestroyInput*
         segs.push_back( LineSegment( vertices[i], vertices[i+1])); 
    
     moveIntersectionsToIntegerCoordinates3(segs);
-    map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
+    map<Vertex,vector<Vertex> > graph = getConnectivityGraph(segs);
 
     return getPolygons(graph);
 }

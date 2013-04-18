@@ -48,7 +48,7 @@ void cairo_render_polygons(const list<VertexChain> &polygons)
 
 
 //void createCairoDebugOutput( vector<Vertex> verts, LineArrangement &newDiagonals )
-void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDiagonals, bool shift=false )
+void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDiagonals, double shift_x, double shift_y, double scale)
 {
     assert(chain.data().front() == chain.data().back());
     vector<Vertex> verts(chain.data());
@@ -59,12 +59,13 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
         events.add( verts, i);*/
 
 
-    cairo_surface_t *surface = cairo_pdf_surface_create ("debug.pdf", 150, 150);
+    cairo_surface_t *surface = cairo_pdf_surface_create ("debug.pdf", 200, 200);
     cairo_t *cr = cairo_create (surface);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
-    cairo_scale (cr, 1/10000.0, 1/10000.0);
+    cairo_scale (cr, scale, scale);
 
-    cairo_translate( cr, -553625894, -128060048);
+    cairo_translate( cr, shift_x, shift_y);
+    //cairo_translate( cr, -553625894, +128060048+80*20000);
     
 
 
@@ -88,20 +89,20 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
             case REGULAR:cairo_set_source_rgb(cr, .2,.2,.2); break;
         }
         static const double M_PI = 3.141592;
-        cairo_arc(cr, asDouble(event.pos.get_x()), asDouble( event.pos.get_y() ), 1000, 0, 2 * M_PI); 
+        cairo_arc(cr, asDouble(event.pos.get_x()), -asDouble( event.pos.get_y() ), 2000, 0, 2 * M_PI); 
         cairo_fill (cr);
         
-        cairo_arc(cr, asDouble(event.pos.get_x()), asDouble( event.pos.get_y() ), 1000, 0, 2 * M_PI); 
+        cairo_arc(cr, asDouble(event.pos.get_x()), -asDouble( event.pos.get_y() ), 2000, 0, 2 * M_PI); 
         cairo_set_source_rgb (cr, 0,0,0);
         cairo_stroke(cr);
     }
         
     cairo_set_source_rgb (cr, 0, 0, 0);
-    cairo_move_to(cr, asDouble(verts[0].get_x()), asDouble(verts[0].get_y()) );
+    cairo_move_to(cr, asDouble(verts[0].get_x()), -asDouble(verts[0].get_y()) );
     
     for (uint64_t i = 0; i < verts.size(); i++)
-        cairo_line_to(cr, asDouble(verts[i].get_x()), asDouble(verts[i].get_y()) );
-    cairo_line_to(    cr, asDouble(verts[0].get_x()), asDouble(verts[0].get_y()) );
+        cairo_line_to(cr, asDouble(verts[i].get_x()), -asDouble(verts[i].get_y()) );
+    cairo_line_to(    cr, asDouble(verts[0].get_x()), -asDouble(verts[0].get_y()) );
     cairo_stroke(cr);
 
 
@@ -110,8 +111,8 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
     {
         cairo_set_source_rgb(cr, 1,rand()/(double)RAND_MAX,rand()/(double)RAND_MAX);
     
-        cairo_move_to(cr, asDouble(it->start.get_x()), asDouble(it->start.get_y()));
-        cairo_line_to(cr, asDouble(it->end.get_x()), asDouble(it->end.get_y()));
+        cairo_move_to(cr, asDouble(it->start.get_x()), -asDouble(it->start.get_y()));
+        cairo_line_to(cr, asDouble(it->end.get_x()), -asDouble(it->end.get_y()));
         cairo_stroke( cr);
     }
 
@@ -121,11 +122,15 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
     cairo_surface_destroy(surface);
 }
 
-void cairo_render_triangles(const vector<int32_t> &triangles)
+void cairo_render_triangles(const vector<int32_t> &triangles, double shift_x, double shift_y, double scale)
 {
 
     cairo_surface_t *surface = cairo_pdf_surface_create ("debug2.pdf", 200, 200);
     cairo_t *cr = cairo_create (surface);
+    cairo_scale (cr, scale, scale);
+
+    cairo_translate( cr, shift_x, shift_y);
+
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
     
     cairo_set_line_width (cr, 0.1);
@@ -137,9 +142,9 @@ void cairo_render_triangles(const vector<int32_t> &triangles)
     
     for (uint64_t i = 0; i +5 < triangles.size(); i+=6)
     {
-        cairo_move_to(cr, triangles[i  ], 200-triangles[i+1] );
-        cairo_line_to(cr, triangles[i+2], 200-triangles[i+3] );
-        cairo_line_to(cr, triangles[i+4], 200-triangles[i+5] );
+        cairo_move_to(cr, triangles[i  ], -triangles[i+1] );
+        cairo_line_to(cr, triangles[i+2], -triangles[i+3] );
+        cairo_line_to(cr, triangles[i+4], -triangles[i+5] );
         cairo_close_path(cr);
         cairo_set_source_rgb(cr, 0,0,0);
         cairo_stroke_preserve(cr);
@@ -188,7 +193,7 @@ int main()
     }
 
     list<LineSegment> newDiagonals = createEndMonotoneDiagonals(poly);
-    createCairoDebugOutput( poly, newDiagonals);
+    createCairoDebugOutput( poly, newDiagonals, -553625894, +128060048+80*20000, 1/10000.0);
 
 
     //#warning: TODO: add test cases with very small (3-5 vertices) irregular polygons
@@ -215,7 +220,7 @@ int main()
     //cout << poly << endl;
     
 
-    cairo_render_triangles(triangles);
+    cairo_render_triangles(triangles,-553625894, +128060048+200*10000, 1/10000.0);
     /*
     VertexChain q;  // tests the case of two adjacent vertices with identical x-value forming a REGULAR-START pair
     q.append( Vertex(0,0));

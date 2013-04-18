@@ -343,7 +343,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
         Vertex top =  dist > 0 ? v2 : v1;
         Vertex bottom=dist > 0 ? v1 : v2;
 
-        //cout << "\tstarting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
+        cout << "starting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
         
         while (top != bottom)
         {
@@ -365,23 +365,31 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
             
             assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
             Vertex vSucc;
-            bool hasSucc = false;
-            
+            //bool hasSucc = false;
+
+            //Vertex vv(553921153, 128774301);
+            //cout << "nNeighbors " << graph[vv].size() << endl;
             if (graph[v].size() == 2)
             {
                 Vertex next1 = graph[v][0];
                 Vertex next2 = graph[v][1];
                 assert( (next1 == pred) != (next2 == pred)); //exactly one of the connected vertices has to be the predecessor
                 vSucc = (next1 == pred) ? next2 : next1;
-                hasSucc = true;
             } else
             {
-                vector<Vertex> &candidates = graph[v];
+                //vector<Vertex> &candidates = ;
 
+                if (updateTop)
+                    vSucc = getLeftMostContinuation(graph[v], pred, v);
+                else
+                    vSucc = getRightMostContinuation(graph[v], pred, v);
+                /*
                 for ( vector<Vertex>::const_iterator it = candidates.begin(); it != candidates.end(); it++)
                 {
+                    if (vv == v)
+                        cout << "candidate " << *it << endl;
                     if (*it == pred) continue;
-                    if (it->get_x() > v.get_x()) continue; // otherwise polygon would get a second END-vertex, but each polygon can only have one
+                    //if (it->get_x() > v.get_x()) continue; // otherwise polygon would get a second END-vertex, but each polygon can only have one
                     
                     if (!hasSucc)
                     {
@@ -404,11 +412,11 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
                             (!updateTop && (it->get_y() > vSucc.get_y())))
                             vSucc = *it;
                     }
-                }
+                }*/
             }
-            assert(hasSucc);
+            //assert(hasSucc);
             //cout << "\t\tfound "<< vSucc << endl;
-
+            assert(*it != v);
             if (updateTop)
                 top = vSucc;
             else
@@ -416,8 +424,9 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
             
         }
         chain.push_back(top);   //add the final vertex, top == bottom
-        chain.push_front(top);  //... and duplicate it to mark it as a closes polygon
+        chain.push_front(top);  //... and duplicate it to mark it as a closed polygon
         
+        cout << "\tclosed polygon with vertex " << top << endl;
         VertexChain c(chain);
         c.canonicalize();
         //std::cout << c.isClockwise() << endl;
@@ -598,6 +607,12 @@ map<Vertex, vector<Vertex> > toGraph(const VertexChain &chain, const list<LineSe
         graph[it->start].push_back(it->end);
         graph[it->end].push_back(it->start);
     }
+
+//
+    //assert( graph.count(v));
+    //for ( vector<Vertex>::const_iterator it = graph[v].begin(); it != graph[v].end(); it++)
+    //    cout << "*" << *it << endl;
+    //assert(false);
     return graph;
 }
 

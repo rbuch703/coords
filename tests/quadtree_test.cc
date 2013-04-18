@@ -42,10 +42,10 @@ int main(int, char** )
     
     moveIntersectionsToIntegerCoordinates3(segs);
     TEST( intersectionsOnlyShareEndpoint(segs) );
-    map<Vertex,set<Vertex> > graph = getConnectivityGraph(segs);
+    map<Vertex,vector<Vertex> > graph = getConnectivityGraph(segs);
     
     int numEdges = 0;
-    for (map<Vertex,set<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
+    for (map<Vertex,vector<Vertex>>::const_iterator it = graph.begin(); it != graph.end(); it++)
     {
 /*           for (set<Vertex>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++)
                 cout << "#\t" << it->first << "," << *it2 << endl;

@@ -15,7 +15,7 @@ gl_test
 tests/arithmetic_test
 tests/geometry_test
 tests/quadtree_test
-tests/triangulation
+tests/triangulation_test
 
 #ignore compiled objects
 *.o
