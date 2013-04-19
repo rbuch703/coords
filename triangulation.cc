@@ -343,7 +343,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
         Vertex top =  dist > 0 ? v2 : v1;
         Vertex bottom=dist > 0 ? v1 : v2;
 
-        cout << "starting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
+        //cout << "starting at vertex " << *it << ", top: " << top << ", bottom: " << bottom << endl;
         
         while (top != bottom)
         {
@@ -426,7 +426,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
         chain.push_back(top);   //add the final vertex, top == bottom
         chain.push_front(top);  //... and duplicate it to mark it as a closed polygon
         
-        cout << "\tclosed polygon with vertex " << top << endl;
+        //cout << "\tclosed polygon with vertex " << top << endl;
         VertexChain c(chain);
         c.canonicalize();
         //std::cout << c.isClockwise() << endl;
@@ -441,6 +441,10 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
 list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
 {
     assert( chain.data().front() == chain.data().back());
+    /*cout << "=======================" << endl;
+    for (uint64_t i = 0; i < chain.data().size(); i++)
+        cout << "* " << chain.data()[i] << endl;*/
+        
     vector<Vertex> verts(chain.data());
     verts.pop_back();
     
@@ -459,7 +463,7 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
         //cout << "handling event " << ev << endl;
         switch (ev.type)
         {
-            case START: 
+            case START:
             {
                 assert ( ev.succ.pseudoDistanceToLine(ev.pred, ev.pos) > 0);
                 status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
@@ -468,18 +472,18 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
             }
             case END: 
             {
-                EdgeContainer e = status.findAdjacentEdge(ev.pos.get_x(), ev.pos.get_y());
+                LineSegment e = status.getEdgeLeftOf(ev.pos);
 #ifndef NDEBUG
                 if (ev.succ.get_x() == ev.pos.get_x())
                     /* in this edge case the status edge would have to be a horizontal one, which the status BBST cannot deal with.
                      * As a work-around, the horizontal edge was therefore replaced by a dummy edge that passes through the vertex
                      * that caused the previous event (the successor in clockwise vertex order) */
-                    assert( e->m_Data.start == ev.succ || e->m_Data.end == ev.succ);
+                    assert( e.start == ev.succ || e.end == ev.succ);
                 else
-                    assert( e->m_Data.start == ev.pos  || e->m_Data.end == ev.pos);
+                    assert( e.start == ev.pos  || e.end == ev.pos);
 #endif
-                helpers.erase( e->m_Data);
-                status.remove( e->m_Data, ev.pos.get_x());
+                helpers.erase( e);
+                status.remove( e, ev.pos.get_x());
                 
                 break;
             }
@@ -732,6 +736,13 @@ ostream& operator<<(ostream &os, TriangulationVertex v)
 static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> &bottomChain, vector<int32_t> &res)
 {
     //cout << topChain.size() << ";" << bottomChain.size() << endl;
+    /*cout << "topChain:" << endl;
+    for (uint64_t i = 0; i < topChain.size(); i++)
+        cout << topChain[i] << endl;
+        
+    cout << "bottomChain:" << endl;
+    for (uint64_t i = 0; i < bottomChain.size(); i++)
+        cout << bottomChain[i] << endl;*/
     
     //vector<int32_t> res;
     assert(topChain.front() == bottomChain.front() );
@@ -739,6 +750,7 @@ static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> 
     assert(topChain.size() >= 2 && bottomChain.size() >= 2);
     
     vector<TriangulationVertex> stack;  //is mostly used as a stack, but we need access to the up to three most recent elements
+    //cout << "pushing start vertex " << topChain[0] << endl;
     stack.push_back( TriangulationVertex( topChain[0], true));    // == bottomChain[0]
     Vertex final = topChain.back(); //==botomChain.back(); must be handled individually, because it belongs to both chains at the same time
     topChain.pop_back();
@@ -751,6 +763,7 @@ static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> 
         stack.push_back( TriangulationVertex( topChain[i1++], true));
     else
         stack.push_back( TriangulationVertex( bottomChain[i2++], false));
+    //cout << "pushing " << stack.back() << endl;
 
     //cout << stack[0] << endl;
     //cout << stack[1] << endl;
@@ -764,16 +777,25 @@ static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> 
         assert(stack.size() >= 2);
         if ( stack.back().onTopChain == vNext.onTopChain)
         {
+            //cout << "pushing " << vNext << ", stack size is " << stack.size() << endl;
             stack.push_back( vNext );
             while ( stack.size() >= 3)
             {
                 uint64_t num = stack.size();
-                assert( stack[num-1].onTopChain == stack[num-2].onTopChain);
-                bool onTop = stack[num-1].onTopChain;
+                assert( stack.back().onTopChain == stack[num-2].onTopChain);
+                bool onTop = stack.back().onTopChain;
                 BigInt dist = stack[num-3].vertex.pseudoDistanceToLine(stack[num-2].vertex, stack[num-1].vertex);
-                if (dist == 0)
-                    cout << "\t" << stack[num-3] << "\n\t" << stack[num-2] << "\n\t" << stack[num-3] << endl;
-                assert(dist != 0 && "colinear vertices");
+                
+                if (dist == 0) 
+                {
+                    /* last two elements from one side, and last element from other side are colinear --> would form a degenerate triangle
+                     * instead, just drop that triangle (remove the last but one element from the first side) and continue as if the 
+                     * triangle had been output. */
+                    stack[num-2] = stack[num-1];
+                    stack.pop_back();
+                    //cout << "\t" << stack[num-3] << "\n\t" << stack[num-2] << "\n\t" << stack[num-1] << endl;
+                    //assert(dist != 0 && "colinear vertices");
+                } else
                 if ( (onTop && dist < 0)|| (!onTop && dist > 0) ) // form a triangle inside the polygon --> output the triangle and remove it from the stack
                 {
                     addTriangle( res, stack[num-3].vertex, stack[num-2].vertex, stack[num-1].vertex);
@@ -789,6 +811,9 @@ static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> 
 
             TriangulationVertex topOfStack = stack.back();
             stack.clear();
+            //cout << " === clearing stack === " << endl;
+            //cout << "pushing " << topOfStack << endl;
+            //cout << "pushing " << vNext << endl;
             stack.push_back(topOfStack);
             stack.push_back(vNext);   
         }
@@ -862,7 +887,8 @@ vector<int32_t> triangulate( const VertexChain &c)
     static int i = 0;
     i++;
     cout << "triangulating polygon " << i << endl;
-    if (i == 22)
+    #warning debug code
+    if (i == 7143)
     {
         FILE* f = fopen("poly.bin", "wb");
         BOOST_FOREACH( Vertex v, c.data())
@@ -876,7 +902,7 @@ vector<int32_t> triangulate( const VertexChain &c)
         
         cout << c << endl;
     }
-    if (c.size() > 100)
+    if (c.size() > 1000)
         cout << "triangulating a polygon with " << c.size() << " vertices" << endl;
 
     vector<int32_t> res;
@@ -884,8 +910,8 @@ vector<int32_t> triangulate( const VertexChain &c)
     BOOST_FOREACH( const VertexChain &chain, polys)
         triangulateMonotonePolygon(chain, res);
         
-    if (c.size() > 100)
-        cout << "\t ... took" << (getWallTime() - t)  << "seconds" << endl;
+    if (c.size() > 1000)
+        cout << "\t ... took" << (getWallTime() - t)  << " seconds" << endl;
 
     return res;
 }

@@ -283,8 +283,8 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
     uint64_t num_self_closed = 0;
     while (! feof(src))
     {
-        //if (++idx % 1 == 0) 
-        std::cout << ++idx << " ways read, " << std::endl;
+        if (++idx % 1000 == 0) 
+            std::cout << (idx/1000) << "k ways read, " << std::endl;
         int i = fgetc(src);
         if (i == EOF) break;
         ungetc(i, src);
