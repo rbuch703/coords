@@ -7,27 +7,33 @@
 #include <stdint.h>
 #include <vector>
 
-vector<int32_t> triangulate( const VertexChain &c);
+vector<int32_t> triangulate( VertexChain &c);
 
 // =====================================================
 // everything below this line is only exposed for debug purposes
 
-list<VertexChain> toMonotonePolygons( const VertexChain &chain);
+list<VertexChain> toMonotonePolygons( VertexChain &chain);
 void triangulateMonotonePolygon( const VertexChain &monotone_polygon, vector<int32_t> &res);
-list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain);
+list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain);
 
 enum EventType { START, END, SPLIT, MERGE, REGULAR };
 
 class SimpEvent
 {
 public:
-    SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id, EventType p_type);
+    //SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id, EventType p_type);
+    SimpEvent( Vertex p_pred, Vertex p_pos, Vertex p_aux, Vertex p_succ, bool p_isShared, EventType p_type);
     
     bool operator==(const SimpEvent & other) const;
     bool operator!=(const SimpEvent & other) const;
     bool operator <(const SimpEvent & other) const;
 public:
-    Vertex pos, pred, succ;
+    /* for single-vertex events: the event's position, and the associated predecessor and successor; aux is unused
+     * for vertex pair events: the event's position, its neighbor with identical x-value (aux), 
+     * and the predecessor and successor of that vertex pair.*/
+    Vertex pred, pos, aux, succ;
+    // whether the event consists of two adjacent vertices with identical x-values
+    bool isShared; 
     EventType type;
 };
 
@@ -46,16 +52,18 @@ public:
             Vertex pos(  polygon[ i]);
             Vertex pred( polygon[ (i + polygon.size() -1) % polygon.size() ]);
             Vertex succ( polygon[ (i                 + 1) % polygon.size() ]);
-            assert( (pred.get_x() != pos.get_x()) || (succ.get_x() != pos.get_x() ));
+            assert( (pred.x != pos.x) || (succ.x != pos.x ));
             
-            if (pred.get_x() == pos.get_x()) continue;  //already handled as a pair
-            if (succ.get_x() == pos.get_x())            //handled as pair edge case
+            if (pred.x == pos.x) continue;  //already handled as a pair
+            if (succ.x == pos.x)            //handle as 'pair' edge case
             {
-                pair<EventType, EventType> events = classifyPair( polygon, i);
-                insert( SimpEvent( polygon, i,   events.first ));
-                insert( SimpEvent( polygon, i+1, events.second));
+                Vertex succ2 = polygon[ (i + 2) % polygon.size()];
+
+                EventType event = classifyPair( pred, pos, succ, succ2);
+                insert( SimpEvent( pred, pos, succ, succ2, true, event ));
+                //insert( SimpEvent( polygon, i+1, events.second));
             } else
-                insert( SimpEvent(polygon, i, classifyVertex(polygon, i)));
+                insert( SimpEvent(pred, pos, Vertex(0,0), succ, false, classifyVertex(polygon, i)));
         }
 
         
@@ -88,45 +96,31 @@ private:
       */
     //TODO: change to direct vertex data access (non-int128_t)
       
-    pair<EventType,EventType> classifyPair(const vector<Vertex> &vertices, uint64_t vertex_id)
+    EventType classifyPair(Vertex pred, Vertex pos1, Vertex pos2, Vertex succ)
     {
-        assert(vertices.front() != vertices.back());
-        Vertex pred = vertices[ (vertex_id + vertices.size() - 1) % vertices.size()];
-        Vertex pos1 = vertices[  vertex_id];
-        Vertex pos2 = vertices[ (vertex_id                   + 1) % vertices.size()];
-        Vertex succ = vertices[ (vertex_id                   + 2) % vertices.size()];
-        
-        assert(pos1.get_x() == pos2.get_x());
-        assert(pos1.get_y() != pos2.get_y());
-        assert(pred.get_x() != pos1.get_x());
-        assert(pos2.get_x() != succ.get_x());
-        
-        /* if two subsequent vertices:
-         * - form a REGULAR vertex: --> make both regular
-         * - form a START vertex: the one that will occur earlier in the event queue has to be the START vertex (to start the "compartment"); other: REGULAR
-         * - form a SPLIT vertex: the vertex with the earlier (= smaller y-value) event must be the SPLIT vertex to open the new compartment; other: REGULAR
-         * - form a END vertex: the one that will occur later in the event queue has to be the END vertex (so that the compartment's final vertex closes it); other: REGULAR
-         * - form a MERGE vertex: the vertex with the later event must be the MERGE vertex so that the last vertex closes the compartment
-         */
+        assert(pos1.x == pos2.x);
+        assert(pos1.y != pos2.y);
+        assert(pred.x != pos1.x);
+        assert(pos2.x != succ.x);
         
         if ( ((pred.get_x() < pos1.get_x()) && (succ.get_x() > pos1.get_x())) ||
              ((pred.get_x() > pos1.get_x()) && (succ.get_x() < pos1.get_x()))) 
-            return pair<EventType, EventType>( REGULAR, REGULAR);
+            return REGULAR;
         else if (pred.get_x() < pos1.get_x() && succ.get_x() < pos1.get_x()) // MERGE or END
         {
             if (pos1.get_y() < pos2.get_y())
-                return pair<EventType, EventType>( REGULAR, MERGE);
+                return MERGE;
             else 
-                return pair<EventType, EventType>( END, REGULAR);   //pos1 is the later event (= higher y-value) vertex
+                return END;
         } else if ((pred.get_x() > pos1.get_x()) && (succ.get_x() > pos1.get_x())) // START or SPLIT
         {
             if (pos1.get_y() < pos2.get_y())
-                return pair<EventType, EventType>( START, REGULAR);
+                return START;
             else
-                return pair<EventType, EventType>( REGULAR, SPLIT); //pos2 is the earlier event (= lower y-value) vertex
+                return SPLIT;
         } else assert(false);
         
-        return pair<EventType, EventType>( REGULAR, REGULAR); //dummy
+        return REGULAR; //dummy
     }
 
     //TODO: change to direct vertex data access (non-int128_t)

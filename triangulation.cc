@@ -13,13 +13,11 @@
 #include <list>
 
 
-SimpEvent::SimpEvent( const vector<Vertex> &vertices, uint64_t vertex_id, EventType p_type): 
-        pos(  vertices[  vertex_id]), 
-        pred( vertices[ (vertex_id + vertices.size() -1) % vertices.size() ]), 
-        succ( vertices[ (vertex_id                  + 1) % vertices.size() ]),
-        type(p_type)
+SimpEvent::SimpEvent( Vertex p_pred, Vertex p_pos, Vertex p_aux, Vertex p_succ, bool p_isShared, EventType p_type): 
+        pred( p_pred), pos(  p_pos), aux(  p_aux), succ( p_succ), isShared(p_isShared), type(p_type)
 {
-    assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
+    assert ( isShared ? (pos.get_x() == aux.get_x()) : p_aux == Vertex(0,0)  );
+    //assert( (vertices.front() != vertices.back()) && "For this algorithm, the duplicate back vertex must have been removed");
     //cout << "creating event " << pred << "/" << pos << "/" << succ << endl;
 }
     
@@ -37,8 +35,9 @@ ostream &operator<<( ostream &os, SimpEvent ev)
         case SPLIT:  os << "SPLIT";  break;
         case MERGE:  os << "MERGE";  break;
         case REGULAR:os << "REGULAR";break;
+        default: assert(false); break;
     }
-    os << " " << ev.pred <<" / *" << ev.pos << "* / " << ev.succ;
+    os << " *" << ev.pos << "* : " << ev.pred <<" [" << ev.aux << "] " << ev.succ;
     return os;
 }
 
@@ -190,14 +189,14 @@ public:
     
     void remove(LineSegment item, const BigInt xPos)
     {
-        //cout << "removing edge " << item << endl;
+        //cout << "\tremoving edge " << item << " at x= " << xPos << endl;
     
         assert( item.start.get_x() <= item.end.get_x());
-#ifndef NDEBUG
+/*#ifndef NDEBUG
         #warning expensive debug checks (that change the time complexity)
         for (const_iterator it = this->begin(); it != end(); it++)
             assert( it->start.get_x() <= xPos && it->end.get_x() >= xPos && "line arrangement contains outdated edge");
-#endif
+#endif*/
 
         AVLTreeNode<LineSegment> *node = findPos(item, xPos);
         assert( node && "Node to be removed does not exist");
@@ -250,7 +249,7 @@ public:
     
     EdgeContainer insert(const LineSegment &item, BigInt xPos)
     {
-        //cout << "inserting edge " << item << endl;
+        //cout << "\tinserting edge " << item << " at x=" << xPos << endl;
         
         // Must not be equal because LineArrangement internally sorts these lines by x-coordinate
         // and a segment with identical x-values at its entpoints does not have a unique x coordinate.
@@ -258,11 +257,11 @@ public:
         // with a smaller x-coordinate than the end. This reduced the numbers of necessary checks elsewhere
         assert( item.start.get_x() < item.end.get_x());
     
-#ifndef NDEBUG
+/*#ifndef NDEBUG
         #warning expensive debug checks (that change the time complexity)
         for (LineArrangement::const_iterator it = begin(); it != end(); it++)
             assert( it->start.get_x() <= xPos && it->end.get_x() >= xPos && "line arrangement contains outdated edge");
-#endif
+#endif*/
     
         EdgeContainer parent = findParent(item, xPos);
         
@@ -365,10 +364,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
             
             assert(graph[v].size() > 1); //at least 2 edges from the original polygon, potentially additional ones from diagonals
             Vertex vSucc;
-            //bool hasSucc = false;
 
-            //Vertex vv(553921153, 128774301);
-            //cout << "nNeighbors " << graph[vv].size() << endl;
             if (graph[v].size() == 2)
             {
                 Vertex next1 = graph[v][0];
@@ -376,46 +372,11 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
                 assert( (next1 == pred) != (next2 == pred)); //exactly one of the connected vertices has to be the predecessor
                 vSucc = (next1 == pred) ? next2 : next1;
             } else
-            {
-                //vector<Vertex> &candidates = ;
+                vSucc = updateTop ? getLeftMostContinuation(graph[v], pred, v):
+                                   getRightMostContinuation(graph[v], pred, v);
 
-                if (updateTop)
-                    vSucc = getLeftMostContinuation(graph[v], pred, v);
-                else
-                    vSucc = getRightMostContinuation(graph[v], pred, v);
-                /*
-                for ( vector<Vertex>::const_iterator it = candidates.begin(); it != candidates.end(); it++)
-                {
-                    if (vv == v)
-                        cout << "candidate " << *it << endl;
-                    if (*it == pred) continue;
-                    //if (it->get_x() > v.get_x()) continue; // otherwise polygon would get a second END-vertex, but each polygon can only have one
-                    
-                    if (!hasSucc)
-                    {
-                        hasSucc = true;
-                        vSucc = *it;
-                        continue;
-                    }
-                    
-                    BigInt dist = it->pseudoDistanceToLine(v , vSucc);
-                    if (!updateTop) dist = -dist;   //top vertex chain needs leftmost continuation, bottom chain needs rightmost continuation
-                    
-                    if (dist < 0)
-                    {
-                        vSucc = *it;
-                    } else if (dist == 0)   //edge case: current vertex and two possible successors lie on a single line
-                    {
-                        assert( (vSucc.get_x() == v.get_x()) && (it->get_x() == v.get_x()));
-                        
-                        if ( (updateTop && (it->get_y() < vSucc.get_y())) ||
-                            (!updateTop && (it->get_y() > vSucc.get_y())))
-                            vSucc = *it;
-                    }
-                }*/
-            }
             //assert(hasSucc);
-            //cout << "\t\tfound "<< vSucc << endl;
+            //cout << "\t\tfound " << ( updateTop ? "top" : "bottom")<< vSucc << endl;
             assert(*it != v);
             if (updateTop)
                 top = vSucc;
@@ -438,9 +399,10 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
 }
 
 
-list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
+list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
 {
     assert( chain.data().front() == chain.data().back());
+    assert( chain.isClockwise());
     /*cout << "=======================" << endl;
     for (uint64_t i = 0; i < chain.data().size(); i++)
         cout << "* " << chain.data()[i] << endl;*/
@@ -465,7 +427,7 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
         {
             case START:
             {
-                assert ( ev.succ.pseudoDistanceToLine(ev.pred, ev.pos) > 0);
+                //assert ( ev.succ.pseudoDistanceToLine(ev.pred, ev.pos) > 0);
                 status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
                 helpers.insert( pair<LineSegment, Vertex>( LineSegment(ev.pos, ev.pred), ev.pos));
                 break;
@@ -473,15 +435,9 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
             case END: 
             {
                 LineSegment e = status.getEdgeLeftOf(ev.pos);
-#ifndef NDEBUG
-                if (ev.succ.get_x() == ev.pos.get_x())
-                    /* in this edge case the status edge would have to be a horizontal one, which the status BBST cannot deal with.
-                     * As a work-around, the horizontal edge was therefore replaced by a dummy edge that passes through the vertex
-                     * that caused the previous event (the successor in clockwise vertex order) */
-                    assert( e.start == ev.succ || e.end == ev.succ);
-                else
-                    assert( e.start == ev.pos  || e.end == ev.pos);
-#endif
+                assert( e.end == (ev.isShared ? ev.aux : ev.pos));
+                 //e.start == ev.pos  || e.end == ev.pos);
+
                 helpers.erase( e);
                 status.remove( e, ev.pos.get_x());
                 
@@ -491,26 +447,31 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
             {
                 LineSegment edge = status.getEdgeLeftOf( ev.pos);
                 assert( helpers.count( edge ));
-                assert(helpers[edge].get_x() <= ev.pos.get_x());
-                newDiagonals.push_back( LineSegment( helpers[edge], ev.pos ));
+                assert( helpers[edge].get_x() <= ev.pos.get_x());
+
+                assert( !ev.isShared || (ev.pos.y > ev.aux.y) );
                 
-                helpers[edge] = ev.pos;
+                /* The diagonal needs to end at the left-most (lower y-value) of the two (pos, aux) vertices:
+                   For the general case (helper has lower x-value), any of the two would do. But for the edge case
+                   that the helper has identical x-value and 'pos' and 'aux', the new diagonal for the helper must end
+                   at the first of {pos, aux} that it encounters; otherwise the resulting graph would be inconsistent.
+                   Since the helper has to be lexicographically smaller than the event (otherwise its event would occur 
+                   after this one and thus he would not yet be a helper), in has to have smaller y-value than both 
+                   'pos' and 'aux' if all share a common x-value. Since of 'pos' and 'aux', 'aux' always has the smaller
+                   y-value for SPLIT events (checked via assertion above), 'aux' is the first vertex encountered 
+                   when starting from the helper. */
+                Vertex vLeft = ev.isShared ? ev.aux : ev.pos;
+                newDiagonals.push_back( LineSegment( helpers[edge], vLeft));
+
+                helpers[edge] = vLeft;
                 
-                if (ev.pos.get_x() == ev.pred.get_x())  //edge case: status would be a horizontal line, which LineArrangement can't handle
-                {
-                    //workaround for degenerate case: insert a dummy edge into 'status'
-                    //since the next event necessarily has to be the REGULAR event at ev.pred,
-                    //the dummy will not be accessed and will be replaced by the REGULAR event
-                    LineSegment dummy_edge = LineSegment( Vertex(ev.pos.get_x()-1, ev.pos.get_y()), ev.pos);
-                    status.insert( dummy_edge, ev.pos.get_x() );
-                    helpers.insert( pair<LineSegment, Vertex>( dummy_edge, Vertex(0,0)) );
-                    
-                } else
-                {
-                    assert ( ev.pred.pseudoDistanceToLine(ev.succ, ev.pos) > 0);
-                    status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
-                    helpers.insert( pair<LineSegment, Vertex>( LineSegment(ev.pos, ev.pred), ev.pos));
-                }
+                //assert ( ev.pred.pseudoDistanceToLine(ev.succ, ev.pos) > 0);
+                status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
+                /* Following the same argument as above, the helper needs to be the right-most of {pos,aux}: 
+                   In the edge case that pos, aux and a lexicographically *bigger* other SPLIT event share an 
+                   x-value, the new diagonal will be between a position right of {pos, aux} and thus has to end
+                   at 'pos' (and not pass through it to end at 'aux') */
+                helpers.insert( pair<LineSegment, Vertex>( LineSegment(ev.pos, ev.pred), ev.pos));
                 break;
             }
             case MERGE:
@@ -520,63 +481,60 @@ list<LineSegment> createEndMonotoneDiagonals( const VertexChain &chain)
                                  This will be a 'status' edge that (in non-degenerate cases) ends at ev.pos
                               2. set ev.pos as the new helper for the 'status' edge of the left sub-range (now the complete range)
                                  as ev.pos is not the knwon vertex with the highest x-value inside the range */
-                assert( ev.succ.pseudoDistanceToLine( ev.pos, ev.pred) > 0);
+                //assert( ev.succ.pseudoDistanceToLine( ev.pos, ev.pred) > 0);
                 
-                Vertex incidentAt = ev.succ.get_x() != ev.pos.get_x() ?
-                    ev.pos : ev.succ; /*edge case: if ev.pos and ev.succ have a common x-value, then ev.pos will be 
-                                                   the MERGE event, but the status edge will be incident to ev.succ */
+                assert( !ev.isShared || ( ev.pos.y < ev.aux.y ));
                 
-                LineSegment leftEdge = status.getEdgeLeftOf(incidentAt);
-                assert( leftEdge.end == incidentAt );
+                Vertex vRightMost = ev.isShared ? ev.aux : ev.pos;
+                LineSegment rightEdge = status.getEdgeLeftOf(vRightMost);
+                //cout << "right edge is " << rightEdge << endl;
+                assert( rightEdge.end == vRightMost );
                 
-                //assert ( status.findPos( leftEdge, ev.pos.get_x() ) );
-                status.remove( leftEdge, ev.pos.get_x() );
-                assert( helpers.count(leftEdge) );
-                helpers.erase( leftEdge);
+                status.remove( rightEdge, ev.pos.x );
+                assert( helpers.count(rightEdge) );
+                helpers.erase( rightEdge );
 
-                LineSegment edge = status.getEdgeLeftOf( ev.pos);
+
+                Vertex vLeftMost = ev.isShared ? ev.aux : ev.pos;
+                LineSegment edge = status.getEdgeLeftOf( vLeftMost );
                 assert( helpers.count(edge));
-                helpers[edge] = ev.pos;
+                /* helper needs to be the right-most of {pos, aux} for degenerate cases where the next SPLIT event also 
+                 * has the same x-value (and higher y-value). */
+                helpers[edge] = vRightMost; 
                 break;
             }
-            case REGULAR: //TODO: replace "REGULAR" event by distinct REGULAR_POLY_LEFT und REGULAR_PLY_RIGHT events.
+            case REGULAR: //TODO: replace "REGULAR" event by distinct REGULAR_POLY_LEFT und REGULAR_PoLY_RIGHT events.
+                Vertex &pred = ev.pred;
+                Vertex &succ = ev.succ;
+                Vertex &pos  = ev.pos;
                 
-                // ensure that colinearities have been removed (e.g. by a prior call to canonicalize())
-                assert(  (ev.pred.get_x() != ev.pos.get_x() || ev.succ.get_x() != ev.pos.get_x()) && "Colinear vertices"); 
-                if        (ev.pred.get_x() >= ev.pos.get_x() && ev.succ.get_x() <= ev.pos.get_x())
-                {   //pred below succ (and polygon is clockwise) --> polygon must be *right* of REGULAR vertex
-                    if ( ev.pred.get_x() == ev.pos.get_x() && ev.succ.get_x() < ev.pos.get_x() )
-                    {   //edge case: predecessor has identical x value, but successor does not
-                        //resolution: do nothing, status and helper are still valid
-                    } else
-                    {   
-                        Vertex prev_status_end = 
-                        /* edge case: predecessor has higher x value, but successor does not --> always happens
-                         *            at the vertex right after the previous case, i.e. the status ends at the 'succ' vertex*/
-                            ( ev.pred.get_x() > ev.pos.get_x() && ev.succ.get_x() == ev.pos.get_x() ) ?
-                            ev.succ : ev.pos;
-                            
-                        EdgeContainer e = status.findAdjacentEdge( prev_status_end );
-                        assert (e && (e->m_Data.end == prev_status_end));
-                        assert (helpers.count(e->m_Data));
-                        helpers.erase( e->m_Data);
-                        status.remove( e->m_Data, prev_status_end.get_x());
-                        
-                        LineSegment newEdge( ev.pos, ev.pred);
-                        status.insert( newEdge, ev.pos.get_x() );
-                        helpers.insert( pair<LineSegment, Vertex>( newEdge, ev.pos));
-                    }
-                } else if (ev.pred.get_x() <= ev.pos.get_x() && ev.succ.get_x() >= ev.pos.get_x() )
-                {   //pred above succ (and polygon is clockwise) --> polygon must be *left* of REGULAR vertex
-                    //assert (ev.pred.get_x() != ev.pos.get_x() && ev.succ.get_x() != ev.pos.get_x() && "Not Implemented");
-                    Vertex newHelper = ( ev.pos.get_x() == ev.succ.get_x()) ? ev.succ : ev.pos;
-                    
-                    LineSegment edge = status.getEdgeLeftOf( newHelper );
-                    
-                    assert( helpers.count(edge));
-                    helpers[edge] = newHelper;
+                assert(  (pred.x != pos.x || succ.x != pos.x) && "Colinear vertices"); 
+
+                bool isPolyRightOfEvent = (ev.pred.x >= ev.pos.x && ev.pos.x >= ev.succ.x);
                 
-                } else assert(false);
+                if (isPolyRightOfEvent)
+                {
+                    //cout << "\tPolygon is right of vertex." << endl;
+                    LineSegment oldEdge = status.getEdgeLeftOf( ev.isShared ? ev.aux : ev.pos );
+                    assert (oldEdge.end == (ev.isShared ? ev.aux :ev.pos) );
+                    assert (helpers.count(oldEdge));
+                    helpers.erase(oldEdge);
+                    status.remove(oldEdge, ev.pos.x);
+                    
+                    LineSegment newEdge(ev.pos, ev.pred);
+                    status.insert( newEdge, ev.pos.x);
+                    Vertex rightMost = !ev.isShared || (ev.pos.y > ev.aux.y) ? ev.pos : ev.aux;
+                    helpers.insert( pair<LineSegment, Vertex>( newEdge, rightMost));
+                } else
+                {
+                    //cout << "\tPolygon is left of vertex." << endl;
+                    assert( ev.succ.x >= ev.pos.x && ev.pos.x >= ev.pred.x );
+                    Vertex leftMost = !ev.isShared || (ev.pos.y < ev.aux.y) ? ev.pos : ev.aux;
+                    LineSegment leftEdge = status.getEdgeLeftOf(ev.pos);
+                    assert(helpers.count(leftEdge));
+                    helpers[leftEdge] = leftMost;
+                }
+
                 break;
         }
     }
@@ -638,7 +596,7 @@ vector<Vertex> getEndVertices(const VertexChain &chain)
     return res;
 }
 
-list<VertexChain> toMonotonePolygons( const VertexChain &chain)
+list<VertexChain> toMonotonePolygons( VertexChain &chain)
 {
     if (chain.size() == 4) //triangle
     {
@@ -668,8 +626,30 @@ list<VertexChain> toMonotonePolygons( const VertexChain &chain)
     list<VertexChain> res;
     for ( list<VertexChain>::iterator poly = polygons.begin(); poly != polygons.end(); poly++)
     {
+        /*
         static int i = 0;
         i++;
+        cout << "processing sub-polygon: " << i << endl;
+        cout << *poly << endl;
+        cout << "=========================" << endl;
+        
+        if (i == 4)
+        {
+            FILE* f = fopen("poly.bin", "wb");
+            BOOST_FOREACH( Vertex v, poly->data())
+            {
+                int32_t i = (int32_t)v.get_x();
+                fwrite( &i, sizeof(i), 1, f);
+                i = (int32_t)v.get_y();
+                fwrite( &i, sizeof(i), 1, f);
+            }
+            fclose(f);
+            
+            //cout << c << endl;
+        }
+        */
+        
+        
         assert(poly->size() > 3);
         assert(poly->data().front() == poly->data().back());
         if (poly->size() == 4) // edge case: is a triangle (with duplicte end vertex), no further subdivision necessary
@@ -881,14 +861,16 @@ void triangulateMonotonePolygon( const VertexChain &monotone_polygon, vector<int
     return triangulateMonotoneChains(chain1, chain2, res);
 }
 
-vector<int32_t> triangulate( const VertexChain &c)
+vector<int32_t> triangulate(  VertexChain &c)
 {
-    double t = getWallTime();
+    assert(c.isClockwise());
+
+    /*
     static int i = 0;
     i++;
     cout << "triangulating polygon " << i << endl;
     #warning debug code
-    if (i == 7143)
+    if (i == 59774)
     {
         FILE* f = fopen("poly.bin", "wb");
         BOOST_FOREACH( Vertex v, c.data())
@@ -901,17 +883,22 @@ vector<int32_t> triangulate( const VertexChain &c)
         fclose(f);
         
         cout << c << endl;
-    }
-    if (c.size() > 1000)
+    }*/
+    double t = 0;
+    
+    if (c.size() > 5000)
+    {
+        t = getWallTime();
         cout << "triangulating a polygon with " << c.size() << " vertices" << endl;
+    }
 
     vector<int32_t> res;
-    list<VertexChain> polys = toMonotonePolygons (c.data());
+    list<VertexChain> polys = toMonotonePolygons (c);
     BOOST_FOREACH( const VertexChain &chain, polys)
         triangulateMonotonePolygon(chain, res);
         
-    if (c.size() > 1000)
-        cout << "\t ... took" << (getWallTime() - t)  << " seconds" << endl;
+    if (c.size() > 5000)
+        cout << "\t ... took " << (getWallTime() - t)  << " seconds" << endl;
 
     return res;
 }

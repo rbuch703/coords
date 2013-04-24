@@ -18,6 +18,8 @@ using namespace std;
 
 class QuadTreeNode;
 class MonotonizeEventQueue;
+class LineSegment;
+class VertexChain;
 //enum EventType;
 
 /* there may be hundreds of millions of vertices in memory at a given time, so
@@ -55,6 +57,7 @@ private:
     friend struct AABoundingBox;
     friend class QuadTreeNode;
     friend class MonotonizeEventQueue;
+    friend list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain);
 //    friend EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id);
 };
 

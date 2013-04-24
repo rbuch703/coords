@@ -101,14 +101,25 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
     //cairo_translate( cr, -553625894, +128060048+80*20000);
     
 
+    static const double M_PI = 3.141592;
 
     cairo_set_line_width (cr, 0.1);
 
     cairo_rectangle(cr,1, 200-1, 1, -1);
     
     cairo_stroke(cr);
+
+    cairo_set_source_rgb(cr, 1,0,1);
+    for (uint64_t i = 0; i < verts.size(); i++)
+    {
+        //cairo_arc(cr, asDouble(event.pos.get_x()), -asDouble( event.pos.get_y() ), 1/*/scale*/, 0, 2 * M_PI); 
+        
+        cairo_arc(cr, PROJECT(verts[i]),0.5, 0, 2 * M_PI); 
+        cairo_fill(cr);
+    }
+
     
-    cairo_set_line_width (cr, 0.2);
+    //cairo_set_line_width (cr, 0.2);
     while (events.size() != 0)
     {
         SimpEvent event = events.pop();
@@ -123,9 +134,8 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
             case MERGE:  cairo_set_source_rgb(cr, 0,1,0); break;
             case REGULAR:cairo_set_source_rgb(cr, .2,.2,.2); break;
         }
-        static const double M_PI = 3.141592;
         //cairo_arc(cr, asDouble(event.pos.get_x()), -asDouble( event.pos.get_y() ), 1/*/scale*/, 0, 2 * M_PI); 
-        cairo_arc(cr, PROJECT(event.pos), 0.5/*/scale*/, 0, 2 * M_PI); 
+        cairo_arc(cr, PROJECT(event.pos),0.5, 0, 2 * M_PI); 
         cairo_fill_preserve (cr);
         
         //cairo_arc(cr, asDouble(event.pos.get_x()), -asDouble( event.pos.get_y() ), 2000, 0, 2 * M_PI); 
@@ -191,7 +201,7 @@ void cairo_render_triangles(const vector<int32_t> &triangles)//, double shift_x,
     cairo_set_line_width (cr, 0.1);
     cairo_rectangle(cr,1, 200-1, 1, -1);
     cairo_stroke(cr);
-    cairo_set_line_width (cr, 0.2);
+    //cairo_set_line_width (cr, 0.2);
 
     assert(triangles.size() % 6 == 0);
     
@@ -221,10 +231,10 @@ void cairo_render_triangles(const vector<int32_t> &triangles)//, double shift_x,
 int main()
 {
     
-/*
+    /*
     VertexChain p; 
     srand(24);
-    for (int i = 0; i < 500; i++)
+    for (int i = 0; i < 20; i++)
         p.append(Vertex(rand() % 200, rand() % 200));
     p.append(p.front()); //close polygon
 
@@ -233,10 +243,10 @@ int main()
     BOOST_FOREACH( VertexChain c, simples)
         if ( c.size() > poly.size())
             poly = c;
-        
+      
     std::cout << "generated simple polygon with " << (poly.size()-1) << " vertices" << std::endl;
     poly.canonicalize();
-    assert(poly.isClockwise());*/
+    */
     
     VertexChain poly;
     FILE* f = fopen("poly.bin", "rb");
@@ -246,10 +256,15 @@ int main()
         fread(&x, sizeof(x), 1, f);
         fread(&y, sizeof(y), 1, f);
         if (feof(f)) break; //only returns 'true' after the first non-existent byte has been read
+        //#warning debug '-' sign
         poly.append( Vertex(x,y));
         
     }
+    //poly.mirrorX();
+    //poly.reverse();
 
+    list<LineSegment> dummy;
+    createCairoDebugOutput(poly, dummy);
     list<LineSegment> newDiagonals = createEndMonotoneDiagonals(poly);
     //createCairoDebugOutput( poly, newDiagonals, -553625894, +128060048+80*20000, 1/10000.0);
 
@@ -258,7 +273,7 @@ int main()
 
 
     //#warning: TODO: add test cases with very small (3-5 vertices) irregular polygons
-    list<VertexChain> polys = toMonotonePolygons (poly.data());   
+    list<VertexChain> polys = toMonotonePolygons (poly);   
     std::cout << "generated " << polys.size() << " sub-polygons" << endl;
     cairo_render_polygons(polys);
 
