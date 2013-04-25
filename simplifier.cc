@@ -55,12 +55,15 @@ void handlePolygon(string, VertexChain& segment)
     for (list<VertexChain>::iterator it = polys.begin(); it != polys.end(); it = polys.erase(it))
     {
         it->canonicalize();
-        
-        triangulate( *it);
+        if (it->size() < 4) continue;
+        /*{
+            if (!it->isClockwise())
+                it->reverse();
+            triangulate( *it);
+        }*/
         
         if (it->front() != it->back()) continue;
-        if (it->size() < 4) continue;
-        //poly_storage.push_back(*it);
+        poly_storage.push_back(*it);
     }
     
      
@@ -315,6 +318,9 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
     BOOST_FOREACH ( VertexChain s, lst)         
         handlePolygon("output/coast/tmp", s);
     //    poly_storage.push_back(s);
+    
+    clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);
+    
 }
 
 void extractCountries()
@@ -426,5 +432,4 @@ int main()
     //if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
     reconstructCoastline(f);//, poly_storage);
     //cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
-    //clipRecursive( "output/coast/seg", "", poly_storage, -900000000, -1800000000, 900000000, 1800000000);
 }

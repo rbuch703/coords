@@ -39,8 +39,47 @@ double Vertex::distanceToLine(const Vertex &A, const Vertex &B) const
 
 BigInt Vertex::pseudoDistanceToLine(const Vertex &start, const Vertex &end) const
 {
-    return (end.get_x()-start.get_x())*(start.get_y()-get_y()) - (end.get_y()-start.get_y())*(start.get_x()-get_x());
+    int64_t left = ( (int64_t)end.x - (int64_t)start.x) * ( (int64_t)start.y - (int64_t)y);
+    int64_t right= ( (int64_t)end.y - (int64_t)start.y) * ( (int64_t)start.x - (int64_t)x);
+    
+    return ((BigInt)left) - right;
+//    return (end.get_x()-start.get_x())*(start.get_y()-get_y()) - (end.get_y()-start.get_y())*(start.get_x()-get_x());
 }
+
+int Vertex::atSideOfLine(const Vertex &start, const Vertex &end) const
+{
+    int64_t left = ( (int64_t)end.x - (int64_t)start.x) * ( (int64_t)start.y - (int64_t)y);
+    int64_t right= ( (int64_t)end.y - (int64_t)start.y) * ( (int64_t)start.x - (int64_t)x);
+    // res = left - right;
+    if (left > right) return 1;
+    if (left < right) return -1;
+    return 0;
+}
+
+bool Vertex::isOnLine(const Vertex &start, const Vertex &end) const
+{
+    int64_t left = ( (int64_t)end.x - (int64_t)start.x) * ( (int64_t)start.y - (int64_t)y);
+    int64_t right= ( (int64_t)end.y - (int64_t)start.y) * ( (int64_t)start.x - (int64_t)x);
+    // res = left - right;
+    return left == right;
+}
+
+bool Vertex::isLeftOfLine(const Vertex &start, const Vertex &end) const
+{
+    int64_t left = ( (int64_t)end.x - (int64_t)start.x) * ( (int64_t)start.y - (int64_t)y);
+    int64_t right= ( (int64_t)end.y - (int64_t)start.y) * ( (int64_t)start.x - (int64_t)x);
+    // res = left - right;
+    return left < right;
+}
+
+bool Vertex::isRightOfLine(const Vertex &start, const Vertex &end) const
+{
+    int64_t left = ( (int64_t)end.x - (int64_t)start.x) * ( (int64_t)start.y - (int64_t)y);
+    int64_t right= ( (int64_t)end.y - (int64_t)start.y) * ( (int64_t)start.x - (int64_t)x);
+    // res = left - right;
+    return right < left;
+}
+
 
 BigInt Vertex::squaredLength() const { BigInt bx = get_x(); BigInt by = get_y(); return (bx*bx)+(by*by);}
 bool Vertex::operator==(const Vertex &other) const { return x==other.x && y == other.y;}
@@ -48,8 +87,8 @@ bool Vertex::operator!=(const Vertex &other) const { return x!=other.x || y != o
 bool Vertex::operator< (const Vertex &other) const { return (x < other.x) || ((x == other.x) && (y < other.y));}
 bool Vertex::operator> (const Vertex &other) const { return (x > other.x) || ((x == other.x) && (y > other.y));}
 
-Vertex Vertex::operator+(const Vertex &a) const { return Vertex( get_x() + a.get_x(), y + a.get_y() );}
-Vertex Vertex::operator-(const Vertex &a) const { return Vertex( get_x() - a.get_x(), y - a.get_y() );}
+Vertex Vertex::operator+(const Vertex &a) const { return Vertex( x + a.x, y + a.y );}
+Vertex Vertex::operator-(const Vertex &a) const { return Vertex( x - a.x, y - a.y );}
 
 //Vertex operator*(const int64_t a, const Vertex b) { return Vertex(a*b.x, a*b.y);}
 //Vertex operator*(const BigInt &a, const Vertex &b) { return Vertex(a*b.x, a*b.y);}
@@ -72,7 +111,7 @@ Vertex getLeftMostContinuation( const vector<Vertex> &vertices, Vertex start, Ve
     for (vector<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
     {
         //cout << "\t testing " << *it << endl;
-        BigInt dist = it->pseudoDistanceToLine(start, end);
+        int dist = it->atSideOfLine(start, end);
         //cout << "\t\t pseudodistance is " << dist << endl;
         if (dist < 0) //lies left of line (start-end)
         {
@@ -84,7 +123,7 @@ Vertex getLeftMostContinuation( const vector<Vertex> &vertices, Vertex start, Ve
                 //cout << "\t\t is new minleft" << endl;
                 continue;
             }
-            if (it->pseudoDistanceToLine(end, minLeft) < 0)
+            if (it->isLeftOfLine(end, minLeft))
                 minLeft = *it;
         } else if (dist > 0)    //lies right of line (start-end)
         {
@@ -94,13 +133,13 @@ Vertex getLeftMostContinuation( const vector<Vertex> &vertices, Vertex start, Ve
                 minRight = *it;
                 continue;
             }
-            if (it->pseudoDistanceToLine(end, minRight) < 0)
+            if (it->isLeftOfLine(end, minRight))
                 minRight = *it;
         } else  //dist == 0
         {
             if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
             assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
-            assert(!hasMinRight || minRight.pseudoDistanceToLine(end, *it) != 0); //there should only be continuation straight ahead
+            assert(!hasMinRight || !minRight.isOnLine(end, *it)); //there should only be continuation straight ahead
             hasMinRight = true;
             minRight = *it;
         }
@@ -125,7 +164,7 @@ Vertex getRightMostContinuation( const vector<Vertex> &vertices, Vertex start, V
     for (vector<Vertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
     {
         //cout << "\t testing " << *it << endl;
-        BigInt dist = it->pseudoDistanceToLine(start, end);
+        BigInt dist = it->atSideOfLine(start, end);
         //cout << "\t\t pseudodistance is " << dist << endl;
         if (dist < 0) //lies left of line (start-end)
         {
@@ -137,7 +176,7 @@ Vertex getRightMostContinuation( const vector<Vertex> &vertices, Vertex start, V
                 //cout << "\t\t is new minleft" << endl;
                 continue;
             }
-            if (it->pseudoDistanceToLine(end, maxLeft) > 0)
+            if (it->isRightOfLine(end, maxLeft))
                 maxLeft = *it;
         } else if (dist > 0)    //lies right of line (start-end)
         {
@@ -147,13 +186,13 @@ Vertex getRightMostContinuation( const vector<Vertex> &vertices, Vertex start, V
                 maxRight = *it;
                 continue;
             }
-            if (it->pseudoDistanceToLine(end, maxRight) > 0)
+            if (it->isRightOfLine(end, maxRight))
                 maxRight = *it;
         } else  //dist == 0
         {
             if (*it == start) continue; //vertex chain start-end-start would not be an continuation, but backtracking
             assert ( LineSegment(start, end).getCoefficient(*it) > BigFraction(1) );
-            assert(!hasMaxLeft || maxLeft.pseudoDistanceToLine(end, *it) != 0); //there should only be one continuation straight ahead
+            assert(!hasMaxLeft || !maxLeft.isOnLine(end, *it) ); //there should only be one continuation straight ahead
             hasMaxLeft = true;
             maxLeft = *it;
         }
@@ -275,7 +314,7 @@ void LineSegment::getIntersectionCoefficient( const LineSegment &other, BigInt &
 {
     if (isParallelTo(other))
     {
-        assert ( other.start.pseudoDistanceToLine(start, end) == 0 && 
+        assert ( other.start.isOnLine(start, end) && 
                  "Trying to determine intersection coefficient of non-intersecting parallel lines");
         out_denom = 1;  //result can only be either 0 or 1, so the denominator is always 1
         if ((start == other.end)|| (start == other.start)) 
@@ -805,101 +844,6 @@ map<LineSegment, list<LineSegment>> findIntersectionsBruteForce(const list<LineS
     }
     return intersections;
 }
-
-#if 0
-void findPairwiseIntersections(const list<LineSegment> &set1, const list<LineSegment> &set2, list<LineSegment> &intersections_out)
-{
-    for (list<LineSegment>::const_iterator seg1 = set1.begin(); seg1!= set1.end(); seg1++)
-        for (list<LineSegment>::const_iterator seg2 = set2.begin(); seg2!= set2.end(); seg2++)
-            if (seg1->intersects(*seg2)) 
-            {
-                intersections_out.push_back(*seg1); 
-                intersections_out.push_back(*seg2);
-            }
-}
-
-void findIntersections(const list<LineSegment> &segments, const AABoundingBox &box, list<LineSegment> &intersections_out)
-{
-    
-    //if too few line segments, or area too small for further subdivision, test each segment against every other segment
-    if ((segments.size() < 4) || (box.right - box.left < 2 && box.bottom - box.top < 2)) 
-    {
-        findIntersectionsBruteForce(segments, intersections_out);
-        return;
-    }
-    
-    
-    /** either way, extend the line segment by 1 in both directions to avoid ambiguities 
-        due to a line end point not being part of the line segment */
-    LineSegment splitLine = (box.right - box.left > box.bottom-box.top) ?
-        //vertical split
-        LineSegment(Vertex( (box.right+box.left)/2, box.bottom+1), Vertex((box.right+box.left)/2, box.top-1), -1, -1) :
-        //horizontal split
-        LineSegment(Vertex( box.left - 1, (box.top + box.bottom)/2), Vertex( box.right+1, (box.top+box.bottom)/2), -1, -1);
-        
-    list<LineSegment> left, right, intersect;
-    AABoundingBox *bb_left = NULL, *bb_right = NULL;
-    for (list<LineSegment>::const_iterator seg = segments.begin(); seg!= segments.end(); seg++)
-    {
-        if ( splitLine.intersects(*seg)) intersect.push_back(*seg);
-        else if ( seg->start.pseudoDistanceToLine( splitLine.start, splitLine.end) < 0 ) 
-        {
-            if (!bb_left) bb_left = new AABoundingBox(seg->start);
-            (*bb_left)+= seg->start;
-            (*bb_left)+= seg->end;
-            left.push_back(*seg);
-        }
-        else 
-        {
-            if (!bb_right) bb_right = new AABoundingBox(seg->start);
-            (*bb_right)+= seg->start;
-            (*bb_right)+= seg->end;
-            right.push_back(*seg);
-        }
-    }
-    /** at this point the set of line segments has been split into three subsets:
-        line segments left of, intersecting, and right of the split line.
-        Of these, segments in the left subset cannot possibly intersect those in the right subset.
-        But segments in the left subset may intersect each other, those in the right subset may intersect each other,
-        and segments crossing the split line may intersect all segments
-    */
-    
-    if (left.size() > 1) {assert(bb_left); findIntersections(left, *bb_left, intersections_out);}
-
-    //test all segments against those in the 'intersect' set
-    findPairwiseIntersections(intersect, left, intersections_out);
-    findIntersectionsBruteForce(intersect, intersections_out);
-    findPairwiseIntersections(intersect, right, intersections_out);
-
-    if (right.size() > 1) {assert(bb_right); findIntersections(right, *bb_right, intersections_out);}
-    
-    if (bb_left) delete bb_left;
-    if (bb_right) delete bb_right;
-}
-
-void findIntersections(const list<Vertex> &path, list<LineSegment> &intersections_out)
-{
-    list<LineSegment> segments;
-    list<Vertex>::const_iterator line_start = path.begin();
-    list<Vertex>::const_iterator line_end = line_start; line_end++;
-    
-    AABoundingBox box( *line_start);
-    int32_t id = 0;
-    //std::cout << *line_start << endl;
-    while (line_end != path.end())
-    {
-        segments.push_back( LineSegment(*line_start, *line_end, id, id+1));
-        //std::cout << *line_end << endl;
-        box += *line_end;
-        line_start++;
-        line_end++;
-        id++;
-    }
-    
-    findIntersections( segments, box, intersections_out);
-}
-
-#endif
 
 // ====================================================================
 

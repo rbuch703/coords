@@ -38,6 +38,14 @@ struct __attribute__ ((aligned (4))) Vertex
     /** returns the product of the signed distance to the line AB and the length of the line AB, |AB|.
       * the result is guaranteed to be exact, and is zero iff. The point lies *on* the line*/
     BigInt pseudoDistanceToLine(const Vertex &A, const Vertex &B) const;
+    
+    /* returns: -1 if 'this' is on the left side of AB; +1 if 'this' is on the right side, and 0 if this is on the line
+     */
+    int atSideOfLine(const Vertex &A, const Vertex &B) const;
+    bool isOnLine(const Vertex &A, const Vertex &B) const;
+    bool isLeftOfLine(const Vertex &A, const Vertex &B) const;
+    bool isRightOfLine(const Vertex &A, const Vertex &B) const;
+    
     bool    operator==(const Vertex &other) const;
     bool    operator!=(const Vertex &other) const;
     bool    operator< (const Vertex &other) const;
@@ -51,13 +59,17 @@ public:
 private:    
     int32_t x,y;
     /*the following friend declarations are really just a whitelist of methods/classes that 
-      can guarantee that operations on int32_t values will not overflow */
+      can guarantee that operations on int32_t values will not overflow (e.g. because they
+      only use comparisons and no arithmetic) */
     friend void dumpPolygon(string file_base, const vector<Vertex>& poly);
     friend std::ostream& operator <<(std::ostream& os, const Vertex v);
     friend struct AABoundingBox;
     friend class QuadTreeNode;
     friend class MonotonizeEventQueue;
     friend list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain);
+    friend bool leq(const LineSegment a, Vertex pos);
+    friend bool eq(const LineSegment a, Vertex pos);
+
 //    friend EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id);
 };
 

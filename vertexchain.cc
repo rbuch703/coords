@@ -140,9 +140,14 @@ void simplifySection(list<Vertex> &m_vertices, list<Vertex>::iterator segment_fi
     // make sure that 'it' starts from segment_first+1; segment_first must never be deleted
     for (it++; it != segment_last; it++)
     {
-        double dist_sq = (A == B) ? 
-            asDouble ((*it-A).squaredLength()) : 
-            asDouble ( it->squaredDistanceToLine(A, B));
+        double dist_sq;
+        if (A == B)
+        {
+            BigInt dx = it->get_x() - A.get_x();
+            BigInt dy = it->get_y() - A.get_y();
+            dist_sq = asDouble (dx*dx+dy*dy); 
+        } else
+            dist_sq = asDouble ( it->squaredDistanceToLine(A, B));
         if (dist_sq > max_dist_sq) { it_max = it; max_dist_sq = dist_sq;}
     }
     if (max_dist_sq == 0) return;
@@ -293,7 +298,7 @@ bool VertexChain::isCanonicalPolygon()
     
     uint64_t n = size();
     for (uint64_t me = 0; me < n-1; me++)
-        if (m_vertices[me].pseudoDistanceToLine( m_vertices[(me+n-1)%n], m_vertices[(me+1) % n]) == 0)
+        if (m_vertices[me].isOnLine( m_vertices[(me+n-1)%n], m_vertices[(me+1) % n]) )
         {   //colinear --> not canonical
             m_vertices.push_back( front());
             return false;
@@ -362,23 +367,23 @@ void VertexChain::canonicalize()
         {
             if (! (alreadyShifted || (gap == 0)) )
             {
-                assert (m_vertices[i] == Vertex(0,0)); //debug code, holds only while invalidated verices are overwritten with Vertex(0,0)
+                //assert (m_vertices[i] == Vertex(0,0)); //debug code, holds only while invalidated verices are overwritten with Vertex(0,0)
                 m_vertices[i] = m_vertices[i+gap];
-                m_vertices[i+gap] = Vertex(0,0); //debug code to visualize invalidated entries
+                //m_vertices[i+gap] = Vertex(0,0); //debug code to visualize invalidated entries
             }
             alreadyShifted = false;
             
             uint64_t pred = (i+  n-1) % n;
             uint64_t succ = (i+gap+1) % n;
             
-            if ( m_vertices[i].pseudoDistanceToLine( m_vertices[pred], m_vertices[ succ]) != 0) //not colinear
+            if (! m_vertices[i].isOnLine( m_vertices[pred], m_vertices[ succ]) ) //not colinear
             {
                 i++;
             } else
             {
                 hasMadeChanges = true;
                 gap++;
-                m_vertices[i] = Vertex(0,0);    //debug code
+                //m_vertices[i] = Vertex(0,0);    //debug code
                 
                 if (i > 0)
                 {
@@ -403,139 +408,10 @@ void VertexChain::canonicalize()
     
     #endif
     
-    /*
-    for (int i = 0; i+gap < n;)
-    {
-        if (gap > 0)
-            m_vertices[i] = m_vertices[i+gap];
-            
-        if (m_vertices[i] == m_vertices[ (i+gap+1) % n]) //successive identical vertices
-            gap++;
-        else
-            i++; 
-    }*/
-
-    //m_vertices.resize( size() - gap);
     if (m_vertices.size() >= 3 && closed) // reclose polygon if - after canonicalization - it still has an area
         m_vertices.push_back(m_vertices.front());
 }
 
-#if 0
-/** ensures that no two consecutive vertices of a polygon are identical, 
-    and that no three consecutive vertices are colinear.
-    This property is a necessary prerequisite for many advanced algorithms */
-void VertexChain::canonicalize()
-{
-    if (m_vertices.size() == 0) return;
-    
-    bool closed = m_vertices.front() == m_vertices.back();
-    if (closed)
-    {
-        // first==last causes to many special cases, so remove the duplicate(s) here add re-add one later.
-        /* As a side-effect, this re-adding will only occur iff the polygon still has at least 3 vertices
-         * after removing colinearities and consecutive duplicates. So only non-degenerated polygon will 
-         * ever be closed, and closed polygons are guaranteed to never be degenerated.
-        */
-        m_vertices.pop_back(); 
-    }
-
-    if ( m_vertices.size() < 2) return; //segments of length 0 and 1 are always canonical
-    
-    if ( m_vertices.size() == 2)
-    { //segments of length 2 cannot be colinear, only need to check if vertices are identical
-        if (m_vertices.front() == m_vertices.back()) 
-            m_vertices.pop_back();
-        return;
-    }
-    assert( m_vertices.size() >= 3 );
-    
-    list<Vertex> verts( m_vertices.begin(), m_vertices.end() );
-    
-    list<Vertex>::iterator v3 = verts.begin();
-    list<Vertex>::iterator v1 = v3++;
-    list<Vertex>::iterator v2 = v3++;
-    
-    //at this point, v1, v2, v3 hold references to the first three vertices of the polygon
-    
-    //first part: find and remove colinear vertices
-    while (v3 != verts.end())
-    {
-        assert ( (v1!=v2) && (v2!=v3) && (v3!=v1) );
-    
-        if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) //colinear
-        {
-            verts.erase(v2);
-            v2 = v3++;
-        }
-        else
-        {
-            v1++;
-            v2++;
-            v3++;
-        }
-    }
-    
-    /** special case: in closed polygons, the last two and the first vertex, 
-        or the last and the first two vertices may be colinear */
-    if (closed)
-    {
-        if (verts.size() >= 3)
-        {
-            list<Vertex>::iterator v1 = --verts.end();
-            list<Vertex>::iterator v2 = verts.begin(); 
-            list<Vertex>::iterator v3 = ++verts.begin();
-            if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) 
-                verts.erase(v2);
-        }
-
-        // if we still have three vertices, even after potentially removing one in the previous step
-        if (verts.size() >= 3)
-        {
-            list<Vertex>::iterator v1 = ----verts.end();
-            list<Vertex>::iterator v2 = --verts.end(); 
-            list<Vertex>::iterator v3 = verts.begin();
-            if ( (*v2).pseudoDistanceToLine(*v1, *v3) == 0) 
-                verts.erase(v2);
-        }
-        
-    }
-
-    //second part: remove consecutive identical vertices
-    v1 = verts.begin();
-    v2 = ++verts.begin();
-    assert( v1!= v2);
-    assert( verts.size() > 1);
-    
-    while (v2 != verts.end())
-    {
-        if (*v1 == *v2)
-        {
-            verts.erase(v1);
-            v1 = v2++;
-        } else
-        {
-            v1++;
-            v2++;
-        }
-    }
-    
-    /* when relying only on front() == back() as a loop condition, the while-loop could delete even the final element,
-     * and continue after that. But at that point, calls to front() and back() are invalid, and cause segfault.
-     * Thus the additional check with m_vertices.size() */
-    int num_vertices = verts.size();   // without caching this, the next line could degenerate to O(n²)
-    while (verts.front() == verts.back() && (--num_vertices))
-    {
-        verts.pop_back();
-    }
-    
-    if (closed && verts.size() >= 3)
-        //re-duplicate the first vertex to again mark the polygon as closed 
-        verts.push_back(verts.front());
-        
-    m_vertices = vector<Vertex>(verts.begin(), verts.end());
-        
-}
-#endif
 const Vertex&       VertexChain::front()     const  { return m_vertices.front(); }
 const Vertex&       VertexChain::back()      const  { return m_vertices.back(); }
 //const list<Vertex>& VertexChain::vertices()  const  { return m_vertices; }
@@ -784,8 +660,8 @@ bool VertexChain::isClockwise() {
 
     m_vertices.push_back( m_vertices.front());
 
-    assert( v.pseudoDistanceToLine( vPred, vSucc) != 0 && "colinear vertices detected");
-    return v.pseudoDistanceToLine( vPred, vSucc) < 0;
+    assert( !v.isOnLine( vPred, vSucc)  && "colinear vertices detected");
+    return v.isLeftOfLine( vPred, vSucc);
 }
 
 

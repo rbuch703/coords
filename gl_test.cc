@@ -5,13 +5,18 @@
 #include <stdint.h>
 #include <assert.h>
 #include <math.h>
-#include <errno.h>
 
+#include <errno.h>
 #include <sys/stat.h>
 
-#include <malloc.h>
-#include <string.h>
+//#include <malloc.h>
 
+#include <string>
+#include <vector>
+#include "vertexchain.h"
+#include "triangulation.h"
+
+using namespace std;
 
 typedef struct vertex_data_t
 {
@@ -62,50 +67,48 @@ int64_t isClockwise(vertex_data_t polygon)
     return pseudodistance;// < 0;
 }
 
-typedef struct tile_t
+struct tile_t
 {
-    vertex_data_t *polygons;
+    vector<int32_t> triangles;
+    /*vertex_data_t *polygons;
     int64_t num_polygons;
-    int64_t num_max_polygons;
-} tile_t;
+    int64_t num_max_polygons;*/
+};
 
-tile_t read_tile(const char* filename)
+map<string, tile_t> tileCache;
+
+tile_t read_tile(const string &filename)
 {
-    tile_t tile = { malloc( 64 * sizeof(vertex_data_t)), 0, 64};
+    tile_t tile;
+    // = { malloc( 64 * sizeof(vertex_data_t)), 0, 64};
+    cout << "opening file " << filename << endl;
     
-    printf("opening file %s\n",filename);
-    
-    FILE* f = fopen(filename, "rb");
+    FILE* f = fopen(filename.c_str(), "rb");
     assert (f != NULL);
     
     int64_t nVertices = 0;
     while (fread(&nVertices, sizeof(nVertices), 1, f))
     {
     
-        vertex_data_t polygon = {nVertices, malloc( sizeof(int32_t) * 2 * nVertices) };
+        int32_t* polygon = new int32_t[2 * nVertices];
     
-        if (1 != fread(polygon.vertices, nVertices*8, 1, f))
+        if (1 != fread(polygon, nVertices*8, 1, f))
             assert( 0 && "error reading file");
         
+        VertexChain c(polygon, nVertices);
+        triangulate(c, tile.triangles);
+        /*
         if (tile.num_polygons == tile.num_max_polygons)
         {
             tile.polygons = realloc(tile.polygons, 2 * tile.num_max_polygons * sizeof(vertex_data_t));
             tile.num_max_polygons *= 2;
         }
 
-        tile.polygons[tile.num_polygons++] = polygon;        
+        tile.polygons[tile.num_polygons++] = polygon;        */
     }
     fclose(f);
+    cout << "loaded " << filename << " with " << tile.triangles.size()/6 << " triangles." << endl;
     return tile;
-}
-
-void free_tile(tile_t tile)
-{
-    while (tile.num_polygons)
-    {
-        free(tile.polygons[-- (tile.num_polygons)].vertices );
-    }
-    free(tile.polygons);
 }
 
 void render_tile(tile_t tile)
@@ -113,9 +116,15 @@ void render_tile(tile_t tile)
 
     //glColor3f(1,1,1);
     //BOOST_FOREACH( CountVertexPair p, polygons)
-    for (int i = 0; i < tile.num_polygons; i++) 
+    assert(tile.triangles.size() % 6 == 0);
+    for (uint64_t i = 0; i < tile.triangles.size(); i+=6)
     {
-        glBegin(GL_LINE_STRIP);
+        glBegin(GL_TRIANGLES);
+
+            glVertex2d(tile.triangles[i+1], tile.triangles[i+0]);
+            glVertex2d(tile.triangles[i+3], tile.triangles[i+2]);
+            glVertex2d(tile.triangles[i+5], tile.triangles[i+4]);
+
            /* int64_t pd = isClockwise(tile.polygons[i]);
             if (pd > 0)
                 glColor3f(1,1,1);
@@ -124,11 +133,11 @@ void render_tile(tile_t tile)
             else
                 glColor3f(1,0,0);
             */
-            int32_t* v = tile.polygons[i].vertices;
+            /*int32_t* v = tile.polygons[i].vertices;
             for (int64_t num_vertices = tile.polygons[i].num_vertices; num_vertices; num_vertices--, v+=2)
             {
                 glVertex2d(v[1], v[0]);
-            }
+            }*/
         glEnd();
     }
 }
@@ -186,12 +195,15 @@ void mouseMoved(int x, int y)
     mouse_y = y;
 }
 
-void render_path(const char* filename)
+void render_path(const string &filename)
 {
+    if (!tileCache.count(filename))
+        tileCache.insert( pair<string, tile_t>(filename, read_tile(filename)));
 
-    tile_t tile = read_tile(filename);
-    render_tile(tile);
-    free_tile(tile);
+    assert(tileCache.count(filename));
+
+    render_tile(tileCache[filename]);
+    //free_tile(tile);
     
 }
 
@@ -204,21 +216,14 @@ double max(double a, double b) { return a> b ? a : b;}
 double min(double a, double b) { return a< b ? a : b;}
 double width(rect_t rect) { return rect.right - rect.left;}
 
-void render(const char* basepath, const rect_t view, rect_t tile, char *position)
+void render(const string &basepath, const rect_t view, rect_t tile, const string &position)
 {
     struct stat dummy;
     
-    int buf_size = strlen(basepath) + strlen(position) + 2;
-    char *path = calloc( 1, buf_size ); // plus zero termination and an additional character (see below)
-    // path = BASEPATH + position
-    snprintf(path, buf_size, "%s%s", basepath, position);
+    string path( basepath+position);
     
-    
-    if ( stat( path, &dummy ) != 0) 
-    {   
-        free(path);
+    if ( stat( path.c_str(), &dummy ) != 0) 
         return;
-    }
 
     assert (
         (max( view.left, tile.left) <= min( view.right, tile.right)) && 
@@ -227,26 +232,22 @@ void render(const char* basepath, const rect_t view, rect_t tile, char *position
     /* if no child exists, then this tile is the highest resolution tile available 
      * at least one child exists, then the the existing tiles provide higher resolution for the respective areas.
      * Since in some areas, no data may to be drawn at all, some children may not exist */
-    int hasChildren = 0;
+    bool hasChildren = 0;
+
+    hasChildren |= stat( (path+"0").c_str(), &dummy ) == 0;
+    hasChildren |= stat( (path+"1").c_str(), &dummy ) == 0;
+    hasChildren |= stat( (path+"2").c_str(), &dummy ) == 0;
+    hasChildren |= stat( (path+"3").c_str(), &dummy ) == 0;
     
-    static const char *chars = "0123";
-    for (int i = 0; i < 4; i++)
-    {
-        path[buf_size-2] = chars[i]; //overwrites the zero termination; but since another 0x00 follows, the string is still valid
-        hasChildren |= stat( path, &dummy ) == 0;
-    }
-        
     int sufficientResolution = width(tile) < width(view);
     if (!hasChildren || sufficientResolution) 
     {
-        path[buf_size-2] = '\0'; 
         //cout << "rendering tile " << position << endl;
         render_path(path);
-        free(path);
+        //free(path);
         //Tile(BASEPATH+position).render(); 
         return;
     }
-    free(path);
     
     double mid_x = (tile.right+tile.left) / 2.0;
     double mid_y = (tile.top + tile.bottom) / 2.0;
@@ -256,27 +257,17 @@ void render(const char* basepath, const rect_t view, rect_t tile, char *position
     rect_t tr3 = {tile.top, mid_x,     mid_y,       tile.right};
     rect_t br1 = {mid_y,    mid_x,     tile.bottom, tile.right};
     
-    int len = strlen(position);
-    char* pos = calloc(1,  len + 2);
-    strncpy(pos, position, len);
-    
     if ( mid_x > view.left) //has to render left half
     {
-        pos[len] = '0';
-        if (mid_y > view.bottom) render(basepath, view, bl0, pos);
-        pos[len] = '2';
-        if (mid_y < view.top   ) render(basepath, view, tl2, pos);
+        if (mid_y > view.bottom) render(basepath, view, bl0, position+'0');
+        if (mid_y < view.top   ) render(basepath, view, tl2, position+'2');
     }
     
     if ( mid_x < view.right) //has to render right half
     {
-        pos[len] = '1';
-        if (mid_y > view.bottom) render(basepath, view, br1, pos);
-        pos[len] = '3';
-        if (mid_y < view.top   ) render(basepath, view, tr3, pos);
+        if (mid_y > view.bottom) render(basepath, view, br1, position+'1');
+        if (mid_y < view.top   ) render(basepath, view, tr3, position+'3');
     }
-
-    free(pos);
 }
 
 //static const char* BASEPATH = "output/coast/seg#";

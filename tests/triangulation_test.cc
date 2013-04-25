@@ -231,7 +231,7 @@ void cairo_render_triangles(const vector<int32_t> &triangles)//, double shift_x,
 int main()
 {
     
-    /*
+    
     VertexChain p; 
     srand(24);
     for (int i = 0; i < 20; i++)
@@ -246,8 +246,8 @@ int main()
       
     std::cout << "generated simple polygon with " << (poly.size()-1) << " vertices" << std::endl;
     poly.canonicalize();
-    */
     
+    /*
     VertexChain poly;
     FILE* f = fopen("poly.bin", "rb");
     while (true)
@@ -259,7 +259,7 @@ int main()
         //#warning debug '-' sign
         poly.append( Vertex(x,y));
         
-    }
+    }*/
     //poly.mirrorX();
     //poly.reverse();
 
@@ -268,7 +268,6 @@ int main()
     list<LineSegment> newDiagonals = createEndMonotoneDiagonals(poly);
     //createCairoDebugOutput( poly, newDiagonals, -553625894, +128060048+80*20000, 1/10000.0);
 
-    //533059629	-47008165
     createCairoDebugOutput( poly, newDiagonals);//, -533059629, -47008165+200*300, 1/300.0);
 
 

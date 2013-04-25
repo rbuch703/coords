@@ -8,6 +8,7 @@
 #include <vector>
 
 vector<int32_t> triangulate( VertexChain &c);
+void triangulate( VertexChain &c, vector<int32_t> &triangles_out);
 
 // =====================================================
 // everything below this line is only exposed for debug purposes
@@ -136,33 +137,30 @@ private:
         Vertex succ= vertices[ (vertex_id                   + 1) % vertices.size()];
         
         // subsequent vertices with identical x-value are an edge case (for this x-sweep) and must be handeld separately
-        assert( pos.get_x() != pred.get_x() && pos.get_x() != succ.get_x());
+        assert( pos.x != pred.x && pos.x != succ.x);
 
         assert( pos != pred && pos != succ && pred != succ);
         /* Colinear successive vertices would cause additional special cases --> forbid them.
          * They should have been removed by canonicalize() anyway */
         assert( ! LineSegment(pred, succ).isColinearWith(pos)); 
         
-        if (pos.get_x() < pred.get_x() && pos.get_x() < succ.get_x())    //is either a START or a SPLIT vertex
+        if (pos.x < pred.x && pos.x < succ.x)    //is either a START or a SPLIT vertex
         {
-            int128_t dist = succ.pseudoDistanceToLine(pred, pos);
+            int dist = succ.atSideOfLine(pred, pos);
             assert (dist != 0 && "colinear vertices");
             if (dist < 0) //left turn
                 return EventType::SPLIT;
             else    //right turn
                 return EventType::START;
         
-        } else if (pos.get_x() > pred.get_x() && pos.get_x() > succ.get_x()) //is either an END or a MERGE vertex
+        } else if (pos.x > pred.x && pos.x > succ.x) //is either an END or a MERGE vertex
         {
-            int128_t dist = succ.pseudoDistanceToLine(pred, pos);
+            int dist = succ.atSideOfLine(pred, pos);
             assert (dist != 0 && "colinear vertices");
-            if (dist < 0) //left turn
-                return EventType::MERGE;
-            else
-                return EventType::END;
+            return (dist < 0) /*left turn*/ ? EventType::MERGE : EventType::END;
             
-        } else if ((pos.get_x() > pred.get_x() && pos.get_x() < succ.get_x()) || //one above, one below
-                   (pos.get_x() < pred.get_x() && pos.get_x() > succ.get_x()) )
+        } else if ((pos.x > pred.x && pos.x < succ.x) || //one above, one below
+                   (pos.x < pred.x && pos.x > succ.x) )
         {
             return EventType::REGULAR;
         } else

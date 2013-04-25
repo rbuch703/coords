@@ -49,7 +49,7 @@ ostream &operator<<( ostream &os, SimpEvent ev)
     The method silently assumes that both segments actually intersect the vertical line at xPos.
     Do not make this a method os the LineSegment class, as it has nothing to do with it semantically
   */
-bool leq(const LineSegment a, const LineSegment b, BigInt xPos)
+bool leq(const LineSegment a, const LineSegment b, int32_t xPos)
 {
     assert(a.start.get_x() != a.end.get_x());
     assert(b.start.get_x() != b.end.get_x());
@@ -68,7 +68,7 @@ bool leq(const LineSegment a, const LineSegment b, BigInt xPos)
     return (left == right)|| ((left < right) != flipSign);
 }
 
-bool eq(const LineSegment a, const LineSegment b, BigInt xPos)
+bool eq(const LineSegment a, const LineSegment b, int32_t xPos)
 {
     assert(a.start.get_x() != a.end.get_x());
     assert(b.start.get_x() != b.end.get_x());
@@ -88,34 +88,44 @@ bool eq(const LineSegment a, const LineSegment b, BigInt xPos)
 //=====================================
 
 // returns whether the line segment 'a' at x-value xPos has a y-value less than or equal to yPos
-bool leq(const LineSegment a, BigInt xPos, BigInt yPos)
+bool leq(const LineSegment a, Vertex pos)
 {
-    BigInt dax = a.end.get_x() - a.start.get_x();
-    assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
-             ( a.end.get_x()   >= xPos && a.start.get_x()<= xPos)) &&
+    int64_t dax = (int64_t)a.end.x - (int64_t)a.start.x;
+    
+    assert ((( a.start.x >= pos.x && a.end.x  <= pos.x) ||
+             ( a.end.x   >= pos.x && a.start.x<= pos.x)) &&
              "position not inside x range of segment");
              
     assert (dax != 0 && "edge case vertical line segment");
     
-    bool flipSign = (dax < 0);
+    int64_t day = (int64_t) a.end.y - (int64_t)a.start.y;
+    int64_t dx =  (int64_t)pos.x - (int64_t)a.start.x;
+    int64_t dy =  (int64_t)pos.y - (int64_t)a.start.y;
     
-    BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
-    BigInt right= (yPos - a.start.get_y()) * dax;
+    int64_t left = dx * day;
+    int64_t right= dy * dax;
+    
+    bool flipSign = (dax < 0);
     
     return (left == right) || ((left < right) != flipSign);
 }
 
-bool eq(const LineSegment a, BigInt xPos, BigInt yPos)
+bool eq(const LineSegment a, Vertex pos)
 {
-    BigInt dax = a.end.get_x() - a.start.get_x();
-    assert ((( a.start.get_x() >= xPos && a.end.get_x()  <= xPos) ||
-             ( a.end.get_x()   >= xPos && a.start.get_x()<= xPos)) &&
+    int64_t dax = (int64_t)a.end.x - (int64_t)a.start.x;
+    
+    assert ((( a.start.x >= pos.x && a.end.x  <= pos.x) ||
+             ( a.end.x   >= pos.x && a.start.x<= pos.x)) &&
              "position not inside x range of segment");
              
     assert (dax != 0 && "edge case vertical line segment");
     
-    BigInt left = (xPos - a.start.get_x()) * ( a.end.get_y() - a.start.get_y() );
-    BigInt right= (yPos - a.start.get_y()) * dax;
+    int64_t day = (int64_t) a.end.y - (int64_t)a.start.y;
+    int64_t dx =  (int64_t)pos.x - (int64_t)a.start.x;
+    int64_t dy =  (int64_t)pos.y - (int64_t)a.start.y;
+    
+    int64_t left = dx * day;
+    int64_t right= dy * dax;
     
     return (left == right);
 }
@@ -178,16 +188,16 @@ public:
     {
         EdgeContainer e = findAdjacentEdge( pos );
         assert( e );
-        if ( leq(e->m_Data, pos.get_x(), pos.get_y()) )
+        if ( leq(e->m_Data, pos) )
             return e->m_Data;
         
         assert( hasPredecessor(e) );
         LineSegment edge = getPredecessor( e );
-        assert( leq(edge, pos.get_x(), pos.get_y()));
+        assert( leq(edge, pos));
         return edge;
     }
     
-    void remove(LineSegment item, const BigInt xPos)
+    void remove(LineSegment item, int32_t xPos)
     {
         //cout << "\tremoving edge " << item << " at x= " << xPos << endl;
     
@@ -204,7 +214,7 @@ public:
         AVLTree<LineSegment>::remove(node);
     }
     
-    EdgeContainer findPos(LineSegment item, const BigInt xPos)
+    EdgeContainer findPos(LineSegment item, int32_t xPos)
     {
     	if (! m_pRoot) return NULL;
 
@@ -227,7 +237,7 @@ public:
        Otherwise, the method makes no guarantee on which of the two adjacent edges it returns. In
        particular, it need not return the closest of the two edges.
    */
-    EdgeContainer findAdjacentEdge(const BigInt xPos, const BigInt yPos)
+    EdgeContainer findAdjacentEdge(const Vertex v)
     {
     	if (! m_pRoot) return NULL;
     	
@@ -236,18 +246,18 @@ public:
 	    while (pPos)
 	    {
 	        parent = pPos;
-	        if ( eq(pPos->m_Data,xPos, yPos) ) return pPos;
-	        pPos = leq(pPos->m_Data, xPos, yPos) ? pPos->m_pRight : pPos->m_pLeft;
+	        if ( eq(pPos->m_Data, v) ) return pPos;
+	        pPos = leq(pPos->m_Data, v) ? pPos->m_pRight : pPos->m_pLeft;
 	    }
 	    return parent;
     }
-
+/*
     EdgeContainer findAdjacentEdge(Vertex v)
     {
         return findAdjacentEdge( v.get_x(), v.get_y() );
-    }
+    }*/
     
-    EdgeContainer insert(const LineSegment &item, BigInt xPos)
+    EdgeContainer insert(const LineSegment &item, int32_t xPos)
     {
         //cout << "\tinserting edge " << item << " at x=" << xPos << endl;
         
@@ -296,7 +306,7 @@ protected:
 
     /* returns the tree node whose one direct child would be 'item' (if 'item' was in the tree).
      * This method assumes that 'item' is not actually present in the tree */
-    EdgeContainer findParent(const LineSegment &item, BigInt xPos) const
+    EdgeContainer findParent(const LineSegment &item, int32_t xPos) const
     {
 	    EdgeContainer parent = NULL;
 	    if (! m_pRoot) return NULL;
@@ -336,7 +346,7 @@ list<VertexChain> polygonsFromEndMonotoneGraph( map<Vertex, vector<Vertex>> grap
         Vertex v1 = graph[*it][0];
         Vertex v2 = graph[*it][1];
         
-        BigInt dist = v2.pseudoDistanceToLine(*it, v1);
+        int dist = v2.atSideOfLine(*it, v1);
         assert(dist != 0 && "colinear Vertices");
         
         Vertex top =  dist > 0 ? v2 : v1;
@@ -427,8 +437,7 @@ list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
         {
             case START:
             {
-                //assert ( ev.succ.pseudoDistanceToLine(ev.pred, ev.pos) > 0);
-                status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
+                status.insert( LineSegment(ev.pos, ev.pred), ev.pos.x );
                 helpers.insert( pair<LineSegment, Vertex>( LineSegment(ev.pos, ev.pred), ev.pos));
                 break;
             }
@@ -439,7 +448,7 @@ list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
                  //e.start == ev.pos  || e.end == ev.pos);
 
                 helpers.erase( e);
-                status.remove( e, ev.pos.get_x());
+                status.remove( e, ev.pos.x);
                 
                 break;
             }
@@ -465,8 +474,7 @@ list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
 
                 helpers[edge] = vLeft;
                 
-                //assert ( ev.pred.pseudoDistanceToLine(ev.succ, ev.pos) > 0);
-                status.insert( LineSegment(ev.pos, ev.pred), ev.pos.get_x() );
+                status.insert( LineSegment(ev.pos, ev.pred), ev.pos.x );
                 /* Following the same argument as above, the helper needs to be the right-most of {pos,aux}: 
                    In the edge case that pos, aux and a lexicographically *bigger* other SPLIT event share an 
                    x-value, the new diagonal will be between a position right of {pos, aux} and thus has to end
@@ -481,8 +489,6 @@ list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
                                  This will be a 'status' edge that (in non-degenerate cases) ends at ev.pos
                               2. set ev.pos as the new helper for the 'status' edge of the left sub-range (now the complete range)
                                  as ev.pos is not the knwon vertex with the highest x-value inside the range */
-                //assert( ev.succ.pseudoDistanceToLine( ev.pos, ev.pred) > 0);
-                
                 assert( !ev.isShared || ( ev.pos.y < ev.aux.y ));
                 
                 Vertex vRightMost = ev.isShared ? ev.aux : ev.pos;
@@ -503,12 +509,9 @@ list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
                 helpers[edge] = vRightMost; 
                 break;
             }
-            case REGULAR: //TODO: replace "REGULAR" event by distinct REGULAR_POLY_LEFT und REGULAR_PoLY_RIGHT events.
-                Vertex &pred = ev.pred;
-                Vertex &succ = ev.succ;
-                Vertex &pos  = ev.pos;
+            case REGULAR:
                 
-                assert(  (pred.x != pos.x || succ.x != pos.x) && "Colinear vertices"); 
+                //assert(  (pred.x != pos.x || succ.x != pos.x) && "Colinear vertices"); 
 
                 bool isPolyRightOfEvent = (ev.pred.x >= ev.pos.x && ev.pos.x >= ev.succ.x);
                 
@@ -747,7 +750,7 @@ static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> 
 
     //cout << stack[0] << endl;
     //cout << stack[1] << endl;
-    assert( ((Vertex)topChain[1]).pseudoDistanceToLine(bottomChain[0], bottomChain[1]) > 0);
+    assert( ((Vertex)topChain[1]).isRightOfLine(bottomChain[0], bottomChain[1]) );
     
     while ( i1 != topChain.size() || i2 != bottomChain.size())
     {
@@ -764,7 +767,7 @@ static void triangulateMonotoneChains( vector<Vertex> &topChain, vector<Vertex> 
                 uint64_t num = stack.size();
                 assert( stack.back().onTopChain == stack[num-2].onTopChain);
                 bool onTop = stack.back().onTopChain;
-                BigInt dist = stack[num-3].vertex.pseudoDistanceToLine(stack[num-2].vertex, stack[num-1].vertex);
+                int dist = stack[num-3].vertex.atSideOfLine(stack[num-2].vertex, stack[num-1].vertex);
                 
                 if (dist == 0) 
                 {
@@ -861,45 +864,30 @@ void triangulateMonotonePolygon( const VertexChain &monotone_polygon, vector<int
     return triangulateMonotoneChains(chain1, chain2, res);
 }
 
-vector<int32_t> triangulate(  VertexChain &c)
+void triangulate(  VertexChain &c, vector<int32_t> &triangles_out)
 {
     assert(c.isClockwise());
-
-    /*
-    static int i = 0;
-    i++;
-    cout << "triangulating polygon " << i << endl;
-    #warning debug code
-    if (i == 59774)
-    {
-        FILE* f = fopen("poly.bin", "wb");
-        BOOST_FOREACH( Vertex v, c.data())
-        {
-            int32_t i = (int32_t)v.get_x();
-            fwrite( &i, sizeof(i), 1, f);
-            i = (int32_t)v.get_y();
-            fwrite( &i, sizeof(i), 1, f);
-        }
-        fclose(f);
-        
-        cout << c << endl;
-    }*/
-    double t = 0;
-    
-    if (c.size() > 5000)
+/*    double t = 0;
+    if (c.size() > 50000)
     {
         t = getWallTime();
         cout << "triangulating a polygon with " << c.size() << " vertices" << endl;
     }
-
-    vector<int32_t> res;
+*/
     list<VertexChain> polys = toMonotonePolygons (c);
     BOOST_FOREACH( const VertexChain &chain, polys)
-        triangulateMonotonePolygon(chain, res);
-        
-    if (c.size() > 5000)
+        triangulateMonotonePolygon(chain, triangles_out);
+  /*      
+    if (c.size() > 50000)
         cout << "\t ... took " << (getWallTime() - t)  << " seconds" << endl;
+*/
+}
 
+
+vector<int32_t> triangulate( VertexChain &c)
+{
+    vector<int32_t> res;
+    triangulate(c, res);
     return res;
 }
 

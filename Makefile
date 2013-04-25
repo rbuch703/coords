@@ -2,13 +2,14 @@
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc triangulation.cc
-GL_TEST_SRC = gl_test.c #geometric_types.cc validatingbigint.cc int128.cc
+GL_TEST_SRC = gl_test.cc geometric_types.cc int128.cc vertexchain.cc triangulation.cc
 TEST_SRC = tests/arithmetic_test.cc tests/geometry_test.cc tests/quadtree_test.cc tests/triangulation_test.cc
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
 CONV_OBJ = $(CONV_SRC:.cc=.o)
 SIMP_OBJ = $(SIMP_SRC:.cc=.o) math64.o
 GEO_OBJ  = $(GEO_SRC:.cc=.o) math64.o
+GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o) math64.o
 
 # -ftrapv is extremely important to catch integer overflow bugs, which are otherwise hard to detect
 # OSM data covers almost the entire range of int32_t; multiplying two values (required for some algorithms)
@@ -26,11 +27,11 @@ LD_FLAGS = #-fprofile-arcs#--as-needed
 all: make.dep conv_osmxml data_converter simplifier gl_test tests
 #	 @echo [ALL] $<
 
-gl_test: $(GL_TEST_SRC)
-	@echo "[C  ]" $@
-	@gcc $(GL_TEST_SRC) $(CFLAGS) $(LD_FLAGS) -lGL -lglfw -lm -o $@
+gl_test: $(GL_TEST_OBJ)
+	@echo [LD ] $@
+	@g++ $(GL_TEST_OBJ) $(LD_FLAGS) -lGL -lglfw -lm -o $@
 
-conv_osmxml: $(CONV_XML_OBJ) 
+conv_osmxml: $(CONV_XML_OBJ)
 	@echo [LD ] $@
 	@g++ $(CONV_XML_OBJ) $(LD_FLAGS) -o $@
 
@@ -81,7 +82,7 @@ clean:
 	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests 
 	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation_test
 
-make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(TEST_SRC)
+make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(TEST_SRC) $(GL_TEST_SRC)
 	@echo [DEP]
 	@g++ -MM $^ > make.dep
 
