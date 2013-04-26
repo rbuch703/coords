@@ -6,6 +6,7 @@
 #include "avltree.h"
 #include <stdint.h>
 #include <vector>
+#include <algorithm> //for sort()
 
 vector<int32_t> triangulate( VertexChain &c);
 void triangulate( VertexChain &c, vector<int32_t> &triangles_out);
@@ -39,14 +40,15 @@ public:
 };
 
 //:TODO replace by a heap, don't need the complexity of an AVLTree
-class MonotonizeEventQueue : protected AVLTree<SimpEvent> 
+class MonotonizeEventQueue
 {
 public:
 
-    int size() const { return AVLTree<SimpEvent>::size(); }
+    //int size() const { return size()-m_pos; }
 
-    MonotonizeEventQueue( const vector<Vertex> &polygon)
+    MonotonizeEventQueue( const vector<Vertex> &polygon): m_pos(0)
     {
+        m_events.reserve( polygon.size());
         assert(polygon.front() != polygon.back() && "Not suported for vertex classification");
         for (uint64_t i = 0; i < polygon.size(); i++)
         {
@@ -61,23 +63,21 @@ public:
                 Vertex succ2 = polygon[ (i + 2) % polygon.size()];
 
                 EventType event = classifyPair( pred, pos, succ, succ2);
-                insert( SimpEvent( pred, pos, succ, succ2, true, event ));
-                //insert( SimpEvent( polygon, i+1, events.second));
+                m_events.push_back( SimpEvent( pred, pos, succ, succ2, true, event ));
             } else
-                insert( SimpEvent(pred, pos, Vertex(0,0), succ, false, classifyVertex(polygon, i)));
+                m_events.push_back( SimpEvent(pred, pos, Vertex(0,0), succ, false, classifyVertex(polygon, i)));
         }
-
+        
+        sort(m_events.begin(), m_events.end());
         
     }
 
-    bool containsEvents() const { return size();}
+    bool hasEventsLeft() const { return m_pos != m_events.size();}
     
 	SimpEvent pop()
 	{
-	    assert ( size() > 0 );
-	    SimpEvent item = *begin();
-	    this->remove (item);
-	    return item;
+	    assert ( m_pos != m_events.size() );
+	    return m_events[m_pos++];
     }
     
 /*	SimpEvent top() 
@@ -86,7 +86,7 @@ public:
 	    return *begin();
     }*/
 
-    void remove(SimpEvent ev) { AVLTree<SimpEvent>::remove(ev); }
+    //void remove(SimpEvent ev) { AVLTree<SimpEvent>::remove(ev); }
     
 private:
 
@@ -171,6 +171,9 @@ private:
     {
         this->remove( SimpEvent(v, REGULAR));   //uses arbitrary event type 'REGULAR', which remove() ignores anyway
     }    */
+    
+    vector<SimpEvent> m_events;
+    uint64_t m_pos;
 };
 
 ostream &operator<<( ostream &os, SimpEvent ev);

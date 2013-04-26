@@ -101,7 +101,7 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
     //cairo_translate( cr, -553625894, +128060048+80*20000);
     
 
-    static const double M_PI = 3.141592;
+    //static const double M_PI = 3.141592;
 
     cairo_set_line_width (cr, 0.1);
 
@@ -120,7 +120,7 @@ void createCairoDebugOutput( const VertexChain &chain, list<LineSegment> &newDia
 
     
     //cairo_set_line_width (cr, 0.2);
-    while (events.size() != 0)
+    while (events.hasEventsLeft())
     {
         SimpEvent event = events.pop();
         //double dx = ;

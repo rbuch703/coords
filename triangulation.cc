@@ -47,22 +47,22 @@ ostream &operator<<( ostream &os, SimpEvent ev)
 
 /** returns whether the line 'a' has a smaller or equal y-value at xPos than the line 'b'.
     The method silently assumes that both segments actually intersect the vertical line at xPos.
-    Do not make this a method os the LineSegment class, as it has nothing to do with it semantically
+    Do not make this a method of the LineSegment class, as it has nothing to do with it semantically
   */
 bool leq(const LineSegment a, const LineSegment b, int32_t xPos)
 {
     assert(a.start.get_x() != a.end.get_x());
     assert(b.start.get_x() != b.end.get_x());
     
-    BigInt dbx = b.end.get_x() - b.start.get_x();
-    BigInt dax = a.end.get_x() - a.start.get_x();
+    int64_t dbx = (int64_t)b.end.x - (int64_t)b.start.x;
+    int64_t dax = (int64_t)a.end.x - (int64_t)a.start.x;
     
-    BigInt dby = b.end.get_y() - b.start.get_y();
-    BigInt day = a.end.get_y() - a.start.get_y();
+    int64_t dby = (int64_t)b.end.y - (int64_t)b.start.y;
+    int64_t day = (int64_t)a.end.y - (int64_t)a.start.y;
     
     bool flipSign = (dax < 0) != (dbx < 0);
     
-    BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
+    BigInt left =  dbx * dax * (a.start.get_y() - b.start.get_y());
     BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
     
     return (left == right)|| ((left < right) != flipSign);
@@ -73,13 +73,17 @@ bool eq(const LineSegment a, const LineSegment b, int32_t xPos)
     assert(a.start.get_x() != a.end.get_x());
     assert(b.start.get_x() != b.end.get_x());
     
-    BigInt dbx = b.end.get_x() - b.start.get_x();
-    BigInt dax = a.end.get_x() - a.start.get_x();
+    int64_t dbx = (int64_t)b.end.x - (int64_t)b.start.x;
+    int64_t dax = (int64_t)a.end.x - (int64_t)a.start.x;
     
-    BigInt dby = b.end.get_y() - b.start.get_y();
-    BigInt day = a.end.get_y() - a.start.get_y();
+    int64_t dby = (int64_t)b.end.y - (int64_t)b.start.y;
+    int64_t day = (int64_t)a.end.y - (int64_t)a.start.y;
     
-    BigInt left = (a.start.get_y() - b.start.get_y()) * dbx * dax;
+    if (dbx*day == dax*dby) // parallel
+        return a.start.isOnLine(b.start, b.end);
+
+        
+    BigInt left =  dbx * dax * (a.start.get_y() - b.start.get_y());
     BigInt right=  dby * dax * (xPos - b.start.get_x()) - day * dbx * (xPos - a.start.get_x());
     
     return left == right;
@@ -429,7 +433,7 @@ list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain)
     map<LineSegment, Vertex> helpers;
     LineArrangement status;
     list<LineSegment> newDiagonals;
-    while (events.size() != 0)
+    while (events.hasEventsLeft() )
     {
         SimpEvent ev = events.pop();
         //cout << "handling event " << ev << endl;
@@ -589,7 +593,7 @@ vector<Vertex> getEndVertices(const VertexChain &chain)
     
     vector<Vertex> res;
     MonotonizeEventQueue events(poly);
-    while (events.containsEvents())
+    while (events.hasEventsLeft())
     {
         SimpEvent ev = events.pop();
         if (ev.type == END)

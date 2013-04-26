@@ -69,6 +69,8 @@ private:
     friend list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain);
     friend bool leq(const LineSegment a, Vertex pos);
     friend bool eq(const LineSegment a, Vertex pos);
+    friend bool leq(const LineSegment a, const LineSegment b, int32_t xPos);
+    friend bool eq(const LineSegment a, const LineSegment b, int32_t xPos);
 
 //    friend EventType classifyVertex(const vector<Vertex> &vertices, uint64_t vertex_id);
 };
