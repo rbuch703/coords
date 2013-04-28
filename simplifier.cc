@@ -23,7 +23,7 @@ void writePolygonToDisk(std::string path, VertexChain segment)
 {
    
     double secs = 0;
-    if (segment.size() > 1000)
+    if (segment.size() > 10000)
     {
         secs = getWallTime();
         cout << "\t\tsegment of size " << segment.size();
@@ -33,7 +33,7 @@ void writePolygonToDisk(std::string path, VertexChain segment)
     if (segment.size() < 4) return; // can't be a polygon with less than four vertices (first and last are identical)
     list<VertexChain> simples = toSimplePolygons( segment );
     
-    if (segment.size() > 1000)
+    if (segment.size() > 10000)
         std::cout << "\ttook " << (getWallTime() - secs) << " seconds" << endl;
     
     //assert (poly.isSimple());
@@ -230,7 +230,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
          * actual positions are computed through global shift and scale values per patch )
         */
         VertexChain simp(seg);
-        if (simp.simplifyArea( (right-(uint64_t)left)/2048 ))
+        if (simp.simplifyArea( (right-(uint64_t)left)/1024 ))
         {
             simp.canonicalize();
             writePolygonToDisk(file_base+"#"+position, simp.data() );
@@ -426,10 +426,12 @@ int main()
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
     //extractCountries();
-    //extractBuildings();
+    extractBuildings();
     //extractGermany();
+/*
     FILE* f = fopen("coastline.dump", "rb");
-    //if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
+    if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
     reconstructCoastline(f);//, poly_storage);
+    */
     //cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
 }

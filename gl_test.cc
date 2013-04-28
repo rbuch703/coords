@@ -67,80 +67,134 @@ int64_t isClockwise(vertex_data_t polygon)
     return pseudodistance;// < 0;
 }
 
-struct tile_t
+
+class Tile
 {
-    vector<int32_t> triangles;
-    /*vertex_data_t *polygons;
-    int64_t num_polygons;
-    int64_t num_max_polygons;*/
+public:
+    virtual void render() const = 0;
 };
 
-map<string, tile_t> tileCache;
 
-tile_t read_tile(const string &filename)
+class AreaTile: public Tile
 {
-    tile_t tile;
-    // = { malloc( 64 * sizeof(vertex_data_t)), 0, 64};
-    cout << "opening file " << filename << endl;
-    
-    FILE* f = fopen(filename.c_str(), "rb");
-    assert (f != NULL);
-    
-    int64_t nVertices = 0;
-    while (fread(&nVertices, sizeof(nVertices), 1, f))
+public:    
+    AreaTile(const string &filename)
     {
-    
-        int32_t* polygon = new int32_t[2 * nVertices];
-    
-        if (1 != fread(polygon, nVertices*8, 1, f))
-            assert( 0 && "error reading file");
+        cout << "opening file " << filename << endl;
         
-        VertexChain c(polygon, nVertices);
-        triangulate(c, tile.triangles);
-        /*
-        if (tile.num_polygons == tile.num_max_polygons)
+        FILE* f = fopen(filename.c_str(), "rb");
+        assert (f != NULL);
+        
+        int64_t nVertices = 0;
+        while (fread(&nVertices, sizeof(nVertices), 1, f))
         {
-            tile.polygons = realloc(tile.polygons, 2 * tile.num_max_polygons * sizeof(vertex_data_t));
-            tile.num_max_polygons *= 2;
-        }
-
-        tile.polygons[tile.num_polygons++] = polygon;        */
-    }
-    fclose(f);
-    cout << "loaded " << filename << " with " << tile.triangles.size()/6 << " triangles." << endl;
-    return tile;
-}
-
-void render_tile(tile_t tile)
-{
-
-    //glColor3f(1,1,1);
-    //BOOST_FOREACH( CountVertexPair p, polygons)
-    assert(tile.triangles.size() % 6 == 0);
-    for (uint64_t i = 0; i < tile.triangles.size(); i+=6)
-    {
-        glBegin(GL_TRIANGLES);
-
-            glVertex2d(tile.triangles[i+1], tile.triangles[i+0]);
-            glVertex2d(tile.triangles[i+3], tile.triangles[i+2]);
-            glVertex2d(tile.triangles[i+5], tile.triangles[i+4]);
-
-           /* int64_t pd = isClockwise(tile.polygons[i]);
-            if (pd > 0)
-                glColor3f(1,1,1);
-            else if (pd < 0)
-                glColor3f(0,0,0);
-            else
-                glColor3f(1,0,0);
-            */
-            /*int32_t* v = tile.polygons[i].vertices;
-            for (int64_t num_vertices = tile.polygons[i].num_vertices; num_vertices; num_vertices--, v+=2)
+        
+            int32_t* polygon = new int32_t[2 * nVertices];
+        
+            if (1 != fread(polygon, nVertices*8, 1, f))
+                assert( 0 && "error reading file");
+            
+            VertexChain c(polygon, nVertices);
+            triangulate(c, triangles);
+            /*
+            if (tile.num_polygons == tile.num_max_polygons)
             {
-                glVertex2d(v[1], v[0]);
-            }*/
-        glEnd();
+                tile.polygons = realloc(tile.polygons, 2 * tile.num_max_polygons * sizeof(vertex_data_t));
+                tile.num_max_polygons *= 2;
+            }
+
+            tile.polygons[tile.num_polygons++] = polygon;        */
+        }
+        fclose(f);
+        cout << "loaded " << filename << " with " << triangles.size()/6 << " triangles." << endl;
     }
-}
+    
+    virtual void render() const
+    {
+
+        //glColor3f(1,1,1);
+        //BOOST_FOREACH( CountVertexPair p, polygons)
+        assert(triangles.size() % 6 == 0);
+        for (uint64_t i = 0; i < triangles.size(); i+=6)
+        {
+            glBegin(GL_TRIANGLES);
+                glVertex2d(triangles[i+1], triangles[i+0]);
+                glVertex2d(triangles[i+3], triangles[i+2]);
+                glVertex2d(triangles[i+5], triangles[i+4]);
+            glEnd();
+        }
+    }    
+private:
+    vector<int32_t> triangles;
+};
+
+class OutlineTile: public Tile
+{
+public:
+    OutlineTile(const string &filename):
+        polygons(new vertex_data_t[16]), num_polygons(0), num_max_polygons(16)
+    {
+        
+        cout << "opening outline file " << filename << endl;
+        
+        FILE* f = fopen(filename.c_str(), "rb");
+        assert (f != NULL);
+        
+        int64_t nVertices = 0;
+        while (fread(&nVertices, sizeof(nVertices), 1, f))
+        {
+            vertex_data_t vertices;
+            vertices.num_vertices = nVertices;
+            vertices.vertices = new int32_t[2 * nVertices];
+        
+            if (1 != fread(vertices.vertices, nVertices*8, 1, f))
+                assert( 0 && "error reading file");
+            
+            //VertexChain c(polygon, nVertices);
+            if (num_polygons == num_max_polygons)
+            {
+                vertex_data_t *poly_tmp = new vertex_data_t[2 * num_max_polygons];
+                num_max_polygons *= 2;
+                for (int i = 0; i < num_polygons; i++)
+                    poly_tmp[i] = polygons[i];
+                delete [] polygons;
+                polygons = poly_tmp;
+            }
+
+            polygons[num_polygons++] = vertices;
+        }
+        fclose(f);
+        cout << "loaded " << filename << endl;//" with " << tile.triangles.size()/6 << " triangles." << endl;
+    }
+    
+    virtual void render() const
+    {
+        for (int i = 0; i < num_polygons; i++)
+        {
+               /* int64_t pd = isClockwise(tile.polygons[i]);
+                if (pd > 0)
+                    glColor3f(1,1,1);
+                else if (pd < 0)
+                    glColor3f(0,0,0);
+                else
+                    glColor3f(1,0,0);
+                */
+            vertex_data_t &poly = polygons[i];
+            glBegin(  GL_LINE_LOOP);
+                for (int j = 0; j < poly.num_vertices; j++)
+                    glVertex2d( poly.vertices[2*j+1], poly.vertices[2*j]);
+            glEnd();
+        }
+    }
+    
+private:
+    vertex_data_t *polygons;
+    int64_t num_polygons;
+    int64_t num_max_polygons;
+
+};
+
+map<string, Tile*> tileCache;
 
 int button_state[] = {0, 0, 0};
 double g_top =    900000000;
@@ -195,16 +249,16 @@ void mouseMoved(int x, int y)
     mouse_y = y;
 }
 
-void render_path(const string &filename)
+void render_path(const string &filename, bool asOutline)
 {
     if (!tileCache.count(filename))
-        tileCache.insert( pair<string, tile_t>(filename, read_tile(filename)));
+    
+        tileCache.insert( pair<string, Tile*>(filename, 
+            asOutline ? (Tile*)(new OutlineTile(filename)) : (Tile*)new AreaTile(filename)  ) );
 
     assert(tileCache.count(filename));
 
-    render_tile(tileCache[filename]);
-    //free_tile(tile);
-    
+    tileCache[filename]->render();
 }
 
 typedef struct rect_t
@@ -216,11 +270,11 @@ double max(double a, double b) { return a> b ? a : b;}
 double min(double a, double b) { return a< b ? a : b;}
 double width(rect_t rect) { return rect.right - rect.left;}
 
-void render(const string &basepath, const rect_t view, rect_t tile, const string &position)
+void render(const string &path, const rect_t view, rect_t tile, bool asOutline)
 {
     struct stat dummy;
     
-    string path( basepath+position);
+    //string path( basepath+position);
     
     if ( stat( path.c_str(), &dummy ) != 0) 
         return;
@@ -243,7 +297,7 @@ void render(const string &basepath, const rect_t view, rect_t tile, const string
     if (!hasChildren || sufficientResolution) 
     {
         //cout << "rendering tile " << position << endl;
-        render_path(path);
+        render_path(path, asOutline);
         //free(path);
         //Tile(BASEPATH+position).render(); 
         return;
@@ -259,18 +313,27 @@ void render(const string &basepath, const rect_t view, rect_t tile, const string
     
     if ( mid_x > view.left) //has to render left half
     {
-        if (mid_y > view.bottom) render(basepath, view, bl0, position+'0');
-        if (mid_y < view.top   ) render(basepath, view, tl2, position+'2');
+        if (mid_y > view.bottom) render(path+'0', view, bl0, asOutline);
+        if (mid_y < view.top   ) render(path+'2', view, tl2, asOutline);
     }
     
     if ( mid_x < view.right) //has to render right half
     {
-        if (mid_y > view.bottom) render(basepath, view, br1, position+'1');
-        if (mid_y < view.top   ) render(basepath, view, tr3, position+'3');
+        if (mid_y > view.bottom) render(path+'1', view, br1, asOutline);
+        if (mid_y < view.top   ) render(path+'3', view, tr3, asOutline);
     }
 }
 
 //static const char* BASEPATH = "output/coast/seg#";
+void onResize( int width, int height )
+{
+
+    glViewport(0,0,width, height);
+    double y_mid = (g_top + g_bottom) / 2.0;
+    double myHeight = (g_right - g_left) / width * height;
+    g_top   = y_mid + myHeight/2.0;
+    g_bottom= y_mid - myHeight/2.0;
+}
 
 int main () {
     int running = 1;
@@ -289,6 +352,7 @@ int main () {
     
     glfwSetMouseButtonCallback( buttonPressed );
     glfwSetMousePosCallback( mouseMoved );
+    glfwSetWindowSizeCallback( onResize);
     // Main loop
     while (running) {
         
@@ -304,13 +368,13 @@ int main () {
         rect_t view ={ g_top, g_left, g_bottom, g_right };
         rect_t world={ 900000000, -1800000000, -900000000, 1800000000};
         glColor3f(1,1,1);
-        render( "output/coast/seg#", view, world, "");
+        render( "output/coast/seg#", view, world, false);
         glColor3f(0,1,0);
-        render( "output/coast/state#", view, world, "");
+        render( "output/coast/state#", view, world, true);
         glColor3f(0,0,0);
-        render( "output/coast/country#", view, world, "");
+        render( "output/coast/country#", view, world, true);
         glColor3f(1,0,0);
-        render( "output/coast/building#", view, world, "");
+        render( "output/coast/building#", view, world, false);
 
         // Swap front and back rendering buffers
         glfwSwapBuffers ();
