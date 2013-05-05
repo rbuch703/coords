@@ -311,11 +311,18 @@ int main()
     cities.push_back( OSMKeyValuePair("boundary", "administrative"));
     cities.push_back( OSMKeyValuePair("admin_level", "8"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( cities, fopen("intermediate/cities.dump", "wb")));
+    */
+    list<OSMKeyValuePair> roads;
+    roads.push_back( OSMKeyValuePair("highway", "*"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( roads, fopen("intermediate/roads.dump", "wb")));
+
+    /*
+    list<OSMKeyValuePair> water;
+    water.push_back( OSMKeyValuePair("natural", "water"));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("intermediate/water.dump", "wb")));
+    */
     
-    list<OSMKeyValuePair> autobahn;
-    autobahn.push_back( OSMKeyValuePair("highway", "motorway"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( autobahn, fopen("intermediate/highway_l0.dump", "wb")));
-    
+    /*
     list<OSMKeyValuePair> buildings;
     buildings.push_back( OSMKeyValuePair("building", "*"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("intermediate/buildings.dump", "wb")));
@@ -328,28 +335,11 @@ int main()
     coastline.push_back( OSMKeyValuePair("natural", "coastline"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("intermediate/coastline.dump", "wb")));
     */
-    /*
-    FILE* file = fopen("intermediate/coastline.dump", "wb");
-    for (uint64_t i = 0; i < num_ways; i++)
-    {
-        if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
-        if (! way_index[i]) continue;
-        OSMIntegratedWay way = getWay(i);
-        if (way.hasKey("natural") && way["natural"] == "coastline")
-            way.serialize(file);
 
-    }    
-    fclose(file); */
-    /*
-    list<OSMKeyValuePair> water;
-    water.push_back( OSMKeyValuePair("natural", "water"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("intermediate/water.dump", "wb")));
-    */
-    //dumpWays(extract_config);
+    dumpWays(extract_config);
     
-    //BOOST_FOREACH( const OSMFilterConfig cfg, extract_config)
-    //    fclose(cfg.second);
-    //extractCoastline();
+    BOOST_FOREACH( const OSMFilterConfig cfg, extract_config)
+        fclose(cfg.second);
     
     //free_mmap(&mmap_node);
     free_mmap(&mmap_way);

@@ -204,7 +204,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     if (num_vertices < VERTEX_LIMIT)    //few enough vertices to not further subdivide the area --> write everything to disk
     {
         BOOST_FOREACH( const VertexChain seg, segments)
-            writePolygonToDisk(file_base+"#"+position, seg.data() );
+            writePolygonToDisk(file_base+position, seg.data() );
         return;
     }
     
@@ -217,7 +217,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
      *      This is necessary, because the renderer uses the existence of a file to determine
      *      whether further sub-tiles exist.
      */
-    createEmptyFile(file_base+"#"+position);
+    createEmptyFile(file_base+position);
     
     BOOST_FOREACH( const VertexChain seg, segments)
     {
@@ -233,7 +233,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
         if (simp.simplifyArea( (right-(uint64_t)left)/1024 ))
         {
             simp.canonicalize();
-            writePolygonToDisk(file_base+"#"+position, simp.data() );
+            writePolygonToDisk(file_base+position, simp.data() );
         }
     }
          

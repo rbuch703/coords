@@ -2,7 +2,7 @@
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc helpers.cc
 SIMP_SRC = simplifier.cc osm_types.cc geometric_types.cc vertexchain.cc polygonreconstructor.cc mem_map.cc helpers.cc quadtree.cc int128.cc triangulation.cc
-GL_TEST_SRC = gl_test.cc geometric_types.cc int128.cc vertexchain.cc triangulation.cc
+GL_TEST_SRC = gl_test.cc geometric_types.cc int128.cc vertexchain.cc triangulation.cc helpers.cc
 TEST_SRC = tests/arithmetic_test.cc tests/geometry_test.cc tests/quadtree_test.cc tests/triangulation_test.cc
 
 CONV_XML_OBJ  = $(CONV_XML_SRC:.cc=.o)
@@ -16,8 +16,8 @@ GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o) math64.o
 # already uses all bits of an int64_t, so, more complex algorithms could easily cause an - otherwise undetected -
 # integer overflow
 # WARNING: the gcc option -O2 appears to negate the effects of -ftrapv ! 
-FLAGS = -g -Wall -Wextra -DNDEBUG -O2
-#FLAGS = -ftrapv -g -Wall -Wextra 
+#FLAGS = -g -Wall -Wextra -DNDEBUG -O2
+FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
@@ -29,7 +29,7 @@ all: make.dep conv_osmxml data_converter simplifier gl_test tests
 
 gl_test: $(GL_TEST_OBJ)
 	@echo [LD ] $@
-	@g++ $(GL_TEST_OBJ) $(LD_FLAGS) -lGL -lglfw -lm -o $@
+	@g++ $(GL_TEST_OBJ) $(LD_FLAGS) `curl-config --libs` -lGL -lglfw -lm -o $@
 
 conv_osmxml: $(CONV_XML_OBJ)
 	@echo [LD ] $@
