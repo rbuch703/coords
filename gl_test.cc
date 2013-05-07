@@ -256,68 +256,57 @@ void mouseMoved(int x, int y)
 
 CURL* easyhandle; 
 
+set<string> existing_tiles;
+
+void ensureExistsInCache(const string filename)
+{
+    struct stat dummy;
+    if (stat( ("cache/"+filename).c_str(), &dummy ) == 0) return; //already in cache, nothing to do
+    
+    // download it to fill the cache (or get the server answer that it does not exist)
+        
+    curl_easy_setopt(easyhandle, CURLOPT_URL, ("http://91.250.98.219/"+filename).c_str() );
+    curl_easy_setopt(easyhandle, CURLOPT_USERAGENT, "OSM gl_test-0.1 (libcurl)");
+    curl_easy_setopt(easyhandle, CURLOPT_FAILONERROR, true);
+    //curl_easy_setopt(easyhandle, CURLOPT_HEADER, 1);
+
+    FILE* f = fopen(("cache/"+filename).c_str(), "wb");
+    assert(f && "Could not create file");
+    curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, f);
+    int res = curl_easy_perform(easyhandle);
+    fclose(f);
+    
+    long http_code = 0;
+    assert(CURLE_OK == curl_easy_getinfo (easyhandle, CURLINFO_RESPONSE_CODE, &http_code));
+    
+    bool dlOk = res == CURLE_OK && http_code == 200;
+    if (!dlOk)
+    {
+        cout << "[ERR] error downloading " << filename << "; reason: "<< res << "/" << http_code << ")" << endl;
+        int res = remove ( ("cache/"+filename).c_str() );
+        assert(res = 0);
+        assert(false);
+    } else
+    {
+        double speed;
+        curl_easy_getinfo (easyhandle, CURLINFO_SPEED_DOWNLOAD, &speed);
+        cout << "[INFO] download of " << filename << " completed with " <<  (speed/1024) << "kB/s" << endl;
+    }
+}
+
 bool tileExists(const string tile_name)
 {
-    static map<string, bool> exists;
 
     struct stat dummy;
-    
-    if (exists.count(tile_name)) return exists[tile_name];
 
-    cout << "First-time access to file \"" << tile_name << "\"" << endl;
-
-    if (stat( ("cache/"+tile_name).c_str(), &dummy ) == 0)
-    {
-        cout << "\t... is present in cache" << endl;
-        exists.insert( pair<string, bool>(tile_name, true ));
-    }
-    else      //tile is not in cache; may not have been downloaded or not exist at all
-    {   // --> download it to fill the cache (or get the server answer that it does not exist)
-        
-        curl_easy_setopt(easyhandle, CURLOPT_URL, ("http://91.250.98.219/"+tile_name).c_str() );
-        curl_easy_setopt(easyhandle, CURLOPT_USERAGENT, "OSM gl_test-0.1 (libcurl)");
-        curl_easy_setopt(easyhandle, CURLOPT_FAILONERROR, true);
-        //curl_easy_setopt(easyhandle, CURLOPT_HEADER, 1);
+    if (stat( ("cache/"+tile_name).c_str(), &dummy ) == 0) return true; //already in cache
     
-        FILE* f = fopen(("cache/"+tile_name).c_str(), "wb");
-        assert(f && "Could not create file");
-        curl_easy_setopt(easyhandle, CURLOPT_WRITEDATA, f);
-        int res = curl_easy_perform(easyhandle);
-        
-        long http_code = 0;
-        assert(CURLE_OK == curl_easy_getinfo (easyhandle, CURLINFO_RESPONSE_CODE, &http_code));
-        
-        bool dlOk = res == CURLE_OK && http_code == 200;
-        exists.insert( pair<string, bool>(tile_name, dlOk));
-        fclose(f);
-        
-        cout << "\t... download completed " << (dlOk ? "successfully ": "with error ");
-        if (!dlOk)
-        {
-            cout << "(" << res << "/" << http_code << ")";
-            assert( remove ( ("cache/"+tile_name).c_str() ) == 0);
-        } else
-        {
-            double speed;
-            curl_easy_getinfo (easyhandle, CURLINFO_SPEED_DOWNLOAD, &speed);
-            cout << "with " << (speed/1024) << "kB/s";
-        }
-        cout << endl;
-        
-        /*
-        switch (res)
-        {
-            case CURLE_OK: 
-                break;
-            default:
-                cout << "\t... libcurl returned error code " << res << endl;
-                assert( ); //delete empty file
-                break;
-        }*/
-    }
-    assert(exists.count(tile_name));
+    if ( existing_tiles.count(tile_name) == 0) return false; //does not exist on server
     
-    return exists[tile_name];
+    ensureExistsInCache(tile_name);
+    
+    assert( 0 == stat( ("cache/"+tile_name).c_str(), &dummy ));
+    return true;
     
 }
 
@@ -355,10 +344,10 @@ void render(const string &path, const rect_t view, rect_t tile, bool asOutline)
      * Since in some areas, no data may to be drawn at all, some children may not exist */
     bool hasChildren = 0;
 
-    hasChildren |= tileExists(path+"0");
-    hasChildren |= tileExists(path+"1");
-    hasChildren |= tileExists(path+"2");
-    hasChildren |= tileExists(path+"3");
+    hasChildren |= existing_tiles.count(path+"0");
+    hasChildren |= existing_tiles.count(path+"1");
+    hasChildren |= existing_tiles.count(path+"2");
+    hasChildren |= existing_tiles.count(path+"3");
     
     int sufficientResolution = width(tile) < width(view);
     if (!hasChildren || sufficientResolution) 
@@ -391,6 +380,33 @@ void render(const string &path, const rect_t view, rect_t tile, bool asOutline)
     }
 }
 
+void registerTile( string name, FILE* f, set<string> &tiles_out)
+{
+    uint8_t children;
+    fread(&children, sizeof(children), 1, f);
+    
+    if (children & 1) tiles_out.insert(name+"0");
+    if (children & 1) registerTile(name+"0", f, tiles_out);
+
+    if (children & 2) tiles_out.insert(name+"1");
+    if (children & 2) registerTile(name+"1", f, tiles_out);
+
+    if (children & 4) tiles_out.insert(name+"2");
+    if (children & 4) registerTile(name+"2", f, tiles_out);
+
+    if (children & 8) tiles_out.insert(name+"3");
+    if (children & 8) registerTile(name+"3", f, tiles_out);
+}
+
+void registerTiles( string indexfile, string basename, set<string> &tiles_out)
+{
+    FILE* f = fopen(indexfile.c_str(), "rb");
+    tiles_out.insert( basename ); //existence of root file is implied and not stored in the index
+    
+    registerTile( basename, f, tiles_out);
+    fclose(f);
+}
+
 //static const char* BASEPATH = "output/coast/seg#";
 void onResize( int width, int height )
 {
@@ -409,6 +425,16 @@ int main () {
     easyhandle = curl_easy_init(); 
     ensureDirectoryExists("cache");
     
+    
+    ensureExistsInCache("seg.idx");
+    ensureExistsInCache("country.idx");
+    ensureExistsInCache("building.idx");
+    ensureExistsInCache("state.idx");
+    
+    registerTiles( "cache/seg.idx",     "seg",     existing_tiles);
+    registerTiles( "cache/country.idx", "country", existing_tiles);
+    registerTiles( "cache/building.idx","building",existing_tiles);
+    registerTiles( "cache/state.idx",   "state",   existing_tiles);
 /*    Tile t("output/coast/seg#1");
     Tile t0("output/coast/seg#3");
     Tile t2("output/coast/seg#2");*/

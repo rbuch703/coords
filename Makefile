@@ -24,24 +24,28 @@ CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
-all: make.dep conv_osmxml data_converter simplifier gl_test tests
+all: make.dep conv_osmxml data_converter simplifier gl_test make_index tests
 #	 @echo [ALL] $<
+
+make_index: make_index.cc
+	@echo [LD ] $@
+	@g++ $^ -o $@
 
 gl_test: $(GL_TEST_OBJ)
 	@echo [LD ] $@
-	@g++ $(GL_TEST_OBJ) $(LD_FLAGS) `curl-config --libs` -lGL -lglfw -lm -o $@
+	@g++ $^  $(LD_FLAGS) `curl-config --libs` -lGL -lglfw -lm -o $@
 
 conv_osmxml: $(CONV_XML_OBJ)
 	@echo [LD ] $@
-	@g++ $(CONV_XML_OBJ) $(LD_FLAGS) -o $@
+	@g++ $^ $(LD_FLAGS) -o $@
 
 data_converter: $(CONV_OBJ)
 	@echo [LD ] $@
-	@g++ $(CONV_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
+	@g++ $^ $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
 simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
-	@g++ $(SIMP_OBJ) $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
+	@g++ $^ $(CCFLAGS) $(LD_FLAGS) -lgmp -lgmpxx -o $@
 
 tests: tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation_test
 
@@ -79,7 +83,7 @@ clean:
 	@rm -rf tests/*~
 	@rm -rf *gcda
 	@rm -rf *gcno
-	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests 
+	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests make_index
 	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation_test
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(TEST_SRC) $(GL_TEST_SRC)

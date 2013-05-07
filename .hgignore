@@ -4,7 +4,7 @@ syntax: glob
 # ignore backup files
 *~
 
-# ignore compiled executables
+# ----- ignore compiled executables
 conv_osmxml
 dump_kv
 data_converter
@@ -12,32 +12,33 @@ geo_unit_tests
 simplifier
 stats_xmlosm
 gl_test
+make_index
 tests/arithmetic_test
 tests/geometry_test
 tests/quadtree_test
 tests/triangulation_test
 
-#ignore compiled objects
+# ----- ignore compiled objects
 *.o
 
-# ignore OSM data files
+# ----- ignore OSM data files
 *.osm
 *.osm.bz2
 *.osm.gz
 
-# ignore gcc coverage data
+# ----- ignore gcc coverage data
 *.gcda
 *.gcno
 html
 coverage.info
 
-# ignore debug outputs
+# ----- ignore debug outputs
 *.txt
 
-# oprofile data
+# ----- oprofile data
 oprofile_data
 
-#ignore output files
+# ----- ignore output files
 make.dep
 
 callgrind.out.*
@@ -48,6 +49,7 @@ coastline
 borders
 intermediate
 output
+cache
 
 *.data
 *.idx
