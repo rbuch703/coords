@@ -18,6 +18,19 @@
 
 list<VertexChain> poly_storage;
 
+mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
+mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
+uint64_t* offset = (uint64_t*) idx_map.ptr;
+uint64_t num_rels = idx_map.size / sizeof(uint64_t);
+
+mmap_t way_idx_map = init_mmap ( "intermediate/ways.idx", true, false);
+mmap_t way_data_map= init_mmap ( "intermediate/ways_int.data",true, false);
+uint64_t* way_offset = (uint64_t*) way_idx_map.ptr;
+//#ifndef NDEBUG
+uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
+//#endif
+
+
 
 void writePolygonToDisk(std::string path, VertexChain segment)
 {
@@ -69,103 +82,6 @@ void handlePolygon(string, VertexChain& segment)
      
     //dumpPolygon(file_base, segment);
 }
-
-#if 0
-/** 
- *  @brief: 
- *  @value base_name: the base file name of the output; a serial number and the extension ".csv" are appended
- */
- 
-void extractNetwork(FILE* src/*, double allowedDeviation*/, string base_name)
-{
-    
-    /** maps each vertex that is the start/end point of at least one VertexChain 
-        to all the VertexChains that start/end with it **/
-    map<Vertex, list<VertexChain*> > borders;    
-    
-    /** holds pointers to all manually-allocated copies of border segments.
-        Only needed to keep track of the existing segments in order to delete them later **/
-    set<VertexChain*> border_storage;
-    
-    int idx = 0;
-    while (! feof(src))
-    {
-        if (++idx % 1 == 0) std::cout << idx << " ways read, " << std::endl;
-        
-        int i = fgetc(src);
-        if (i == EOF) break;
-        ungetc(i, src);
-
-        OSMIntegratedWay way(src);
-        
-        VertexChain s = way.toVertexChain();
-        if (s.front() == s.back()) { 
-            handlePolygon(base_name, s);
-            continue; 
-        }
-        VertexChain *seg = new VertexChain(s);
-        
-        borders[seg->front()].push_back(seg);
-        borders[seg->back()].push_back (seg);
-        border_storage.insert(seg);
-    }
-    // copy of endpoint vertices from 'borders', so that we can iterate over the endpoints and still safely modify the map
-    list<Vertex> endpoints; 
-    for (map<Vertex, list<VertexChain*> >::const_iterator v = borders.begin(); v != borders.end(); v++)
-        endpoints.push_back(v->first);
-    
-    cout << "Found " << border_storage.size() << " " << base_name <<" segments and " << zone_entries[base_name] << " loops" << endl;
-    idx = 0;
-    for (list<Vertex>::const_iterator it = endpoints.begin(); it!= endpoints.end(); it++)
-    {
-        if (++idx % 1000 == 0) cout << idx/1000 << "k segments joined" << endl;
-        Vertex v = *it;
-        if (borders[v].size() == 2)  //exactly two border segments meet here --> merge them
-        {
-            VertexChain *seg1 = borders[v].front();
-            VertexChain *seg2 = borders[v].back();        
-            borders[ seg1->front()].remove(seg1);
-            borders[ seg1->back() ].remove(seg1);
-            borders[ seg2->front()].remove(seg2);
-            borders[ seg2->back() ].remove(seg2);
-            border_storage.erase(seg2);
-
-            if      (seg1->front() == seg2->front()) { seg1->reverse(); seg1->append(*seg2, true); }
-            else if (seg1->back()  == seg2->front()) {                  seg1->append(*seg2, true); }
-            else if (seg1->front() == seg2->back() ) { seg2->append(*seg1, true); *seg1 = *seg2;   }
-            else if (seg1->back()  == seg2->back() ) { seg2->reverse(); seg1->append(*seg2, true); }
-            else assert(false);
-            delete seg2;
-            if (seg1->front() == seg1->back())
-            {
-                border_storage.erase(seg1);
-                handlePolygon(base_name, *seg1);
-                delete seg1;
-                continue; 
-            }
-            borders[seg1->front()].push_back(seg1);
-            borders[seg1->back() ].push_back(seg1);
-        }
-    }
-    cout << "Merged them to " << border_storage.size() << " " << base_name << " segments" << endl;
-    idx = 0;
-    cout << "now processing segments that could not be concatenated to form polygons" << endl;
-
-    BOOST_FOREACH (VertexChain* seg, border_storage)
-    {
-        /*
-        if (++idx % 1000 == 0) std::cout << idx/1000 << "k segments simplified, " << std::endl;
-        seg->simplifyStroke(allowedDeviation);
-        assert(seg->front() != seg->back()); //if both are equal it should not be in this list
-        dumpPolygon(base_name, *seg);
-        */
-        delete seg;
-    }
-    
-    cout << "Altogether " << zone_entries[base_name] << " "<< base_name <<" boundary segments (including loops)" << endl;
-    
-}
-#endif
 
 void clipFirstComponent(list<VertexChain> &in, int32_t clip_pos, list<VertexChain> &out1, list<VertexChain> &out2)
 {
@@ -323,63 +239,87 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
     
 }
 
+
+
+/* TODO let this method keep a blacklist of relations already processed through its recursion.
+    Currently, relations may be processed several times (and thus cause the creation of multiple polygons),
+    and the algorithm may even be caught in an infinite loop.
+    */
+void addOuterWaysToReconstructor(const OSMRelation &rel, PolygonReconstructor &recon)
+{
+
+    for (list<OSMRelationMember>::const_iterator way = rel.members.begin(); way != rel.members.end(); way++)
+    {
+        if ( (way->role != "outer") && (way->role != "exclave") && (way->role != "")) continue;
+        switch(way->type)
+        {
+            case RELATION:
+            {
+                if (! offset[way->ref]) continue;
+                OSMRelation child_rel( ((uint8_t*)data_map.ptr) + offset[way->ref], way->ref);
+                addOuterWaysToReconstructor(child_rel, recon);
+                break;            
+            }
+            case WAY:
+            {
+                if (way->ref == 0) continue;
+                if (way_offset[ way->ref ] == 0) continue;
+                const uint8_t * ptr = (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
+                OSMIntegratedWay iw(ptr , way->ref);
+                VertexChain ch(iw.vertices);
+                recon.add(ch);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+
 void extractCountries()
 {
-    mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
-    mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
-    uint64_t* offset = (uint64_t*) idx_map.ptr;
-    assert ( idx_map.size % sizeof(uint64_t) == 0);
-    uint64_t num_rels = idx_map.size / sizeof(uint64_t);
-
-    mmap_t way_idx_map = init_mmap ( "ways.idx", true, false);
-    mmap_t way_data_map= init_mmap ( "ways_int.data",true, false);
-    uint64_t* way_offset = (uint64_t*) way_idx_map.ptr;
-    assert ( way_idx_map.size % sizeof(uint64_t) == 0);
-#ifndef NDEBUG
-    uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
-#endif
 
     
     for (uint64_t rel_id = 0; rel_id < num_rels; rel_id++)
     {
-        if (rel_id % 1000 == 0)
+        if (rel_id % 10000 == 0)
             cout << (rel_id/1000) << "k relations read." << endl;   
         if (! offset[rel_id]) continue;
         OSMRelation rel( ((uint8_t*)data_map.ptr) + offset[rel_id], rel_id);
         
         //if (! rel.hasKey("boundary") || rel["boundary"] != "administrative") continue;
         //if (! rel.hasKey("timezone")) continue;
-        if ( rel["admin_level"] != "4") continue;
         
-        
-        //if (! rel.tags.count( OSMKeyValuePair("boundary", "administrative"))) continue;
-        
-        //cout << rel["ISO3166-1"] << ";" << rel["int_name"] << ";" << rel["name:en"] << ";" << rel["iso3166-1:alpha2"] << endl;
+        /* current canonical detecting of countries: they have ALL of the following properties:
+            - they have an "ISO3166-1" tag
+            - they are tagged as admin_level=2
+            - they are tagges as boundary="administrative"
+            
+            all of these have to be true to prevent false positives (e.g. relations that group the boundary segements shared by two countries,
+            or territories that are a part of a country, but are still assigned a ISO3166-1 code (e.g. Svalbard)
+        */ 
+        //if (rel.hasKey("highway")) continue;
         /*
-        if ( rel.hasKey("ISO3166-1"))
-            cout <<  rel["ISO3166-1"] << endl;
-        else if (rel.hasKey("iso3166-1") )
-            cout <<  rel["iso3166-1"] << endl;
-        //else 
-        //    continue;
-        if (!rel.hasKey("ISO3166-1") && !rel.hasKey("iso3166-1")) continue;
-          */  
+        if (rel.hasKey("route")) continue;
+        if (rel["type"] == "multipolygon") continue;    //anything representing a single polygon which either has holes, or to many vertices to be a single WAY
+        if (rel["type"] == "restriction") continue;     //restrictions betwwen relations/ways/nodes, e.g. "cannot turn left from here to there"
+        if (rel["type"] == "street") continue;          //group of consecutive road segments that share a street name
+        if (rel["type"] == "boundary") continue;        //some geographical boundary
+        if (rel["type"] == "route_master") continue;    //all the directions and variants of routes (vehicles that always run the same way with the same reference number).
+        */
+        /*
+        cout << rel << endl;
+        continue;*/
+        
+        if ( rel["admin_level"] != "2") continue;
+        if ( rel["boundary"] != "administrative") continue;
+        if (!rel.hasKey("ISO3166-1")) continue;
+
+        //if (rel["admin_level"] != "4") continue;
         PolygonReconstructor recon;
         
-        for (list<OSMRelationMember>::const_iterator way = rel.members.begin(); way != rel.members.end(); way++)
-        {
-            if (way->type != WAY) continue;
-            if (way->role != "outer") continue;
-            
-            if (way->ref == 0) continue;
-            assert(way->ref < num_ways);
-            
-            if (way_offset[ way->ref ] == 0) continue;
-            const uint8_t * ptr = (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
-            OSMIntegratedWay iw(ptr , way->ref);
-            VertexChain ch(iw.vertices);
-            recon.add(ch);
-        }
+        addOuterWaysToReconstructor(rel, recon);
         
         recon.forceClosePolygons();
         list<VertexChain> polys = recon.getClosedPolygons();
@@ -393,7 +333,7 @@ void extractCountries()
         //else
         //cout << rel << endl;
     }
-    clipRecursive( "output/coast/state", "", poly_storage);   
+    clipRecursive( "output/coast/country", "", poly_storage);   
 }
 
 void extractBuildings()
@@ -421,12 +361,16 @@ void extractBuildings()
 
 int main()
 {
+    //integrity checke for the mmaps
+    assert ( idx_map.size % sizeof(uint64_t) == 0);
+    assert ( way_idx_map.size % sizeof(uint64_t) == 0);
+
     //double allowedDeviation = 100* 40000.0; // about 40km (~1/10000th of the earth circumference)
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    //extractCountries();
-    extractBuildings();
+    extractCountries();
+    //extractBuildings();
     //extractGermany();
 /*
     FILE* f = fopen("coastline.dump", "rb");
