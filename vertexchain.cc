@@ -73,8 +73,8 @@ bool VertexChain::simplifyArea(double allowedDeviation)
     /** simplifySection() requires the Polygon to consist of at least two vertices,
         so we need to test the number of vertices here. Also, a segment cannot be a polygon
         if its vertex count is less than four (since the polygon of smallest order is a triangle,
-        and first and last vertex are identical. Since simplification cannot add vertices,
-        we can safely terminate the simplification here, if we are short of four vertices. */
+        and first and last vertex are identical). Since simplification cannot add vertices,
+        we can safely terminate the simplification here, if we have less than four vertices. */
     if ( m_vertices.size() < 4) { m_vertices.clear(); return false; }
 
 
@@ -111,7 +111,7 @@ AABoundingBox VertexChain::getBoundingBox() const
     return box;
 }
 
-void VertexChain::simplifyStroke(double allowedDeviation)
+bool VertexChain::simplifyStroke(double allowedDeviation)
 {
     
     //TODO: check whether the whole VertexChain would be simplified to a single line (start-end)
@@ -125,8 +125,18 @@ void VertexChain::simplifyStroke(double allowedDeviation)
     last--;
     simplifySection( vertices, vertices.begin(), last, allowedDeviation);
     
-    m_vertices = vector<Vertex>( vertices.begin(), vertices.end() );    
+    /*
+    if (vertices.size() == 2)
+    {
+        BigInt dx = vertices.front().get_x() - vertices.back().get_x();
+        BigInt dy = vertices.front().get_y() - vertices.back().get_y();
+        dist_sq = asDouble (dx*dx+dy*dy);
+        if (dist_sq < allowedDeviation*allowedDeviation) 
+            vertices.pop_back();
+    }*/
     
+    m_vertices = vector<Vertex>( vertices.begin(), vertices.end() );    
+    return m_vertices.size() > 1;
 }
 
 void simplifySection(list<Vertex> &m_vertices, list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation)
@@ -158,7 +168,7 @@ void simplifySection(list<Vertex> &m_vertices, list<Vertex>::iterator segment_fi
         segment_first++;
         // erase range includes first iterator but excludes second one
         m_vertices.erase( segment_first, segment_last);
-        assert( m_vertices.front() == m_vertices.back());
+        //assert( m_vertices.front() == m_vertices.back());
     } else  //use point with maximum deviation as additional necessary point in the simplified polygon, recurse
     {
         simplifySection(m_vertices, segment_first, it_max, allowedDeviation);
@@ -318,27 +328,102 @@ bool VertexChain::isCanonicalPolygon()
     
 }
 
+
 /** ensures that no two consecutive vertices of a polygon are identical, 
     and that no three consecutive vertices are colinear.
     This property is a necessary prerequisite for many advanced algorithms */
 void VertexChain::canonicalize()
 {
-    //for open vertex chains, this method is incorrect; For these, colinearity must not be checked among first and last vertex
-    assert ( m_vertices.front() == m_vertices.back() && "incomplete implementation");
+    if (m_vertices.front() == m_vertices.back())
+        canonicalizePolygon();
+    else
+        canonicalizeLineSegment();
+}
+
+void VertexChain::canonicalizeLineSegment()
+{
+    //warning: for open vertex chains, this method is incorrect; For these, colinearity must not be checked among first and last vertex
+    assert( m_vertices.front() != m_vertices.back() && "Must not be called for closed polygons");    
+    static int j = 0;
+    j++;
+    if (size() == 0) return;
     
+    if ( size() < 2) return; //segments of length 0 and 1 are always canonical
+    
+    uint64_t n = size();
+    uint64_t gap = 0;
+    //when vertices is removed, all succesor vertices need to be moved some positions left (as indicated by 'gap')
+    //in order to fill the empty spot(s). The variable 'alreadyMoved' hold whether m_vertices[i] has already 
+    //been moved
+    
+    bool alreadyMoved = false;
+    for (int i = 1; i+gap+1 < n;)
+    {
+        if (!alreadyMoved && (gap != 0) )
+        {
+            assert (m_vertices[i] == Vertex(0,0)); //debug code, holds only while invalidated vertices are overwritten with Vertex(0,0)
+            m_vertices[i] = m_vertices[i+gap];
+            m_vertices[i+gap] = Vertex(0,0); //debug code to visualize invalidated entries
+        }
+        alreadyMoved = false;
+        
+        assert (i-1 >= 0);
+        if (! m_vertices[i].isOnLine( m_vertices[i-1], m_vertices[i+gap+1]) ) //not colinear
+        {
+            i++;
+        } else
+        {
+            gap++;
+            m_vertices[i] = Vertex(0,0);    //debug code
+            
+            if (i > 1)
+            {
+                /* since vertex 'i' was removed, vertex 'i-1' has a new successor and may be 
+                 * colinear to that (and its the predecessor i-2) --> needs to be checked again */
+                i--;
+                alreadyMoved = true;
+            }
+            //otherwise we removed the second vertex, but its predecessor will never be removed--> no vertex to recheck, just continue as usual
+        }
+    }
+    assert(size() >= gap+1);
+    //last list item has not yet been moved by the previous algorithm, do that now
+    m_vertices[size()-1-gap] =  m_vertices[size()-1];   
+    
+    m_vertices.resize( size() - gap);
+    
+    if (m_vertices.size() == 2 && m_vertices.front() == m_vertices.back())
+        m_vertices.pop_back();
+        
+    #ifndef NDEBUG
+    n = size();
+    //gap = 0;
+    for (uint64_t i = 0; i+1 < n; i++)
+    {
+        if (m_vertices[i] == m_vertices[i+1])
+            cout << "ERROR AT SEGMENT " << j << endl;
+        assert( m_vertices[i] != m_vertices[i+1]);
+    }
+    
+    #endif
+    
+}
+
+
+
+void VertexChain::canonicalizePolygon()
+{
+    //warning: for open vertex chains, this method is incorrect; For these, colinearity must not be checked among first and last vertex
+    assert(m_vertices.front() == m_vertices.back() && "Must not be called for open line segments");
     
     if (size() == 0) return;
     
-    bool closed = m_vertices.front() == m_vertices.back();
-    if (closed)
-    {
-        // first==last causes to many special cases, so remove the duplicate(s) here add re-add one later.
-        /* As a side-effect, this re-adding will only occur iff the polygon still has at least 3 vertices
-         * after removing colinearities and consecutive duplicates. So only non-degenerated polygon will 
-         * ever be closed, and closed polygons are guaranteed to never be degenerated.
-        */
-        m_vertices.pop_back(); 
-    }
+    // first==last causes to many special cases, so remove the duplicate(s) here and re-add one later.
+    /* As a side-effect, this re-adding will only occur iff the polygon still has at least 3 vertices
+     * after removing colinearities and consecutive duplicates. So only non-degenerated polygon will 
+     * ever be closed, and closed polygons are guaranteed to never be degenerated.
+    */
+    m_vertices.pop_back(); 
 
     if ( size() < 2) return; //segments of length 0 and 1 are always canonical
     
@@ -367,7 +452,7 @@ void VertexChain::canonicalize()
         {
             if (! (alreadyShifted || (gap == 0)) )
             {
-                //assert (m_vertices[i] == Vertex(0,0)); //debug code, holds only while invalidated verices are overwritten with Vertex(0,0)
+                //assert (m_vertices[i] == Vertex(0,0)); //debug code, holds only while invalidated vertices are overwritten with Vertex(0,0)
                 m_vertices[i] = m_vertices[i+gap];
                 //m_vertices[i+gap] = Vertex(0,0); //debug code to visualize invalidated entries
             }
@@ -408,7 +493,7 @@ void VertexChain::canonicalize()
     
     #endif
     
-    if (m_vertices.size() >= 3 && closed) // reclose polygon if - after canonicalization - it still has an area
+    if (m_vertices.size() >= 3) // reclose polygon if - after canonicalization - it still has an area
         m_vertices.push_back(m_vertices.front());
 }
 
@@ -480,7 +565,7 @@ bool VertexChain::isSimple() const
 template<VertexCoordinate significantCoordinate, VertexCoordinate otherCoordinate> 
 static void clip( const vector<Vertex> & polygon, BigInt clip_pos, list<VertexChain*> &above, list<VertexChain*> &below)
 {
-    assert( polygon.front() == polygon.back());
+    //assert( polygon.front() == polygon.back());
 
     VertexChain *current_seg = new VertexChain();
     vector<Vertex>::const_iterator v2 = polygon.begin();
@@ -551,9 +636,8 @@ static void ensureOrientation( list<VertexChain> &in, list<VertexChain> &out, bo
 }
 
 //FIXME: notion of above/below is inverted
-void VertexChain::clipSecondComponent( BigInt clip_y, list<VertexChain> &out_above, list<VertexChain> &out_below)
+void VertexChain::clipSecondComponent( BigInt clip_y, bool closePolygons, list<VertexChain> &out_above, list<VertexChain> &out_below)
 {
-    list<VertexChain*> above, below;
 
     bool allAbove = true;
     bool allBelow= true;
@@ -573,21 +657,38 @@ void VertexChain::clipSecondComponent( BigInt clip_y, list<VertexChain> &out_abo
     if (allAbove || allBelow)
         return;
 
-    bool clockwise = isClockwise();
-    
+    bool clockwise = !closePolygons || isClockwise();   // is only relevant for clipping polygons (as opposed to vertex chains)
+    list<VertexChain*> above, below;
     clip<getYCoordinate, getXCoordinate>( m_vertices, clip_y, above, below);
+    
+    if (closePolygons)
+    {
 
-    list<VertexChain> tmp_above, tmp_below;
-    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, tmp_above);
-    connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, tmp_below);
+        list<VertexChain> tmp_above, tmp_below;
+        connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, above, tmp_above);
+        connectClippedSegments<getYCoordinate,getXCoordinate>(clip_y, below, tmp_below);
 
-    ensureOrientation(tmp_above, out_above, clockwise);
-    ensureOrientation(tmp_below, out_below, clockwise);
+        ensureOrientation(tmp_above, out_above, clockwise);
+        ensureOrientation(tmp_below, out_below, clockwise);
+    } else
+    {
+        BOOST_FOREACH( VertexChain* c, above)
+        {
+            out_above.push_back(*c);
+            delete c;
+        }
+
+        BOOST_FOREACH( VertexChain* c, below)
+        {
+            out_below.push_back(*c);
+            delete c;
+        }
+        
+    }
 }
 
-void VertexChain::clipFirstComponent( BigInt clip_x, list<VertexChain> &out_left, list<VertexChain> &out_right)
+void VertexChain::clipFirstComponent( BigInt clip_x, bool closePolygons, list<VertexChain> &out_left, list<VertexChain> &out_right)
 {
-    list<VertexChain*> left, right;
     
     bool allLeft = true;
     bool allRight= true;
@@ -606,16 +707,34 @@ void VertexChain::clipFirstComponent( BigInt clip_x, list<VertexChain> &out_left
     if (allLeft || allRight)
         return;
 
-    bool clockwise = isClockwise();
-
+    bool clockwise = !closePolygons || isClockwise();
+    list<VertexChain*> left, right;
     clip<getXCoordinate, getYCoordinate>( m_vertices, clip_x, left, right);
-
-    list<VertexChain> tmp_left, tmp_right;
-    connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  tmp_left );
-    connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, tmp_right);
     
-    ensureOrientation(tmp_left, out_left, clockwise);
-    ensureOrientation(tmp_right, out_right, clockwise);
+    if (closePolygons)
+    {
+        list<VertexChain> tmp_left, tmp_right;
+        connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, left,  tmp_left );
+        connectClippedSegments<getXCoordinate,getYCoordinate>(clip_x, right, tmp_right);
+        
+        ensureOrientation(tmp_left, out_left, clockwise);
+        ensureOrientation(tmp_right, out_right, clockwise);
+    }
+    else
+    {
+        BOOST_FOREACH( VertexChain* c, left)
+        {
+            out_left.push_back(*c);
+            delete c;
+        }
+
+        BOOST_FOREACH( VertexChain* c, right)
+        {
+            out_right.push_back(*c);
+            delete c;
+        }
+        
+    }    
 }
 
 bool VertexChain::isClockwise() { 

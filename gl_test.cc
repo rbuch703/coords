@@ -349,7 +349,7 @@ void render(const string &path, const rect_t view, rect_t tile, bool asOutline)
     hasChildren |= existing_tiles.count(path+"2");
     hasChildren |= existing_tiles.count(path+"3");
     
-    int sufficientResolution = width(tile) < width(view);
+    int sufficientResolution = width(tile) < 2*width(view);
     if (!hasChildren || sufficientResolution) 
     {
         //cout << "rendering tile " << position << endl;
@@ -366,7 +366,7 @@ void render(const string &path, const rect_t view, rect_t tile, bool asOutline)
     rect_t bl0 = {mid_y,    tile.left, tile.bottom, mid_x};
     rect_t tr3 = {tile.top, mid_x,     mid_y,       tile.right};
     rect_t br1 = {mid_y,    mid_x,     tile.bottom, tile.right};
-    
+
     if ( mid_x > view.left) //has to render left half
     {
         if (mid_y > view.bottom) render(path+'0', view, bl0, asOutline);

@@ -18,8 +18,8 @@ public:
     
     const Vertex& front() const;
     const Vertex& back()  const;
-    //const list<Vertex>& vertices() const;
     const vector<Vertex>& data() const;
+    vector<Vertex>& internal_data() { return m_vertices;}
     
     void reverse();
     void append(const Vertex& node);
@@ -29,23 +29,27 @@ public:
     
     AABoundingBox getBoundingBox() const;    
     void canonicalize();    //remove successive identical and colinear vertices
+    
     bool isCanonicalPolygon();
     bool isClockwise();
     
     uint64_t size() const { return m_vertices.size(); }
-    //bool isSimple() const; // FIXME: is O(n²), will be too slow for many applications
+    void clear() { m_vertices.clear(); }
     
     /** semantics: a split line of 'clip_y' means that everything above *and including* 'clip_y' belongs to the
         upper part, everything else to the lower part    */
-    void clipSecondComponent( BigInt clip_y, list<VertexChain> &top_out, list<VertexChain> &bottom_out);
-    void clipFirstComponent(  BigInt clip_x, list<VertexChain> &left_out, list<VertexChain> &right_out);
+    void clipSecondComponent( BigInt clip_y, bool closePolygons, list<VertexChain> &top_out, list<VertexChain> &bottom_out);
+    void clipFirstComponent(  BigInt clip_x, bool closePolygons, list<VertexChain> &left_out, list<VertexChain> &right_out);
 
     /** @returns: 'true' if the resulting polygon is a proper one, 'false' if it should be discarded completely. 
         In the latter case the state of the polygon is undefined. */
     bool simplifyArea(double allowedDeviation);
-    void simplifyStroke(double allowedDeviation);
+    bool simplifyStroke(double allowedDeviation);
     //list<VertexChain> toSimplePolygon();
 private:
+    void canonicalizeLineSegment();
+    void canonicalizePolygon();
+
     //void simplifySection(list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);
     std::vector<Vertex> m_vertices;
 };

@@ -45,7 +45,7 @@ void build_index(string basepath, string filename)
 
 int main()
 {
-    build_index("output/coast/", "seg");
+    build_index("output/coast/", "road");
 /*    FILE* f = fopen("seg.idx", "wb");
     make_index("seg", f);
     fclose(f);*/

@@ -17,6 +17,7 @@
 using namespace std;
 
 class QuadTreeNode;
+class PointQuadTreeNode;
 class MonotonizeEventQueue;
 class LineSegment;
 class VertexChain;
@@ -66,6 +67,7 @@ private:
     friend struct AABoundingBox;
     friend class QuadTreeNode;
     friend class MonotonizeEventQueue;
+    friend class PointQuadTreeNode;
     friend list<LineSegment> createEndMonotoneDiagonals( VertexChain &chain);
     friend bool leq(const LineSegment a, Vertex pos);
     friend bool eq(const LineSegment a, Vertex pos);
