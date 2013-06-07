@@ -364,15 +364,19 @@ public:
         if (br) delete br;
     };
     void insert( Vertex *p);
-    void simplifyLeaves( int64_t maxAllowedDeviation);
+    //void simplifyLeaves( int64_t maxAllowedDeviation);
+    void simplify(PointQuadTreeNode *root, double allowedDeviation);
     uint64_t getNumNodes() const;
+    uint64_t getNumItems() const;
     //void printHierarchy(int depth = 0);
     //void exportSegments(list<LineSegment> &segments_out);
 private:
     static const unsigned int SUBDIVISION_THRESHOLD = 100; //so far just a random guess...
-    //bool addToQuadrant(LineSegment seg);    
-    //bool intersectedByRecursive( LineSegment edge1, list<LineSegment> &createdSegments, int depth);
-    //int  coversQuadrants( LineSegment edge, bool &tl, bool &tr, bool &bl, bool &br) const;
+    static bool closerThanThreshold(Vertex a, Vertex b, double threshold);
+    bool closerThanThreshold(Vertex a, double threshold);
+    static void moveCloseEnoughVertices( Vertex *ref, vector<Vertex*> &src, vector<Vertex*> &dest, double allowedDeviation);
+    void removeCloseVertices(Vertex* ref, vector<Vertex*> &dest, double distanceThreshold);
+
     void subdivide();
     void moveVerticesRecursively( vector<Vertex*> &target);
     
@@ -383,6 +387,104 @@ private:
     //BigInt            mid_x, mid_y;
 };
 
+bool PointQuadTreeNode::closerThanThreshold(Vertex a, Vertex b, double threshold)
+{
+    double dx = a.x-(int64_t)b.x;
+    double dy = a.y-(int64_t)b.y;
+    
+    return dx*dx+dy*dy < threshold*threshold;
+}
+
+bool PointQuadTreeNode::closerThanThreshold(Vertex a, double threshold)
+{
+    //if (a.x >= min_x && a.x <= max_x && a.y >= min_y && a.y <= max_y) return true;  //'a' is inside this node
+    
+    return (a.x >= min_x - threshold && a.x <= max_x + threshold &&
+            a.y >= min_y - threshold && a.y <= max_y + threshold);  //'a' is close enough so that a vertex in this node could be close to 'a' then 'threshold'
+    
+    
+}
+
+void PointQuadTreeNode::moveCloseEnoughVertices( Vertex *ref, vector<Vertex*> &src, vector<Vertex*> &dest, double allowedDeviation)
+{
+    uint64_t idx = 0;
+    while (idx < src.size())
+    {
+        assert (src[idx] != ref); //every reference should be present in the quad tree exactly once
+        if (closerThanThreshold(*ref, *(src[idx]), allowedDeviation))
+        {
+            dest.push_back(src[idx]);
+            src[idx] = src.back();
+            src.pop_back();
+        } else idx++;
+    }
+}
+
+void PointQuadTreeNode::removeCloseVertices(Vertex* ref, vector<Vertex*> &dest, double distanceThreshold)
+{
+
+   if (tl || tr || bl ||br)
+   {
+        assert(tl && tr && bl && br);
+        assert( vertices.size() == 0);
+        
+        //int64_t mid_x = (min_x + max_x ) / 2;
+        //int64_t mid_y = (min_y + max_y ) / 2;
+        if (tl->closerThanThreshold(*ref, distanceThreshold)) tl->removeCloseVertices(ref, dest, distanceThreshold);
+        if (tr->closerThanThreshold(*ref, distanceThreshold)) tr->removeCloseVertices(ref, dest, distanceThreshold);
+        if (bl->closerThanThreshold(*ref, distanceThreshold)) bl->removeCloseVertices(ref, dest, distanceThreshold);
+        if (br->closerThanThreshold(*ref, distanceThreshold)) br->removeCloseVertices(ref, dest, distanceThreshold);
+        return;
+   }
+       
+   moveCloseEnoughVertices(ref, vertices, dest, distanceThreshold);  
+}
+
+void PointQuadTreeNode::simplify(PointQuadTreeNode *root, double allowedDeviation)
+{
+    //#error: for whatever reason, this function does not cluster all vertices that are supposed to be clustered (i.e. that are close together)
+    if (tl || tr || bl ||br)
+    {
+        assert(tl && tr && bl && br);
+        assert( vertices.size() == 0);
+        
+        tl->simplify(root, allowedDeviation);
+        tr->simplify(root, allowedDeviation);
+        bl->simplify(root, allowedDeviation);
+        br->simplify(root, allowedDeviation);
+        return;
+    }
+    
+    vector<Vertex*> cluster;
+    while (vertices.size())
+    {
+        Vertex* v = vertices.back();
+        vertices.pop_back();
+
+        cluster.clear();
+        root->removeCloseVertices(v, /*ref*/ cluster, allowedDeviation);
+        
+        if (cluster.size() == 0) continue;
+        
+        cluster.push_back(v);
+        
+        //cout << "merging " << cluster.size() << " vertices" << endl;
+        int64_t sum_x =0;
+        int64_t sum_y =0;
+        
+        for (uint64_t j = 0; j < cluster.size(); j++)
+        {
+            sum_x += cluster[j]->x;
+            sum_y += cluster[j]->y;
+        }
+        Vertex avg( sum_x / (int64_t)cluster.size(), sum_y / (int64_t)cluster.size());
+        for (uint64_t j = 0; j < cluster.size(); j++)
+            *(cluster[j]) = avg;
+    }
+    //#warning CONTINUE HERE FIRST
+    
+}
+
 uint64_t PointQuadTreeNode::getNumNodes() const
 {
     uint64_t num = 0;
@@ -392,6 +494,17 @@ uint64_t PointQuadTreeNode::getNumNodes() const
     if (br) num += 1 + br->getNumNodes();
     return num;
 }
+
+uint64_t PointQuadTreeNode::getNumItems() const
+{
+    uint64_t num = vertices.size();
+    if (tl) num += tl->getNumItems();
+    if (tr) num += tr->getNumItems();
+    if (bl) num += bl->getNumItems();
+    if (br) num += br->getNumItems();
+    return num;
+}
+
 
 
 void PointQuadTreeNode::insert( Vertex *p)
@@ -413,6 +526,7 @@ void PointQuadTreeNode::insert( Vertex *p)
             if (p->y <= mid_y) tr->insert(p);
             else               br->insert(p);
         }
+        return;
     } else 
         vertices.push_back(p);
 
@@ -441,6 +555,7 @@ void PointQuadTreeNode::insert( Vertex *p)
     }
 }
 
+/*
 void PointQuadTreeNode::simplifyLeaves( int64_t allowedDeviation)
 {
     double dx = (max_x-min_x);
@@ -476,7 +591,7 @@ void PointQuadTreeNode::simplifyLeaves( int64_t allowedDeviation)
     
     BOOST_FOREACH(Vertex* v, verts)
         *v = avg;    
-}
+}*/
 
 void PointQuadTreeNode::moveVerticesRecursively( vector<Vertex*> &target)
 {
@@ -514,8 +629,9 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
             root->insert(&v);
         }
     }
-    cout << "created quad tree with " << root->getNumNodes() << " nodes" << endl;
-    root->simplifyLeaves(allowedDeviation);
+    cout << "registered " << i << "vertices" << endl;
+    cout << "created quad tree with " << root->getNumNodes() << " nodes and" << root->getNumItems() << " vertices" << endl;
+    root->simplify(root, allowedDeviation);
     cout << "simplified it to " << root->getNumNodes() << " nodes" << endl;
     delete root;
 
@@ -529,13 +645,19 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
     }
     cout << "... resulting in " << data.size() << " vertex chains after canonicalization" << endl;
 
-    BOOST_FOREACH( VertexChain &c, data)
+    for (list<VertexChain>::iterator c = data.begin(); c != data.end(); )
     {
-        bool hasNonDegenerateResult = c.simplifyStroke(1800000000/1024);
+        bool hasNonDegenerateResult = c->simplifyStroke(1800000000/1024);
         if (hasNonDegenerateResult)
-            writePolygonToDisk("output/road", c.data() , false);
+            c++;
+        else
+            c = data.erase(c);
     }
+
+    cout << "... and " << data.size() << " vertex chains after line segment simplification" << endl;
     
+    BOOST_FOREACH( VertexChain &c, data)
+            writePolygonToDisk("output/road", c.data() , false);
     
 }
 
