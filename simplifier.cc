@@ -365,7 +365,7 @@ public:
     };
     void insert( Vertex *p);
     //void simplifyLeaves( int64_t maxAllowedDeviation);
-    void simplify(PointQuadTreeNode *root, double allowedDeviation);
+    void clusterCloseVertices(PointQuadTreeNode *root, double distanceThreshold);
     uint64_t getNumNodes() const;
     uint64_t getNumItems() const;
     //void printHierarchy(int depth = 0);
@@ -374,17 +374,15 @@ private:
     static const unsigned int SUBDIVISION_THRESHOLD = 100; //so far just a random guess...
     static bool closerThanThreshold(Vertex a, Vertex b, double threshold);
     bool closerThanThreshold(Vertex a, double threshold);
-    static void moveCloseEnoughVertices( Vertex *ref, vector<Vertex*> &src, vector<Vertex*> &dest, double allowedDeviation);
-    void removeCloseVertices(Vertex* ref, vector<Vertex*> &dest, double distanceThreshold);
+    //static void moveCloseVertices( Vertex *ref, vector<Vertex*> &src, vector<Vertex*> &dest, double distanceThreshold);
+    void extractCloseVertices(Vertex* ref, vector<Vertex*> &dest, double distanceThreshold);
 
     void subdivide();
-    void moveVerticesRecursively( vector<Vertex*> &target);
+    //void moveVerticesRecursively( vector<Vertex*> &target);
     
     PointQuadTreeNode        *tl, *tr, *bl, *br;
     int64_t             min_x, max_x, min_y, max_y;
     vector<Vertex*>     vertices;
-    //AABoundingBox       box;
-    //BigInt            mid_x, mid_y;
 };
 
 bool PointQuadTreeNode::closerThanThreshold(Vertex a, Vertex b, double threshold)
@@ -405,42 +403,36 @@ bool PointQuadTreeNode::closerThanThreshold(Vertex a, double threshold)
     
 }
 
-void PointQuadTreeNode::moveCloseEnoughVertices( Vertex *ref, vector<Vertex*> &src, vector<Vertex*> &dest, double allowedDeviation)
+void PointQuadTreeNode::extractCloseVertices(Vertex* ref, vector<Vertex*> &dest, double distanceThreshold)
 {
-    uint64_t idx = 0;
-    while (idx < src.size())
+
+    if (tl || tr || bl ||br)
     {
-        assert (src[idx] != ref); //every reference should be present in the quad tree exactly once
-        if (closerThanThreshold(*ref, *(src[idx]), allowedDeviation))
+        assert(tl && tr && bl && br);
+        assert( vertices.size() == 0);
+
+        if (tl->closerThanThreshold(*ref, distanceThreshold)) tl->extractCloseVertices(ref, dest, distanceThreshold);
+        if (tr->closerThanThreshold(*ref, distanceThreshold)) tr->extractCloseVertices(ref, dest, distanceThreshold);
+        if (bl->closerThanThreshold(*ref, distanceThreshold)) bl->extractCloseVertices(ref, dest, distanceThreshold);
+        if (br->closerThanThreshold(*ref, distanceThreshold)) br->extractCloseVertices(ref, dest, distanceThreshold);
+        return;
+   } 
+
+    //move all vertices closer than 'distanceThreshold' to 'ref', to the container 'dest'
+    uint64_t idx = 0;
+    while (idx < vertices.size())
+    {
+        assert (vertices[idx] != ref); //every reference should be present in the quad tree exactly once
+        if (closerThanThreshold(*ref, *(vertices[idx]), distanceThreshold))
         {
-            dest.push_back(src[idx]);
-            src[idx] = src.back();
-            src.pop_back();
+            dest.push_back(vertices[idx]);
+            vertices[idx] = vertices.back();
+            vertices.pop_back();
         } else idx++;
     }
 }
 
-void PointQuadTreeNode::removeCloseVertices(Vertex* ref, vector<Vertex*> &dest, double distanceThreshold)
-{
-
-   if (tl || tr || bl ||br)
-   {
-        assert(tl && tr && bl && br);
-        assert( vertices.size() == 0);
-        
-        //int64_t mid_x = (min_x + max_x ) / 2;
-        //int64_t mid_y = (min_y + max_y ) / 2;
-        if (tl->closerThanThreshold(*ref, distanceThreshold)) tl->removeCloseVertices(ref, dest, distanceThreshold);
-        if (tr->closerThanThreshold(*ref, distanceThreshold)) tr->removeCloseVertices(ref, dest, distanceThreshold);
-        if (bl->closerThanThreshold(*ref, distanceThreshold)) bl->removeCloseVertices(ref, dest, distanceThreshold);
-        if (br->closerThanThreshold(*ref, distanceThreshold)) br->removeCloseVertices(ref, dest, distanceThreshold);
-        return;
-   }
-       
-   moveCloseEnoughVertices(ref, vertices, dest, distanceThreshold);  
-}
-
-void PointQuadTreeNode::simplify(PointQuadTreeNode *root, double allowedDeviation)
+void PointQuadTreeNode::clusterCloseVertices(PointQuadTreeNode *root, double distanceThreshold)
 {
     //#error: for whatever reason, this function does not cluster all vertices that are supposed to be clustered (i.e. that are close together)
     if (tl || tr || bl ||br)
@@ -448,10 +440,10 @@ void PointQuadTreeNode::simplify(PointQuadTreeNode *root, double allowedDeviatio
         assert(tl && tr && bl && br);
         assert( vertices.size() == 0);
         
-        tl->simplify(root, allowedDeviation);
-        tr->simplify(root, allowedDeviation);
-        bl->simplify(root, allowedDeviation);
-        br->simplify(root, allowedDeviation);
+        tl->clusterCloseVertices(root, distanceThreshold);
+        tr->clusterCloseVertices(root, distanceThreshold);
+        bl->clusterCloseVertices(root, distanceThreshold);
+        br->clusterCloseVertices(root, distanceThreshold);
         return;
     }
     
@@ -462,7 +454,7 @@ void PointQuadTreeNode::simplify(PointQuadTreeNode *root, double allowedDeviatio
         vertices.pop_back();
 
         cluster.clear();
-        root->removeCloseVertices(v, /*ref*/ cluster, allowedDeviation);
+        root->extractCloseVertices(v, /*ref*/ cluster, distanceThreshold);
         
         if (cluster.size() == 0) continue;
         
@@ -481,7 +473,6 @@ void PointQuadTreeNode::simplify(PointQuadTreeNode *root, double allowedDeviatio
         for (uint64_t j = 0; j < cluster.size(); j++)
             *(cluster[j]) = avg;
     }
-    //#warning CONTINUE HERE FIRST
     
 }
 
@@ -593,6 +584,7 @@ void PointQuadTreeNode::simplifyLeaves( int64_t allowedDeviation)
         *v = avg;    
 }*/
 
+/*
 void PointQuadTreeNode::moveVerticesRecursively( vector<Vertex*> &target)
 {
     if (tl) { tl->moveVerticesRecursively( target ); delete tl; tl = NULL;}
@@ -601,21 +593,29 @@ void PointQuadTreeNode::moveVerticesRecursively( vector<Vertex*> &target)
     if (br) { br->moveVerticesRecursively( target ); delete br; br = NULL;}
     target.insert(target.end(), vertices.begin(), vertices.end() );
     vertices.clear();
-}
+}*/
 
+bool similar(const VertexChain &a, const VertexChain &b)
+{
+    const vector<Vertex> &A = a.data();
+    const vector<Vertex> &B = b.data();
+
+    if (a.size() != b.size()) return false;
+    for (uint64_t idx = 0; idx < a.size(); idx++)
+        if (A[idx] != B[idx]) return false;
+
+    return true;
+}
 
 void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
 {
 #warning CONTINUEHERE
     /* general approach:
-     * 1. merge close-enough vertices by building an quadtree of pointers to all graph vertices
-     *    1a. [done] merge vertices in leaf nodes if whole leaf is smaller than allowDeviation
-     *    1b. in bigger leaves, merge individual groups of vertices
-     *    1c. for vertices close to tree node boundary, also merge vertices of adjacent nodes
-     * 2. canonicalize all line segments (will remove duplicates due to merged vertices)
-     * 3. remove canonical line segments consisting only of a single vertex
-     * 4. merge adjacent line segments whose common vertex is shared only by them
-     * 6. merge line segments that share both endpoints and where each vertex of one segment is close enough to the other segment (and vice-versa)
+     * 0. [done] merge adjacent line segments whose common vertex is shared only by them - done directly by extractHighways()
+     * 1. [done] merge close-enough vertices by building an quadtree of pointers to all graph vertices
+     * 2. [done] canonicalize all line segments (will remove duplicates due to merged vertices)
+     * 3. [done] remove canonical line segments consisting only of a single vertex
+     * 4. merge line segments that share both endpoints and where each vertex of one segment is close enough to the other segment (and vice-versa)
      * 5. simplify all remaining line segments with simplifyStroke()
      */
     PointQuadTreeNode* root = new PointQuadTreeNode( -900000000, 900000000, -1800000000, 1800000000);
@@ -629,12 +629,13 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
             root->insert(&v);
         }
     }
-    cout << "registered " << i << "vertices" << endl;
-    cout << "created quad tree with " << root->getNumNodes() << " nodes and" << root->getNumItems() << " vertices" << endl;
-    root->simplify(root, allowedDeviation);
+    cout << "registered " << i << " vertices" << endl;
+    cout << "created quad tree with " << root->getNumNodes() << " nodes and " << root->getNumItems() << " vertices" << endl;
+    root->clusterCloseVertices(root, allowedDeviation);
     cout << "simplified it to " << root->getNumNodes() << " nodes" << endl;
     delete root;
 
+    // Step 2 & 3
     for ( list<VertexChain>::iterator it = data.begin(); it != data.end(); )
     {
         it->canonicalize();
@@ -644,7 +645,8 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
             it = data.erase(it);
     }
     cout << "... resulting in " << data.size() << " vertex chains after canonicalization" << endl;
-
+    
+    // Step 5
     for (list<VertexChain>::iterator c = data.begin(); c != data.end(); )
     {
         bool hasNonDegenerateResult = c->simplifyStroke(1800000000/1024);
@@ -656,8 +658,61 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
 
     cout << "... and " << data.size() << " vertex chains after line segment simplification" << endl;
     
-    BOOST_FOREACH( VertexChain &c, data)
-            writePolygonToDisk("output/road", c.data() , false);
+    map<Vertex, set<Vertex> > graph;
+    for (list<VertexChain>::iterator c = data.begin(); c != data.end(); c++)
+    {
+        //VertexChain reversed = *c;
+        const vector<Vertex> &vertices = c->data();
+        for (uint64_t i =0; i < c->size()-1; i++)
+        {
+            if (graph.count( vertices[i]   ) < 1) graph.insert( pair<Vertex, set<Vertex> >(vertices[i], set<Vertex>()));
+            if (graph.count( vertices[i+1] ) < 1) graph.insert( pair<Vertex, set<Vertex> >(vertices[i], set<Vertex>()));
+            
+            if (graph[vertices[i]].count(vertices[i+1]) == 0) graph[vertices[i]].insert(vertices[i+1]);
+            if (graph[vertices[i+1]].count(vertices[i]) == 0) graph[vertices[i+1]].insert(vertices[i]);
+        }
+    }
+
+    uint64_t numEdges = 0;
+    for (map<Vertex, set<Vertex> >::const_iterator it = graph.begin(); it != graph.end(); it++)
+        numEdges+= it->second.size();
+
+    cout << "... and " << (numEdges/2) << " vertices after duplicate removal" << endl;
+    uint64_t numChains = 0;
+    while (graph.size())
+    {
+        VertexChain c;
+        Vertex v = graph.begin()->first;
+        c.append(v);
+        
+        while (graph.count(v) )
+        {
+            assert( graph[v].size() > 0);
+            Vertex next = *(graph[v].begin());
+            
+            assert( graph.count(next));
+            assert( graph[next].size() > 0);
+            
+            graph[v   ].erase(next);
+            graph[next].erase(v);
+            
+            if (graph[v   ].size() == 0) graph.erase(v);
+            if (graph[next].size() == 0) graph.erase(next);
+            c.append(next);
+            v = next;
+        }
+        
+        numChains++;
+        writePolygonToDisk("output/road", c.data() , false);
+        
+    }
+    
+    
+    cout << "... aggregated into " << numChains << " final vertex chains" << endl;
+    
+    
+    //BOOST_FOREACH( VertexChain &c, data)
+            
     
 }
 
@@ -704,7 +759,7 @@ void extractHighways()
     
     //Next step: merge adjacent segments (if the common end point is shared *only* by them)
     
-    /* Note: all VertexChain pointers are pointers into an array of VertexChain, which handles object deallocation.
+    /* Note: all VertexChain pointers are pointers into an array of VertexChains, which handles object deallocation.
              Thus, no manual 'delete' is necessary */
     for ( map<Vertex, list<VertexChain*> >::const_iterator it = endVertices.begin(); it != endVertices.end(); it++)
     {

@@ -136,6 +136,7 @@ bool VertexChain::simplifyStroke(double allowedDeviation)
     }*/
     
     m_vertices = vector<Vertex>( vertices.begin(), vertices.end() );    
+    canonicalize();
     return m_vertices.size() > 1;
 }
 
