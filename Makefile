@@ -85,6 +85,7 @@ clean:
 	@rm -rf *gcno
 	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests make_index
 	@rm -rf gl_test tests/arithmetic_test tests/geometry_test tests/quadtree_test tests/triangulation_test
+	@rm -rf coverage.info callgrind.out.*
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) $(TEST_SRC) $(GL_TEST_SRC)
 	@echo [DEP]

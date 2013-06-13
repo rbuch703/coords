@@ -31,6 +31,9 @@ uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
 //#endif
 
 
+void simplifyGraph(list<VertexChain> &data, double allowedDeviation); // forward
+
+
 
 void writePolygonToDisk(std::string path, VertexChain segment, bool closeSegments)
 {
@@ -102,14 +105,121 @@ void clipFirstComponent(list<VertexChain> &in, int32_t clip_pos, bool closeSegme
     }
 }
 
-/**
-  *
-  */
+set<string> leaves;
+
+void clipToQuadrants(list<VertexChain> &segments, int32_t mid_x, int32_t mid_y, bool closeSegments, bool clipDestructive,
+                     list<VertexChain> &vTopLeft,    list<VertexChain> &vTopRight, 
+                     list<VertexChain> &vBottomLeft, list<VertexChain> &vBottomRight)
+{
+    list<VertexChain> vLeft, vRight;
+
+    if (clipDestructive)    // saves memory, but destroys the content of 'segments'
+    {
+        while (segments.begin() != segments.end())
+        {
+            VertexChain seg = segments.front();
+            segments.pop_front();
+            /** beware of coordinate semantics: OSM data is stored as (lat,lon)-pairs, where lat is the "vertical" component
+              * Thus, compared to computer graphics (x,y)-pairs, the axes are switched */
+            seg.clipSecondComponent( mid_x, closeSegments, vLeft, vRight);
+        }
+        assert(segments.size() == 0);
+    } else
+    {
+        BOOST_FOREACH( VertexChain seg, segments)
+            seg.clipSecondComponent( mid_x, closeSegments, vLeft, vRight);
+    }
+    
+    if (closeSegments)
+    {
+        BOOST_FOREACH( const VertexChain &seg, vLeft)    assert( seg.data().front() == seg.data().back());
+        BOOST_FOREACH( const VertexChain &seg, vRight)   assert( seg.data().front() == seg.data().back());
+    }
+    
+    list<VertexChain> vTop, vBottom;
+
+    clipFirstComponent(vLeft, mid_y, closeSegments, vTopLeft, vBottomLeft);
+    assert(vLeft.size() == 0);
+    
+    
+    clipFirstComponent(vRight, mid_y, closeSegments, vTopRight, vBottomRight);
+    assert(vRight.size() == 0);
+}
+
+static uint64_t VERTEX_LIMIT = 20000;   //arbitrarily guessed
+
+void clipToLeaves(string file_base, string position, list<VertexChain>& segments, bool closeSegments, set<string> &leaves,
+                   int32_t min_y = -900000000, int32_t max_y = 900000000, 
+                   int32_t min_x = -1800000000, int32_t max_x = 1800000000 )
+{
+    //cout << position << endl;
+    assert (leaves.count(position) == 0); //already stored as a leaf, i.e. a tile with full accuracy; should not happen
+    
+    
+    uint64_t num_vertices = 0;
+    BOOST_FOREACH( const VertexChain &seg, segments)
+        num_vertices+= seg.size();
+        
+    if (num_vertices <= VERTEX_LIMIT)
+    {
+        BOOST_FOREACH( const VertexChain &seg, segments)
+            writePolygonToDisk(file_base+position, seg.data(), closeSegments ); 
+       
+        leaves.insert(position);
+        return;
+    }
+
+    int32_t mid_x = (min_x/2) + (max_x/2);  // individual division to prevent integer overflow during summation
+    int32_t mid_y = (min_y/2) + (max_y/2);
+    
+    list<VertexChain> topLeft, topRight, bottomLeft, bottomRight;
+    clipToQuadrants( segments, mid_x, mid_y, closeSegments, position != "", topLeft, topRight, bottomLeft, bottomRight);
+    
+    clipToLeaves(file_base, position+"0", topLeft,     closeSegments, leaves, min_y, mid_y, min_x, mid_x); topLeft.clear();
+    clipToLeaves(file_base, position+"2", bottomLeft,  closeSegments, leaves, mid_y, max_y, min_x, mid_x); bottomLeft.clear();
+    clipToLeaves(file_base, position+"1", topRight,    closeSegments, leaves, min_y, mid_y, mid_x, max_x); topRight.clear();
+    clipToLeaves(file_base, position+"3", bottomRight, closeSegments, leaves, mid_y, max_y, mid_x, max_x); bottomRight.clear();
+}
+
+// clips the set of vertex chains recursively until they have the size of tiles of level 'level'
+void clipToLevel(string file_base, string position, list<VertexChain>& segments, bool closeSegments, 
+                 set<string> &leaves, uint64_t level, 
+                 int32_t min_y = - 900000000, int32_t max_y =  900000000, 
+                 int32_t min_x = -1800000000, int32_t max_x = 1800000000 )
+{
+    //cout << position << endl;
+    //cout << "currently at level " << level << endl;
+    if (leaves.count(position) ) return; //already stored as a leaf, i.e. a tile with full accuracy
+    
+    if (level == 0)    
+    {
+        BOOST_FOREACH( const VertexChain &seg, segments)
+            writePolygonToDisk(file_base+position, seg.data(), closeSegments ); 
+       
+        return;
+    }
+
+    int32_t mid_x = (min_x/2) + (max_x/2);  // individual division to prevent integer overflow during summation
+    int32_t mid_y = (min_y/2) + (max_y/2);
+    
+    list<VertexChain> topLeft, topRight, bottomLeft, bottomRight;
+    clipToQuadrants( segments, mid_x, mid_y, closeSegments, true, topLeft, topRight, bottomLeft, bottomRight);
+    
+    clipToLevel(file_base, position+"0", topLeft,     closeSegments, leaves, level - 1, min_y, mid_y, min_x, mid_x); 
+    topLeft.clear();
+    clipToLevel(file_base, position+"2", bottomLeft,  closeSegments, leaves, level - 1, mid_y, max_y, min_x, mid_x); 
+    bottomLeft.clear();
+    clipToLevel(file_base, position+"1", topRight,    closeSegments, leaves, level - 1, min_y, mid_y, mid_x, max_x); 
+    topRight.clear();
+    clipToLevel(file_base, position+"3", bottomRight, closeSegments, leaves, level - 1, mid_y, max_y, mid_x, max_x); 
+    bottomRight.clear();
+}
+
+
+#if 0
 void clipRecursive(string file_base, string position, list<VertexChain>& segments, bool closeSegments,
                    int32_t top = -900000000, int32_t left = -1800000000, int32_t bottom = 900000000, int32_t right = 1800000000, uint32_t level = 0)
 {
-    uint64_t VERTEX_LIMIT = 20000;
-
     uint64_t num_vertices = 0;
     BOOST_FOREACH( const VertexChain &seg, segments)
         num_vertices+= seg.size();    
@@ -208,6 +318,32 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     clipRecursive( file_base, position+ "3", vBottom, closeSegments, mid_v, mid_h, bottom, right, level+1);
     vBottom.clear();
     
+} 
+#endif
+
+void createTiles(string basename, list<VertexChain> &segments, bool closedPolygons)
+{
+    set<string> leaves;
+    cout << "Creating hierarchy leaves" << endl;
+    clipToLeaves(basename, "", segments, closedPolygons, leaves);
+    
+    uint64_t highest_depth = 0;
+    BOOST_FOREACH( string s, leaves) 
+        highest_depth = max( highest_depth, s.length());
+    
+    cout << "[INFO] Hierarchy depth is " << highest_depth << endl;;
+    assert(highest_depth < 17);
+    
+    double distanceThreshold = (360 * 10000000.0) / 1024;
+    for (uint64_t i = 0; i < highest_depth; i++)
+    {
+        cout << "[INFO] Creating tiles for level " << i << " with threshold " << distanceThreshold << endl;
+        list<VertexChain> copy(segments.begin(), segments.end());
+        simplifyGraph(copy, distanceThreshold);
+        
+        clipToLevel( basename, "", copy, closedPolygons, leaves, i);
+        distanceThreshold /=2;
+    }
 }
 
 void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
@@ -250,7 +386,8 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
         handlePolygon("output/coast/tmp", s);
     //    poly_storage.push_back(s);
     
-    clipRecursive( "output/coast/seg", "", poly_storage, true, -900000000, -1800000000, 900000000, 1800000000);
+    createTiles( "output/seg", poly_storage, true);
+    //clipRecursive( "output/coast/seg", "", poly_storage, true, -900000000, -1800000000, 900000000, 1800000000);
     
 }
 
@@ -348,7 +485,8 @@ void extractCountries()
         //else
         //cout << rel << endl;
     }
-    clipRecursive( "output/coast/country", "", poly_storage, true);
+    createTiles("output/country", poly_storage, true);
+    //clipRecursive( "output/coast/country", "", poly_storage, true);
 }
 
 class PointQuadTreeNode
@@ -546,55 +684,6 @@ void PointQuadTreeNode::insert( Vertex *p)
     }
 }
 
-/*
-void PointQuadTreeNode::simplifyLeaves( int64_t allowedDeviation)
-{
-    double dx = (max_x-min_x);
-    double dy = (max_y-min_y);
-    double diag_sq = (dx*dx+dy*dy);
-    if (diag_sq > allowedDeviation*allowedDeviation) //still above threshold
-    {
-        if (tl) tl->simplifyLeaves(allowedDeviation);
-        if (tr) tr->simplifyLeaves(allowedDeviation);
-        if (bl) bl->simplifyLeaves(allowedDeviation);
-        if (br) br->simplifyLeaves(allowedDeviation);
-        return;
-    }
-
-    vector<Vertex*> verts;
-    
-    moveVerticesRecursively(verts);
-    assert(vertices.size() == 0);
-    
-    if (verts.size() == 0) return;
-    //cout << "merging " << verts.size() << " vertices" << endl;
-    int64_t sum_x = 0;
-    int64_t sum_y = 0;
-    BOOST_FOREACH(Vertex* v, verts)
-    {
-        sum_x += v->x;
-        sum_y += v->y;
-    }
-    
-    //the casting here is important. Without it, the division would be performed on unsigned operands
-    Vertex avg( sum_x / (int64_t)verts.size(), sum_y / (int64_t)verts.size() );
-    assert(avg.x >= -900000000 && avg.x <= 900000000 && avg.y >= -1800000000 && avg.y <= 1800000000);
-    
-    BOOST_FOREACH(Vertex* v, verts)
-        *v = avg;    
-}*/
-
-/*
-void PointQuadTreeNode::moveVerticesRecursively( vector<Vertex*> &target)
-{
-    if (tl) { tl->moveVerticesRecursively( target ); delete tl; tl = NULL;}
-    if (tr) { tr->moveVerticesRecursively( target ); delete tr; tr = NULL;}
-    if (bl) { bl->moveVerticesRecursively( target ); delete bl; bl = NULL;}
-    if (br) { br->moveVerticesRecursively( target ); delete br; br = NULL;}
-    target.insert(target.end(), vertices.begin(), vertices.end() );
-    vertices.clear();
-}*/
-
 bool similar(const VertexChain &a, const VertexChain &b)
 {
     const vector<Vertex> &A = a.data();
@@ -609,30 +698,29 @@ bool similar(const VertexChain &a, const VertexChain &b)
 
 void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
 {
-#warning CONTINUEHERE
     /* general approach:
      * 0. [done] merge adjacent line segments whose common vertex is shared only by them - done directly by extractHighways()
      * 1. [done] merge close-enough vertices by building an quadtree of pointers to all graph vertices
      * 2. [done] canonicalize all line segments (will remove duplicates due to merged vertices)
      * 3. [done] remove canonical line segments consisting only of a single vertex
-     * 4. merge line segments that share both endpoints and where each vertex of one segment is close enough to the other segment (and vice-versa)
-     * 5. simplify all remaining line segments with simplifyStroke()
+     * 4. [done] simplify all remaining line segments with simplifyStroke()
+     * 5. [done] remove duplicate edges
      */
     PointQuadTreeNode* root = new PointQuadTreeNode( -900000000, 900000000, -1800000000, 1800000000);
-    uint64_t i = 0;
+    //uint64_t i = 0;
     BOOST_FOREACH( VertexChain &c, data)
     {
         BOOST_FOREACH( Vertex &v, c.internal_data())
         {
-            i++;
-            if (i % 1000000 == 0) cout << (i/1000000) << "M vertices registered" << endl;
+            //i++;
+            //if (i % 1000000 == 0) cout << (i/1000000) << "M vertices registered" << endl;
             root->insert(&v);
         }
     }
-    cout << "registered " << i << " vertices" << endl;
-    cout << "created quad tree with " << root->getNumNodes() << " nodes and " << root->getNumItems() << " vertices" << endl;
+    //cout << "registered " << i << " vertices" << endl;
+    //cout << "created quad tree with " << root->getNumNodes() << " nodes and " << root->getNumItems() << " vertices" << endl;
     root->clusterCloseVertices(root, allowedDeviation);
-    cout << "simplified it to " << root->getNumNodes() << " nodes" << endl;
+    //cout << "simplified it to " << root->getNumNodes() << " nodes" << endl;
     delete root;
 
     // Step 2 & 3
@@ -644,24 +732,25 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
         else
             it = data.erase(it);
     }
-    cout << "... resulting in " << data.size() << " vertex chains after canonicalization" << endl;
+    //cout << "... resulting in " << data.size() << " vertex chains after canonicalization" << endl;
     
-    // Step 5
+    // Step 4
     for (list<VertexChain>::iterator c = data.begin(); c != data.end(); )
     {
-        bool hasNonDegenerateResult = c->simplifyStroke(1800000000/1024);
+        bool hasNonDegenerateResult = c->simplifyStroke( allowedDeviation);
         if (hasNonDegenerateResult)
             c++;
         else
             c = data.erase(c);
     }
 
-    cout << "... and " << data.size() << " vertex chains after line segment simplification" << endl;
+    //cout << "... and " << data.size() << " vertex chains after line segment simplification" << endl;
     
+    
+    // Step 5
     map<Vertex, set<Vertex> > graph;
     for (list<VertexChain>::iterator c = data.begin(); c != data.end(); c++)
     {
-        //VertexChain reversed = *c;
         const vector<Vertex> &vertices = c->data();
         for (uint64_t i =0; i < c->size()-1; i++)
         {
@@ -672,12 +761,13 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
             if (graph[vertices[i+1]].count(vertices[i]) == 0) graph[vertices[i+1]].insert(vertices[i]);
         }
     }
-
+    data.clear();
+    
     uint64_t numEdges = 0;
     for (map<Vertex, set<Vertex> >::const_iterator it = graph.begin(); it != graph.end(); it++)
         numEdges+= it->second.size();
 
-    cout << "... and " << (numEdges/2) << " vertices after duplicate removal" << endl;
+    //cout << "... and " << (numEdges/2) << " vertices after duplicate removal" << endl;
     uint64_t numChains = 0;
     while (graph.size())
     {
@@ -703,7 +793,8 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
         }
         
         numChains++;
-        writePolygonToDisk("output/road", c.data() , false);
+        data.push_back(c);
+        //writePolygonToDisk("output/road", c.data() , false);
         
     }
     
@@ -716,33 +807,10 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
     
 }
 
-void extractHighways()
+void mergeAdjacentVertexChains(list<VertexChain> &chains)
 {
-    FILE *f = fopen("intermediate/roads.dump", "rb");
-    int i = 0;
-    int ch;
-    while ( (ch = fgetc(f)) != EOF )
-    {
-        ungetc(ch, f);
-        //int d = fputc(ch, f);
-        //perror("fputc");
-        //assert(d == ch);
-        if (++i % 1000000 == 0) cout << (i/1000000) << "M roads read" << endl;
-        OSMIntegratedWay way(f, -1);
-        if (way["highway"] != "motorway") 
-            if (way["highway"] != "motorway_link") 
-                continue;
-        
-        VertexChain tmp(way.vertices);
-        poly_storage.push_back(tmp);
-        //handlePolygon("dummy", tmp);
-        //tmp.isClockwise();
-        //cout << way << endl;        
-    } 
-    
-    cout << "found " << poly_storage.size() << " highway segments" << endl;
     map<Vertex, list<VertexChain*>> endVertices;
-    for (list<VertexChain>::iterator seg = poly_storage.begin(); seg != poly_storage.end(); seg++)
+    for (list<VertexChain>::iterator seg = chains.begin(); seg != chains.end(); seg++)
     {
         if (! endVertices.count( seg->front()))
             endVertices.insert( pair<Vertex, list<VertexChain*> >(seg->front(), list<VertexChain*>()) );
@@ -750,8 +818,6 @@ void extractHighways()
         if (! endVertices.count( seg->back()))
             endVertices.insert( pair<Vertex, list<VertexChain*> >(seg->back(), list<VertexChain*>() ) );
             
-        // the algorithm should work even if the segment forms a loop
-        // assert(seg->front() != seg.back());
         endVertices[ seg->front()].push_back( &(*seg) );
         endVertices[ seg->back() ].push_back( &(*seg) );
     }
@@ -793,18 +859,53 @@ void extractHighways()
         c2->clear();
     }
     
-    list<VertexChain>::iterator seg = poly_storage.begin();
-    while (seg != poly_storage.end())
+    list<VertexChain>::iterator seg = chains.begin();
+    while (seg != chains.end())
     {
         if (seg->size() == 0)
-            seg = poly_storage.erase(seg);
+            seg = chains.erase(seg);
         else
             seg++;
     }
+}
+
+void extractHighways()
+{
+    FILE *f = fopen("intermediate/roads.dump", "rb");
+    int i = 0;
+    int ch;
+    while ( (ch = fgetc(f)) != EOF )
+    {
+        ungetc(ch, f);
+        //int d = fputc(ch, f);
+        //perror("fputc");
+        //assert(d == ch);
+        if (++i % 1000000 == 0) cout << (i/1000000) << "M roads read" << endl;
+        OSMIntegratedWay way(f, -1);
+        if (way["highway"] != "motorway") 
+            if (way["highway"] != "motorway_link") 
+                continue;
+        
+        VertexChain tmp(way.vertices);
+        poly_storage.push_back(tmp);
+        //handlePolygon("dummy", tmp);
+        //tmp.isClockwise();
+        //cout << way << endl;        
+    } 
+    
+    cout << "found " << poly_storage.size() << " highway segments" << endl;
+
+    mergeAdjacentVertexChains(poly_storage);
     
     cout << "... of which " << poly_storage.size() << " will be present in the simplified road network" << endl;
     
-    simplifyGraph(poly_storage, (3600000000)/1024);
+//void clipToLeaves(string file_base, string position, list<VertexChain>& segments, bool closeSegments, set<string> &leaves,
+    
+    //set<string> leaves;
+    //clipToLeaves("output/coast/road", "", poly_storage, false, leaves);
+    //clipToLevel("output/coast/road", "", poly_storage, false, leaves, 2);
+    createTiles("output/road", poly_storage, false);
+     //simplifyGraph(poly_storage, (3600000000)/1024);
     //clipRecursive( "output/coast/road", "", poly_storage, false);
 }
 
@@ -829,7 +930,9 @@ void extractBuildings()
         //tmp.isClockwise();
         //cout << way << endl;        
     } 
-    clipRecursive( "output/coast/building", "", poly_storage, true);
+    createTiles("output/road", poly_storage, true);
+    
+//    clipRecursive( "output/coast/building", "", poly_storage, true);
 }
 
 int main()
