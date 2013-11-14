@@ -220,6 +220,22 @@ void OSMNode::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyVal
     ptr[id] = offset;
 }
 
+bool OSMNode::hasKey(string key) const
+{
+    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+        if (it->first == key) return true;
+    return false;
+}
+
+const string& OSMNode::getValue(string key) const
+{
+    static const string empty="";
+    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+        if (it->first == key) return it->second;
+    return empty;
+}
+
+
 bool OSMNode::operator==(const OSMNode &other) const {return lat == other.lat && lon == other.lon;}
 bool OSMNode::operator!=(const OSMNode &other) const {return lat != other.lat || lon != other.lon;}
 bool OSMNode::operator< (const OSMNode &other) const {return id < other.id;}

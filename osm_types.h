@@ -35,6 +35,10 @@ struct OSMNode
     OSMNode( const uint8_t* data_ptr, uint64_t node_id);
         
     void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    const string &getValue(string key) const;
+    bool hasKey(string key) const;
+    const string &operator[](string key) const {return getValue(key);}
+    
     bool operator==(const OSMNode &other) const;
     bool operator!=(const OSMNode &other) const;
     bool operator< (const OSMNode &other) const;

@@ -16,8 +16,8 @@ GL_TEST_OBJ = $(GL_TEST_SRC:.cc=.o) math64.o
 # already uses all bits of an int64_t, so, more complex algorithms could easily cause an - otherwise undetected -
 # integer overflow
 # WARNING: the gcc option -O2 appears to negate the effects of -ftrapv ! 
-#FLAGS = -g -Wall -Wextra -DNDEBUG -O2
-FLAGS = -ftrapv -g -Wall -Wextra 
+FLAGS = -g -Wall -Wextra #-DNDEBUG -O2
+#FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11

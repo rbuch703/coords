@@ -18,25 +18,103 @@
 
 list<VertexChain> poly_storage;
 
-mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
-mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
-uint64_t* offset = (uint64_t*) idx_map.ptr;
-uint64_t num_rels = idx_map.size / sizeof(uint64_t);
+class OSMEntities
+{
 
-mmap_t way_idx_map = init_mmap ( "intermediate/ways.idx", true, false);
-mmap_t way_data_map= init_mmap ( "intermediate/ways_int.data",true, false);
-uint64_t* way_offset = (uint64_t*) way_idx_map.ptr;
-//#ifndef NDEBUG
-uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
-//#endif
+public:
+    OSMEntities(string indexFilename, string  dataFileName)
+    {
+        idx_map = init_mmap ( indexFilename.c_str(),true, false);
+        data_map = init_mmap ( dataFileName.c_str(),true, false);
+        num = idx_map.size / sizeof(uint64_t);
 
+    }
+
+        
+    ~OSMEntities()
+    {
+        free_mmap (&idx_map);
+        free_mmap (&data_map);
+    }
+    
+    bool exists(uint64_t id) { 
+        if (id >= num) return false;
+        return ((uint64_t*)idx_map.ptr)[id];
+    }
+    /*
+    OSMNode get(uint64_t node_id)
+    {
+        assert ( node_id >= num_nodes );
+        uint64_t idx = ((uint64_t*)node_idx_map.ptr)[node_id];
+        assert( idx > 0);
+        return OSMNode( ((uint8_t*)node_data_map.ptr) + idx, node_id);
+    }*/
+    
+    uint64_t count() const { return num;}
+protected:
+    uint64_t num;
+    mmap_t idx_map;
+    mmap_t data_map;
+
+};
+
+
+class Nodes: public OSMEntities
+{
+
+public:
+    Nodes(string indexFilename, string  dataFileName): OSMEntities( indexFilename, dataFileName) {}
+
+
+    OSMNode get(uint64_t id)
+    {
+        assert ( id <= num );
+        uint64_t idx = ((uint64_t*) this->idx_map.ptr)[id];
+        assert( idx > 0);
+        return OSMNode( ((uint8_t*)data_map.ptr) + idx, id);
+    }
+};
+
+class Ways: public OSMEntities
+{
+
+public:
+    Ways(string indexFilename, string  dataFileName): OSMEntities( indexFilename, dataFileName) {}
+
+    OSMIntegratedWay get(uint64_t way_id)
+    {
+        assert ( way_id <= num );
+        uint64_t idx = ((uint64_t*)idx_map.ptr)[way_id];
+        assert( idx > 0);
+        const uint8_t* dest = ((uint8_t*)data_map.ptr) + idx;
+        return OSMIntegratedWay( dest, way_id);
+    }
+
+};
+
+class Relations: public OSMEntities
+{
+
+public:
+    Relations(string indexFilename, string  dataFileName): OSMEntities( indexFilename, dataFileName) {}
+
+    OSMRelation get(uint64_t way_id)
+    {
+        assert ( way_id <= num );
+        uint64_t idx = ((uint64_t*)idx_map.ptr)[way_id];
+        assert( idx > 0);
+        const uint8_t* dest = ((uint8_t*)data_map.ptr) + idx;
+        return OSMRelation( dest, way_id);
+    }
+
+};
 
 void simplifyGraph(list<VertexChain> &data, double allowedDeviation); // forward
 
 
-
 void writePolygonToDisk(std::string path, VertexChain segment, bool closeSegments)
 {
+   
     if (!closeSegments) //just dump the line segment, no need for conversion to simple polygon, etc.
     {
         segment.canonicalize();
@@ -45,7 +123,6 @@ void writePolygonToDisk(std::string path, VertexChain segment, bool closeSegment
         return;
         
     }
-    
    
     double secs = 0;
     if (segment.size() > 10000)
@@ -95,6 +172,8 @@ void handlePolygon(string, VertexChain& segment)
     //dumpPolygon(file_base, segment);
 }
 
+
+
 void clipFirstComponent(list<VertexChain> &in, int32_t clip_pos, bool closeSegments, list<VertexChain> &out1, list<VertexChain> &out2)
 {
     for (uint64_t i = in.size(); i; i--)
@@ -132,8 +211,10 @@ void clipToQuadrants(list<VertexChain> &segments, int32_t mid_x, int32_t mid_y, 
     
     if (closeSegments)
     {
+    #ifndef NDEBUG
         BOOST_FOREACH( const VertexChain &seg, vLeft)    assert( seg.data().front() == seg.data().back());
         BOOST_FOREACH( const VertexChain &seg, vRight)   assert( seg.data().front() == seg.data().back());
+    #endif
     }
     
     list<VertexChain> vTop, vBottom;
@@ -216,10 +297,11 @@ void clipToLevel(string file_base, string position, list<VertexChain>& segments,
 }
 
 
-#if 0
 void clipRecursive(string file_base, string position, list<VertexChain>& segments, bool closeSegments,
                    int32_t top = -900000000, int32_t left = -1800000000, int32_t bottom = 900000000, int32_t right = 1800000000, uint32_t level = 0)
 {
+    uint64_t VERTEX_LIMIT = 20000;
+
     uint64_t num_vertices = 0;
     BOOST_FOREACH( const VertexChain &seg, segments)
         num_vertices+= seg.size();    
@@ -319,7 +401,6 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     vBottom.clear();
     
 } 
-#endif
 
 void createTiles(string basename, list<VertexChain> &segments, bool closedPolygons)
 {
@@ -391,13 +472,11 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
     
 }
 
-
-
 /* TODO let this method keep a blacklist of relations already processed through its recursion.
     Currently, relations may be processed several times (and thus cause the creation of multiple polygons),
     and the algorithm may even be caught in an infinite loop.
     */
-void addOuterWaysToReconstructor(const OSMRelation &rel, PolygonReconstructor &recon)
+/*void addOuterWaysToReconstructor(const OSMRelation &rel, PolygonReconstructor &recon)
 {
 
     for (list<OSMRelationMember>::const_iterator way = rel.members.begin(); way != rel.members.end(); way++)
@@ -426,22 +505,36 @@ void addOuterWaysToReconstructor(const OSMRelation &rel, PolygonReconstructor &r
                 break;
         }
     }
-}
-
+}*/
 
 void extractCountries()
 {
+/*
+    mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
+    mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
+    uint64_t* offset = (uint64_t*) idx_map.ptr;
+    assert ( idx_map.size % sizeof(uint64_t) == 0);
+    uint64_t num_rels = idx_map.size / sizeof(uint64_t);
+
+    mmap_t way_idx_map = init_mmap ( "ways.idx", true, false);
+    mmap_t way_data_map= init_mmap ( "ways_int.data",true, false);
+    uint64_t* way_offset = (uint64_t*) way_idx_map.ptr;
+    assert ( way_idx_map.size % sizeof(uint64_t) == 0);
+#ifndef NDEBUG
+    uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
+#endif*/
+    Relations *relations = new Relations("intermediate/relations.idx", "intermediate/relations.data");
+    Ways *ways = new Ways("ways.idx", "ways_int.data");
 
     
-    for (uint64_t rel_id = 0; rel_id < num_rels; rel_id++)
+    for (uint64_t rel_id = 0; rel_id < relations->count(); rel_id++)
     {
-        if (rel_id % 10000 == 0)
+        if (rel_id % 1000 == 0)
             cout << (rel_id/1000) << "k relations read." << endl;   
-        if (! offset[rel_id]) continue;
-        OSMRelation rel( ((uint8_t*)data_map.ptr) + offset[rel_id], rel_id);
-        
-        //if (! rel.hasKey("boundary") || rel["boundary"] != "administrative") continue;
-        //if (! rel.hasKey("timezone")) continue;
+            
+        if (! relations->exists(rel_id)) continue;
+        //if (! offset[rel_id]) continue;
+        OSMRelation rel = relations->get(rel_id);
         
         /* current canonical detecting of countries: they have ALL of the following properties:
             - they have an "ISO3166-1" tag
@@ -468,10 +561,24 @@ void extractCountries()
         if ( rel["boundary"] != "administrative") continue;
         if (!rel.hasKey("ISO3166-1")) continue;
 
-        //if (rel["admin_level"] != "4") continue;
         PolygonReconstructor recon;
         
-        addOuterWaysToReconstructor(rel, recon);
+        for (list<OSMRelationMember>::const_iterator way = rel.members.begin(); way != rel.members.end(); way++)
+        {
+            if (way->type != WAY) continue;
+            if (way->role != "outer") continue;
+            
+            //if (way->ref == 0) continue;
+            //assert(way->ref < ways->cont());
+            
+            if (! ways->exists(way->ref)) continue;
+            
+            //if (way_offset[ way->ref ] == 0) continue;
+            //const uint8_t * ptr = (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
+            OSMIntegratedWay iw = ways->get(way->ref);//(ptr , way->ref);
+            VertexChain ch(iw.vertices);
+            recon.add(ch);
+        }
         
         recon.forceClosePolygons();
         list<VertexChain> polys = recon.getClosedPolygons();
@@ -485,8 +592,9 @@ void extractCountries()
         //else
         //cout << rel << endl;
     }
-    createTiles("output/country", poly_storage, true);
-    //clipRecursive( "output/coast/country", "", poly_storage, true);
+    delete ways;
+    delete relations;
+    clipRecursive( "output/country", "", poly_storage, true);
 }
 
 class PointQuadTreeNode
@@ -868,6 +976,91 @@ void mergeAdjacentVertexChains(list<VertexChain> &chains)
             seg++;
     }
 }
+void extractAreas()
+{
+/*
+    mmap_t idx_map = init_mmap ( "intermediate/relations.idx", true, false);
+    mmap_t data_map= init_mmap ( "intermediate/relations.data",true, false);
+
+    assert ( idx_map.size % sizeof(uint64_t) == 0);
+    uint64_t num_rels = idx_map.size / sizeof(uint64_t);
+
+    uint64_t *rel_indices = (uint64_t*)idx_map.ptr;
+    uint8_t*  rel_data =    (uint8_t*)data_map.ptr;*/
+  
+    set<uint64_t> way_whitelist; //list of ways that were selected as part of matching relations
+    Relations *relations = new Relations("intermediate/relations.idx", "intermediate/relations.data");
+    
+    for (uint64_t rel_id = 0; rel_id < relations->count(); rel_id++)
+    {
+        if (rel_id % 100000 == 0)
+            cout << (rel_id/1000) << "k relations read." << endl;   
+
+        if (! relations->exists(rel_id)) continue;
+        //if (! rel_indices[rel_id]) continue;
+        
+        OSMRelation rel = relations->get(rel_id);//( &rel_data[rel_indices[rel_id]], rel_id);
+        if ((rel["type"] != "multipolygon") && (rel["type"] != "boundary")) continue;
+        if (!rel.hasKey("waterway") && !rel.hasKey("natural")) continue;
+        if (rel["waterway"] != "riverbank" && rel["natural"] != "water") continue;
+        
+        BOOST_FOREACH (OSMRelationMember member, rel.members)
+        {
+            if (member.role != "outer") continue;
+            if (member.type != ELEMENT::WAY) continue;
+            way_whitelist.insert( member.ref);
+        }
+    }
+    delete relations;
+    /*free_mmap(&idx_map);
+    free_mmap(&data_map);*/
+
+    /*
+    mmap_t way_idx_map = init_mmap ( "ways.idx", true, false);
+    mmap_t way_data_map= init_mmap ( "ways_int.data",true, false);
+
+    assert ( way_idx_map.size % sizeof(uint64_t) == 0);
+    uint64_t num_ways = way_idx_map.size / sizeof(uint64_t);
+
+    uint64_t *way_indices = (uint64_t*)way_idx_map.ptr;
+    uint8_t*  way_data =    (uint8_t*)way_data_map.ptr;*/
+    Ways *ways = new Ways("ways.idx", "ways_int.data");
+    PolygonReconstructor recon;
+
+    for (uint64_t way_id = 0; way_id < ways->count(); way_id++)
+    {
+        if (way_id % 1000000 == 0)
+            cout << (way_id/1000000) << "M ways read." << endl;   
+
+        if (! ways->exists(way_id)) continue;
+        OSMIntegratedWay way = ways->get(way_id);
+
+        if (!way_whitelist.count(way_id))
+        {
+            if (!way.hasKey("waterway") && !way.hasKey("natural")) continue;
+            if (way["waterway"] != "riverbank" && way["natural"] != "water") continue;
+        }
+        
+        recon.add(VertexChain(way.vertices));
+        
+        //cout << way << endl;
+        
+    }
+    delete ways;
+    /*free_mmap(&way_idx_map);
+    free_mmap(&way_data_map);*/
+
+    recon.forceClosePolygons();
+    list<VertexChain> polys = recon.getClosedPolygons();
+    recon.clear();
+    for (list<VertexChain>::iterator it = polys.begin(); it != polys.end(); it++)
+        handlePolygon("dummy", *it);
+
+
+    cout << poly_storage.size() << " polygons extracted" << endl;
+    clipRecursive( "output/coast/water", "", poly_storage, true);
+    
+}
 
 void extractHighways()
 {
@@ -909,7 +1102,6 @@ void extractHighways()
     //clipRecursive( "output/coast/road", "", poly_storage, false);
 }
 
-
 void extractBuildings()
 {
     FILE *f = fopen("intermediate/buildings.dump", "rb");
@@ -930,23 +1122,226 @@ void extractBuildings()
         //tmp.isClockwise();
         //cout << way << endl;        
     } 
-    createTiles("output/road", poly_storage, true);
+    clipRecursive( "output/coast/building", "", poly_storage, true);
+}
+
+void extractMagdeburgRoads()
+{
+    FILE *f = fopen("intermediate/roads.dump", "rb");
+    FILE* f_out = fopen("street_of_magdeburg.bin", "wb");
+    int i = 0;
+    int ch;
     
-//    clipRecursive( "output/coast/building", "", poly_storage, true);
+    map<string,int32_t> vMaxSpeedValues;
+    vMaxSpeedValues.insert( pair<string, int32_t>("3", 3));
+    vMaxSpeedValues.insert( pair<string, int32_t>("5", 5));
+    vMaxSpeedValues.insert( pair<string, int32_t>("7", 7));
+    vMaxSpeedValues.insert( pair<string, int32_t>("10", 10));
+    vMaxSpeedValues.insert( pair<string, int32_t>("20", 20));
+    vMaxSpeedValues.insert( pair<string, int32_t>("30", 30));
+    vMaxSpeedValues.insert( pair<string, int32_t>("50", 50));
+    vMaxSpeedValues.insert( pair<string, int32_t>("60", 60));
+    vMaxSpeedValues.insert( pair<string, int32_t>("70", 70));
+    vMaxSpeedValues.insert( pair<string, int32_t>("80", 80));
+    vMaxSpeedValues.insert( pair<string, int32_t>("100", 100));
+    vMaxSpeedValues.insert( pair<string, int32_t>("120", 120));
+    vMaxSpeedValues.insert( pair<string, int32_t>("none", 130));
+    vMaxSpeedValues.insert( pair<string, int32_t>("signals", 130));
+    vMaxSpeedValues.insert( pair<string, int32_t>("walk", 5));
+    vMaxSpeedValues.insert( pair<string, int32_t>("", -1));
+    
+    
+    map<string, int32_t> road_classification;
+    static const int PED = 1;
+    static const int BIKE= 2;
+    static const int CAR = 4;
+    //legend: OR-combination of the following:
+    /* 1: usable by pedestrians; 
+       2: usable by bicycles;
+       4: usable by cars
+    */
+
+    road_classification.insert(pair<string, int32_t>("construction",    0));    //under construction, impassable
+    road_classification.insert(pair<string, int32_t>("proposed",        0));    
+    road_classification.insert(pair<string, int32_t>("raceway",         0));    
+    road_classification.insert(pair<string, int32_t>("bridleway",       PED|BIKE));
+    road_classification.insert(pair<string, int32_t>("bus_stop",        PED|BIKE));
+    road_classification.insert(pair<string, int32_t>("cycleway",        PED|BIKE));    
+    road_classification.insert(pair<string, int32_t>("footway",         PED|BIKE));    
+    road_classification.insert(pair<string, int32_t>("steps",           PED|BIKE));    
+    road_classification.insert(pair<string, int32_t>("path",            PED|BIKE));    
+    road_classification.insert(pair<string, int32_t>("pedestrian",      PED|BIKE));    
+    road_classification.insert(pair<string, int32_t>("motorway",                 CAR));
+    road_classification.insert(pair<string, int32_t>("motorway_link",            CAR));    
+    road_classification.insert(pair<string, int32_t>("trunk",                    CAR));    
+    road_classification.insert(pair<string, int32_t>("trunk_link",               CAR));    
+    road_classification.insert(pair<string, int32_t>("living_street",   PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("primary",         PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("primary_link",    PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("residential",     PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("road",            PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("secondary",       PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("secondary_link",  PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("service",         PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("tertiary",        PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("track",           PED|BIKE|CAR));    
+    road_classification.insert(pair<string, int32_t>("unclassified",    PED|BIKE|CAR));    
+
+
+    while ( (ch = fgetc(f)) != EOF )
+    {
+        ungetc(ch, f);
+        //int d = fputc(ch, f);
+        //perror("fputc");
+        //assert(d == ch);
+        if (++i % 1000000 == 0) cerr << (i/1000000) << "M roads read" << endl;
+        OSMIntegratedWay way(f, -1);
+        
+        bool inMagdeburg = false;
+        for (list<OSMVertex>::const_iterator v = way.vertices.begin(); v != way.vertices.end(); v++)
+            inMagdeburg |= 
+                v->x >= 52.07*10000000 && v->x <= 52.23 * 10000000 &&
+                v->y >= 11.5 *10000000 && v->y <= 11.75 * 10000000;
+
+        if (!inMagdeburg) continue;
+        assert( road_classification.count(way["highway"]));
+
+        
+        uint32_t nVertices = way.vertices.size();
+        fwrite( &nVertices, sizeof(nVertices), 1, f_out);
+        if ( !vMaxSpeedValues.count( way["maxspeed"]) )
+        {
+            cerr << "unknown maxspeed value '" << way["maxspeed"] << "'" << endl;
+            assert(false);
+        }
+        
+        uint32_t maxSpeed  = vMaxSpeedValues[ way["maxspeed"]] ;
+        fwrite( &maxSpeed, sizeof(maxSpeed), 1, f_out);
+        
+        uint32_t classification = road_classification[ way["highway"]];
+        fwrite( &classification, sizeof(classification), 1, f_out);
+        
+        
+        for (list<OSMVertex>::const_iterator v = way.vertices.begin(); v != way.vertices.end(); v++)
+        {
+            fwrite(&(v->x), sizeof(v->x), 1, f_out);
+            fwrite(&(v->y), sizeof(v->y), 1, f_out);
+        }
+
+            //cout << way << endl;
+        
+        //tmp.isClockwise();
+        //cout << way << endl;        
+    }
+    fclose(f);
+    fclose(f_out);
+     
+     /*
+    cout << "list of highway types follows:" << endl;
+    for (map<string, int>::const_iterator s = highway_types.begin(); s != highway_types.end(); s++)
+        cout << (s->first) << ":\t" << s->second << endl;*/
+    //clipRecursive( "output/coast/building", "", poly_storage);      
+}
+
+
+
+
+void extractMagdeburgAmenities()
+{
+
+    map<string, FILE*> am_files;
+    am_files.insert(pair<string, FILE*>("fuel", fopen("fuel_stations.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("kindergarten", fopen("kindergarten.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("school", fopen("school.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("place_of_worship", fopen("place_of_worship.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("fast_food", fopen("fastfood.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("bank", fopen("bank.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("post_box", fopen("postbox.bin", "wb")));
+    am_files.insert(pair<string, FILE*>("pharmacy", fopen("pharmacy.bin", "wb")));
+
+    Ways* ways = new Ways("ways.idx", "ways_int.data");
+    //FILE* fFuelStation = fopen("fuel_stations_of_magdeburg.bin", "wb");
+
+    map<string, int> amenities;
+    for (uint64_t way_id = 0; way_id < ways->count(); way_id++)
+    {
+        if (way_id % 1000000 == 0)
+            cout << (way_id/1000000) << "M ways read." << endl;   
+        if (! ways->exists(way_id)) continue;
+        OSMIntegratedWay way = ways->get(way_id);
+
+        if (!way.hasKey("amenity")) continue;
+        
+        double center_x = 0;
+        double center_y = 0;
+        for ( list<OSMVertex>::const_iterator v = way.vertices.begin(); v != way.vertices.end(); v++)
+        {
+            center_x += v->x;
+            center_y += v->y;
+        }
+        center_x /= way.vertices.size();
+        center_y /= way.vertices.size();
+
+        if (!( center_x >= 52.07*10000000 && center_x <= 52.23 * 10000000 &&
+               center_y >= 11.5 *10000000 && center_y <= 11.75 * 10000000))
+               continue;
+       //cout << way << endl;
+       if (! amenities.count(way["amenity"])) amenities.insert( pair<string, int>(way["amenity"], 0));
+       amenities[way["amenity"]] += 1;
+       
+       if (! am_files.count(way["amenity"])) continue;
+       //if ( way["amenity"] != "fuel") continue;
+       int32_t x = center_x;
+       fwrite( &x, sizeof(x), 1, am_files[way["amenity"]] );
+       int32_t y = center_y;
+       fwrite( &y, sizeof(y), 1, am_files[way["amenity"]] );
+       
+    }
+
+    delete ways;
+     
+    Nodes nodes("intermediate/nodes.idx", "intermediate/nodes.data");
+    
+    for (uint64_t idx = 0; idx < nodes.count(); idx++)
+    {
+        if (idx % 10000000 == 0) cout << (idx/1000000) << "M nodes read." << endl;
+        if (! nodes.exists(idx)) continue;
+        OSMNode node = nodes.get(idx);
+        if (! node.hasKey("amenity")) continue;
+        
+        if (!( node.lat >= 52.07*10000000 && node.lat <= 52.23 * 10000000 &&
+               node.lon >= 11.5 *10000000 && node.lon <= 11.75 * 10000000))
+               continue;
+        
+       if (! amenities.count(node["amenity"])) amenities.insert( pair<string, int>(node["amenity"], 0));
+       amenities[node["amenity"]] += 1;
+        //cout << node << endl;
+
+       //if ( node["amenity"] != "fuel") continue;
+   
+       if (! am_files.count(node["amenity"])) continue;
+               
+       fwrite( &node.lat, sizeof(node.lat), 1, am_files[node["amenity"]] );
+       fwrite( &node.lon, sizeof(node.lon), 1, am_files[node["amenity"]] );
+        
+    }
+    //fclose(fFuelStation);
+    for ( map<string, int>::const_iterator it = amenities.begin(); it != amenities.end(); it++)
+        cout << it->first << ":\t" << it->second << endl;
+    
+    //FIXME: close all file pointers in am_files
 }
 
 int main()
 {
-    //integrity checke for the mmaps
-    assert ( idx_map.size % sizeof(uint64_t) == 0);
-    assert ( way_idx_map.size % sizeof(uint64_t) == 0);
-
     //double allowedDeviation = 100* 40000.0; // about 40km (~1/10000th of the earth circumference)
     //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
     //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
     //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
     //extractCountries();
-    extractHighways();
+    //extractAreas();
+    extractMagdeburgRoads();
+    //extractMagdeburgAmenities();
     //extractBuildings();
     //extractGermany();
 /*

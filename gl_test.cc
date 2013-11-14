@@ -265,7 +265,7 @@ void ensureExistsInCache(const string filename)
     
     // download it to fill the cache (or get the server answer that it does not exist)
         
-    curl_easy_setopt(easyhandle, CURLOPT_URL, ("http://91.250.98.219/"+filename).c_str() );
+    curl_easy_setopt(easyhandle, CURLOPT_URL, ("http://91.250.98.219/data/"+filename).c_str() );
     curl_easy_setopt(easyhandle, CURLOPT_USERAGENT, "OSM gl_test-0.1 (libcurl)");
     curl_easy_setopt(easyhandle, CURLOPT_FAILONERROR, true);
     //curl_easy_setopt(easyhandle, CURLOPT_HEADER, 1);
@@ -277,7 +277,11 @@ void ensureExistsInCache(const string filename)
     fclose(f);
     
     long http_code = 0;
-    assert(CURLE_OK == curl_easy_getinfo (easyhandle, CURLINFO_RESPONSE_CODE, &http_code));
+    #ifndef NDEBUG
+        assert(CURLE_OK == curl_easy_getinfo (easyhandle, CURLINFO_RESPONSE_CODE, &http_code));
+    #else
+        curl_easy_getinfo (easyhandle, CURLINFO_RESPONSE_CODE, &http_code);
+    #endif
     
     bool dlOk = res == CURLE_OK && http_code == 200;
     if (!dlOk)
