@@ -12,153 +12,60 @@
 #include <set>
 
 #include "osm_types.h"
-#include "mem_map.h"
+//#include "mem_map.h"
 #include "helpers.h"
-#include "polygonreconstructor.h"
+//#include "polygonreconstructor.h"
 using namespace std;
 
-/*
-uint64_t* node_index;
-uint64_t* way_index;
-uint64_t* relation_index;
-
-uint8_t* osm_data;
-*/
-
-//mmap_t mmap_node =          init_mmap("intermediate/nodes.idx",      true, false);  //read-only memory maps
-mmap_t mmap_way =           init_mmap("intermediate/ways.idx",       true, false);
-mmap_t mmap_relation =      init_mmap("intermediate/relations.idx",  true, false);
-//mmap_t mmap_node_data =     init_mmap("/mnt/data/nodes.data",     true, false);
-mmap_t mmap_way_data =      init_mmap("intermediate/ways_int.data",  true, false);
-mmap_t mmap_relation_data = init_mmap("intermediate/relations.data", true, false);
-
-//uint64_t* node_index =     (uint64_t*) mmap_node.ptr;
-uint64_t* way_index =      (uint64_t*) mmap_way.ptr;
-uint64_t* relation_index = (uint64_t*) mmap_relation.ptr;
-//uint8_t*  node_data =      (uint8_t*)  mmap_node_data.ptr;
-uint8_t*  way_data =       (uint8_t*)  mmap_way_data.ptr;
-uint8_t*  relation_data =  (uint8_t*)  mmap_relation_data.ptr;
-
-static const uint64_t num_ways = mmap_way.size / sizeof(uint64_t);
-static const uint64_t num_relations = mmap_relation.size / sizeof(uint64_t);
-//static const uint64_t num_nodes = mmap_node.size / sizeof(uint64_t);
-
+FILE* fWayIdx =       fopen("intermediate/ways.idx", "rb");
+FILE* fWayData =      fopen("intermediate/ways_int.data", "rb");
+FILE* fRelationIdx =  fopen("intermediate/relations.idx", "rb");
+FILE* fRelationData = fopen("intermediate/relations.data", "rb");
+uint64_t numRelations, numWays;
 
 typedef pair<list<OSMKeyValuePair>, FILE*> OSMFilterConfig;
 
 //OSMNode             getNode(uint64_t node_id)    { return OSMNode(&node_data[node_index[node_id]], node_id);}
-OSMIntegratedWay    getWay(uint64_t way_id)      
+#if 0
+OSMIntegratedWay getWay(uint64_t way_id)      
 {
-    if (way_index[way_id]) 
+
+    OSMIntegratedWay way(fWayIdx, fWayData, way_id);
+    /*if (way_index[way_id]) 
     {
         const uint8_t *data_ptr = &way_data[way_index[way_id]];
         return OSMIntegratedWay(data_ptr, way_id);
-    }
+    }*/
 
-    cerr << "[WARN] trying to access not-existing way " << way_id << ", skipping" << endl;
+    if (way.id != way_id)
+        cerr << "[WARN] trying to access not-existing way " << way_id << ", skipping" << endl;
         
-    return OSMIntegratedWay(way_id, list<OSMVertex>(), list<OSMKeyValuePair>() );
-        
-}
+    return way;
+}*/
 
-OSMRelation         getRelation(uint64_t relation_id) 
+
+OSMRelation getRelation(uint64_t relation_id) 
 { 
-    if (relation_index[relation_id])
-        return OSMRelation(&relation_data[relation_index[relation_id]], relation_id);
+    OSMRelation res(fRelationIdx, fRelationData, relation_id);
+    
+    if (res.id != relation_id)
+        cerr << "[WARN] trying to access not-existing relation " << relation_id << ", skipping" << endl;
         
-    cerr << "[WARN] trying to access not-existing relation " << relation_id << ", skipping" << endl;
-        
-    return OSMRelation(relation_id, list<OSMRelationMember>(), list<OSMKeyValuePair>() );
-}
-
-//map<string, uint32_t> zone_entries;
-
-
-//static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
-
-//obtains all "outer" ways that belong to a given relation, including those of possible sub-relations
-//FIXME: blacklist those timezone relations that are part of other timezone relations
-/*
-list<uint64_t> getTZWayListRecursive( uint64_t relation_id)
-{
-    list<uint64_t> res;
-    if (! relation_index[relation_id]) {cout << "[WARN] non-existent relation " << relation_id << endl; return res; }
-    OSMRelation rel = getRelation(relation_id);
-
-    if ((rel.getValue("type") !="boundary") && (rel.getValue("type") !="multipolygon") && (rel.getValue("type") != "multilinestring"))
-    {
-        std::cout << "[WARN] Relation " << rel.id <<" with unknown type \"" << rel.getValue("type") << "\"" << std::endl;
-        return res;
-    }
-
-    for (list<OSMRelationMember>::const_iterator it = rel.members.begin(); it != rel.members.end(); it++)
-    {
-        OSMRelationMember member = *it;
-        if (member.type == NODE && member.role == "admin_centre") continue; //not of interest for time zones
-        if (member.type == NODE && member.role == "capital") continue; 
-        if (member.type == NODE && member.role == "label") continue; 
-        
-        if (member.type == RELATION && member.role == "region") member.role = "subarea";
-        if (member.type == RELATION && member.role == "sub_area") member.role = "subarea";
-        if (member.type == RELATION && member.role == "subarea")  continue;  
-        
-        if (member.type == WAY && member.role == "enclave") member.role = "inner"; //same as "inner"
-        if (member.type == WAY && member.role == "inner") continue; //specifies a hole in a polygon FIXME: handle these
-        if (member.type == RELATION && member.role == "inner") continue; //DITO
-        
-        if (member.type == RELATION && (member.role == "outer" || member.role == ""))
-        {
-            list<uint64_t> tmp = getTZWayListRecursive(member.ref);
-            res.insert(res.end(), tmp.begin(), tmp.end());
-            continue;
-        }
-        
-        if (member.type == WAY && member.role =="exclave") member.role = "outer";   // those are all supposed to
-        if (member.type == WAY && member.role =="") member.role = "outer";          // mean the same in OSM
-        
-        if ((member.type != WAY) || (member.role != "outer"))
-        {
-            std::cout << "Unexpected Member (" << ELEMENT_NAMES[member.type] << " " << member.ref 
-                      << ") with role '" << member.role << "' in rel " << rel.id << endl; 
-           continue;
-       }
-       res.push_back(member.ref);
-    }
     return res;
-}*/
+}
+#endif
 
-/*void dumpPolygon(string file_base, const PolygonSegment& segment)
-{
-    size_t pos = file_base.rfind('/');
-    string directory = file_base.substr(0, pos);
-    //zone = zone.substr(pos+1);
-    ensureDirectoryExists(directory);
-    
-    int file_num = 1;
-    if ( zone_entries.count(file_base) )
-        file_num = ++zone_entries[file_base];
-    else (zone_entries.insert( pair<string, uint32_t>(file_base, 1)));
-    
-    ofstream out;
-    char tmp[200];
-    snprintf(tmp, 200, "%s_%u.csv", file_base.c_str(), file_num);
-    //string filename = zone+"_"+ file_num+".csv";
-    out.open(tmp);
-    for (list<Vertex>::const_iterator vertex = segment.vertices().begin(); vertex != segment.vertices().end(); vertex++)
-    {
-        out << vertex->x << ", " << vertex->y << endl;
-    }
-    out.close();
-}*/
 
 void getSubRelations( uint64_t relation_id, set<uint64_t> &outSubRelations)
 {
-    if (! relation_index[relation_id]) {cout << "[WARN] non-existent relation " << relation_id << endl; return; }
-    OSMRelation rel = getRelation(relation_id);
+    OSMRelation rel(fRelationIdx, fRelationData, relation_id);
+    if (rel.id != relation_id)
+        {cout << "[WARN] non-existent relation " << relation_id << endl; return; }
+
 
     for (list<OSMRelationMember>::const_iterator it = rel.members.begin(); it != rel.members.end(); it++)
     {
-        if (it->type == RELATION)
+        if ((it->type == RELATION) && (! outSubRelations.count(it->ref)))
         {
             outSubRelations.insert(it->ref);
             getSubRelations( it->ref, outSubRelations);
@@ -166,15 +73,19 @@ void getSubRelations( uint64_t relation_id, set<uint64_t> &outSubRelations)
     }         
 }
 
-void getOutlineWaysRecursive(const OSMRelation &relation, set<uint64_t> &ways_out)
+void getOutlineWaysRecursive(const OSMRelation &relation, set<uint64_t> &ways_out, set<uint64_t>&relationsChecked )
 {
+    if ( relationsChecked.count(relation.id)) 
+        return;
+    
+    relationsChecked.insert( relation.id);
     for (list<OSMRelationMember>::const_iterator member = relation.members.begin(); member != relation.members.end(); member++)
     {
         if (member->type == WAY) ways_out.insert(member->ref);
         else if (member->type == RELATION)
         {
-            if (member->role == "outer" || member->role == "exclave" || member->role == "") 
-                getOutlineWaysRecursive( getRelation(member->ref), ways_out);
+            if ((member->role == "outer" || member->role == "exclave" || member->role == "")  && !ways_out.count(member->ref))
+                getOutlineWaysRecursive( OSMRelation(fRelationIdx, fRelationData, member->ref), ways_out, relationsChecked);
         }
     }
 }
@@ -202,11 +113,18 @@ void dumpWays( list<OSMFilterConfig> config)
         ways have to be read and dumped to file as well.
       */
     cout << "First phase, scanning relations" << endl;
-    for (uint64_t i = 0; i < num_relations; i++)
+    for (uint64_t i = 0; i < numRelations; i++)
     {
-        if (! relation_index[i]) continue;
+        /*cout << i << endl;
+        if ( (i+1) % 100000 == 0) 
+            exit(0);*/
+            
+        if ((i+1) % 1000000 == 0) std::cout << (i+1)/1000000 << "M relations scanned, " << std::endl;
+
         //std::cout << i << endl;
-        OSMRelation rel = getRelation(i);
+        OSMRelation rel(fRelationIdx, fRelationData, i);
+        if (rel.id != i) 
+            continue;
 
         //std::cout << rel << endl;
                     
@@ -214,7 +132,6 @@ void dumpWays( list<OSMFilterConfig> config)
         BOOST_FOREACH(OSMFilterConfig cfg, config)
         //for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
         {
-            if ((i) % 1000000 == 0) std::cout << i/1000000 << "M relations scanned, " << std::endl;
             
             const list<OSMKeyValuePair> &tags = cfg.first;
             FILE* file = cfg.second;
@@ -226,7 +143,10 @@ void dumpWays( list<OSMFilterConfig> config)
                 matches &= (tag.second == "*" || rel[tag.first] != tag.second); // value= "*" --> match any value
             }
             if (matches)
-                getOutlineWaysRecursive(rel, ways_from_relations[file]);
+            {
+                set<uint64_t> tmp;
+                getOutlineWaysRecursive(rel, ways_from_relations[file],  tmp);
+            }
         }
         
     }
@@ -240,11 +160,12 @@ void dumpWays( list<OSMFilterConfig> config)
     /** second phase, dump all ways matching the tag criteria, but remove 
         them from the relations lists*/    
     //list<Way> loops;
-    for (uint64_t i = 0; i < num_ways; i++)
+    for (uint64_t i = 0; i < numWays; i++)
     {
         if ((i) % 1000000 == 0) std::cout << i/1000000 << "M ways scanned, " << std::endl;
-        if (! way_index[i]) continue;
-        OSMIntegratedWay way = getWay(i);
+        OSMIntegratedWay way(fWayIdx, fWayData, i);
+        if (way.id != i) continue;
+
         for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
         {
             const list<OSMKeyValuePair> &tags = it->first;
@@ -277,7 +198,7 @@ void dumpWays( list<OSMFilterConfig> config)
         const set<uint64_t> &ids = it->second;
         cout << ids.size() << " ways from relations" << endl;
         for ( set<uint64_t>::const_iterator it = ids.begin(); it != ids.end(); it++)
-            getWay(*it).serialize(file);
+            OSMIntegratedWay(fWayIdx, fWayData, *it).serialize(file);
     }
 
 }
@@ -285,11 +206,24 @@ void dumpWays( list<OSMFilterConfig> config)
 
 int main()
 {
+#if 0
     assert( /*mmap_node.size && */mmap_way.size && mmap_relation.size && 
             /*mmap_node_data.size &&*/ mmap_way_data.size && mmap_relation_data.size &&
             "Empty data file(s)");
+#endif
 
     //double allowedDeviation = 100* 40000.0; // about 40km (~1/1000th of the earth circumference)
+    fseek(fRelationIdx, 0, SEEK_END);
+    numRelations = ftell(fRelationIdx);
+    assert(numRelations % 8 == 0);  //contains only uint64_t values
+    numRelations /= 8;
+    
+    fseek(fWayIdx, 0, SEEK_END);
+    numWays = ftell(fWayIdx);
+    assert(numWays % 8 == 0);  //contains only uint64_t values
+    numWays /= 8;
+    
+
     
     
     list<pair<list<OSMKeyValuePair>, FILE*> > extract_config;
@@ -323,9 +257,10 @@ int main()
     
     
     
-    list<OSMKeyValuePair> buildings;
+    /*list<OSMKeyValuePair> buildings;
     buildings.push_back( OSMKeyValuePair("building", "*"));
-    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("intermediate/buildings.dump", "wb")));
+    extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("intermediate/buildings.dump", "wb")));*/
+    
     /*
     list<OSMKeyValuePair> timezones;
     timezones.push_back( OSMKeyValuePair("timezone", "*"));
@@ -342,10 +277,10 @@ int main()
         fclose(cfg.second);
     
     //free_mmap(&mmap_node);
-    free_mmap(&mmap_way);
-    free_mmap(&mmap_relation);
+    //free_mmap(&mmap_way);
+    //free_mmap(&mmap_relation);
     //free_mmap(&mmap_node_data);
-    free_mmap(&mmap_way_data);
-    free_mmap(&mmap_relation_data);
+    //free_mmap(&mmap_way_data);
+    //free_mmap(&mmap_relation_data);
 }
 

@@ -72,10 +72,17 @@ ostream& operator<<(ostream &out, const OSMWay &way);
 // a representation of an OSM way that includes the data of all of its nodes (as opposed to just references to them)
 struct OSMIntegratedWay
 {
+    //manually constructs the way
     OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags);
+    //constructs the way based on a memory pointer (e.g. from a mmap) to serialized way data    
     OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id);
-    //OSMIntegratedWay( const uint8_t* data_ptr, uint64_t way_id);
+    //constructs the way from a file handle whose current position already points to the serialized data
     OSMIntegratedWay( FILE* src, uint64_t way_id = -1);
+    /*constructs the way from files: the first file contains an index of where each way is stored in the second file
+      neither one has to point to the specific way that is sought */
+    OSMIntegratedWay( FILE* idx, FILE* data, uint64_t way_id);
+
+    void initFromFile(FILE* src);
 
     void serialize( FILE* data_file, mmap_t *index_map= NULL, const map<OSMKeyValuePair, uint8_t> *tag_symbols = NULL) const;
     bool hasKey(string key) const;
@@ -108,11 +115,13 @@ struct OSMRelation
     OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags);
     OSMRelation( const uint8_t* data_ptr, uint64_t relation_id);
     OSMRelation( FILE* src, uint64_t rel_id = -1);
+    OSMRelation( FILE* idx, FILE* data, uint64_t relation_id);
 
     void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     bool hasKey(string key) const;
     const string& getValue(string key) const;
     const string& operator[](string key) const {return getValue(key);}
+    void initFromFile(FILE* src);
     uint64_t id;
     list<OSMRelationMember> members;
     list<OSMKeyValuePair> tags;

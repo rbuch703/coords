@@ -333,7 +333,7 @@ OSMIntegratedWay::OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id): 
     tags = deserializeTags(data_ptr);
 }
 
-OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
+void OSMIntegratedWay::initFromFile(FILE* src)
 {
     uint32_t num_vertices;// = vertices.size();
     fread(&num_vertices, sizeof(num_vertices), src);
@@ -359,6 +359,29 @@ OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
     }
     tags = deserializeTags(src);
 }
+
+OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
+{
+    this->initFromFile(src);
+}
+
+OSMIntegratedWay::OSMIntegratedWay( FILE* idx, FILE* data, uint64_t way_id): id(way_id)
+{
+    fseek(idx, way_id*sizeof(uint64_t), SEEK_SET);
+    uint64_t pos;
+    int nRead = fread( &pos, sizeof(uint64_t), 1, idx);
+    /*there is only a magic byte at file position 0. Pos == 0 is the marker representing that no relation 
+      with that id exists */
+    if ((nRead != 1) || (pos == 0)) 
+    {
+        id = -1;
+        return;
+    }
+
+    fseek(data, pos, SEEK_SET);
+    this->initFromFile(data);
+}
+
 
 
 void OSMIntegratedWay::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const
@@ -446,7 +469,8 @@ OSMRelation::OSMRelation( const uint8_t* data_ptr, uint64_t relation_id): id(rel
     tags = deserializeTags(data_ptr);
 }
 
-OSMRelation::OSMRelation( FILE* src, uint64_t rel_id): id(rel_id)
+
+void OSMRelation::initFromFile(FILE* src)
 {
     uint32_t num_members;
     if (1 != fread(&num_members, sizeof(num_members), 1, src)) return;
@@ -468,7 +492,32 @@ OSMRelation::OSMRelation( FILE* src, uint64_t rel_id): id(rel_id)
     }
    
     tags = deserializeTags(src);
+
 }
+
+OSMRelation::OSMRelation( FILE* src, uint64_t rel_id): id(rel_id)
+{
+    this->initFromFile(src);
+}
+
+
+OSMRelation::OSMRelation( FILE* idx, FILE* data, uint64_t relation_id): id(relation_id)
+{
+    fseek(idx, relation_id*sizeof(uint64_t), SEEK_SET);
+    uint64_t pos;
+    int nRead = fread( &pos, sizeof(uint64_t), 1, idx);
+    /*there is only a magic byte at file position 0. Pos == 0 is the marker representing that no relation 
+      with that id exists */
+    if ((nRead != 1) || (pos == 0))
+    {
+        id = -1;
+        return;
+    }
+
+    fseek(data, pos, SEEK_SET);
+    this->initFromFile(data);
+}
+
 
 void OSMRelation::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const
 {
