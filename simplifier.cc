@@ -1335,19 +1335,27 @@ void extractMagdeburgAmenities()
 int main()
 {
     //double allowedDeviation = 100* 40000.0; // about 40km (~1/10000th of the earth circumference)
-    //extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
-    //extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
-    //extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");
-    //extractCountries();
+    /*extractNetwork(fopen("intermediate/countries.dump", "rb"), allowedDeviation, "output/country/country");
+    extractNetwork(fopen("regions.dump", "rb"), allowedDeviation, "output/regions/region");
+    extractNetwork(fopen("water.dump", "rb"), allowedDeviation, "output/water/water");*/
     //extractAreas();
-    extractMagdeburgRoads();
+    //extractMagdeburgRoads();
     //extractMagdeburgAmenities();
-    //extractBuildings();
     //extractGermany();
-/*
+
     FILE* f = fopen("coastline.dump", "rb");
     if (!f) { std::cout << "Cannot open file \"coastline.dump\"" << std::endl; return 0; }
     reconstructCoastline(f);//, poly_storage);
-    */
+
+    cout << "Countries .. " << endl;
+    extractCountries();
+
+    cout << "Highways .. " << endl;
+    extractHighways();
+
+    cout << "Buildings .. " << endl;
+    extractBuildings();
+
+   
     //cout << "reconstructed a total of " << poly_storage.size() << " coastline polygons" << endl;
 }

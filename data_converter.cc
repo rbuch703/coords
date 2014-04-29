@@ -296,7 +296,7 @@ int main()
     
     const char* base_dir = "intermediate";
     ensureDirectoryExists(base_dir);
-    /*
+    
     list<OSMKeyValuePair> country_border_tags;
     country_border_tags.push_back( OSMKeyValuePair("boundary", "administrative"));
     country_border_tags.push_back( OSMKeyValuePair("admin_level", "2"));
@@ -311,27 +311,27 @@ int main()
     cities.push_back( OSMKeyValuePair("boundary", "administrative"));
     cities.push_back( OSMKeyValuePair("admin_level", "8"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( cities, fopen("intermediate/cities.dump", "wb")));
-    */
+    
     list<OSMKeyValuePair> roads;
     roads.push_back( OSMKeyValuePair("highway", "*"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( roads, fopen("intermediate/roads.dump", "wb")));
 
-    /*
+    
     list<OSMKeyValuePair> water;
     water.push_back( OSMKeyValuePair("natural", "water"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( water, fopen("intermediate/water.dump", "wb")));
-    */
     
-    /*
+    
+    
     list<OSMKeyValuePair> buildings;
     buildings.push_back( OSMKeyValuePair("building", "*"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(buildings, fopen("intermediate/buildings.dump", "wb")));
-
+    /*
     list<OSMKeyValuePair> timezones;
     timezones.push_back( OSMKeyValuePair("timezone", "*"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>(timezones, fopen("intermediate/timezones.dump", "wb")));
-    */
-    /*list<OSMKeyValuePair> coastline;
+    
+    list<OSMKeyValuePair> coastline;
     coastline.push_back( OSMKeyValuePair("natural", "coastline"));
     extract_config.push_back( pair<list<OSMKeyValuePair>, FILE*>( coastline, fopen("intermediate/coastline.dump", "wb")));
     */

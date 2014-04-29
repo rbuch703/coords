@@ -5,8 +5,8 @@
 #include <queue>
 #include <boost/foreach.hpp>
 
-static BigInt getXCoordinate(const Vertex &v) { return v.get_x();}
-static BigInt getYCoordinate(const Vertex &v) { return v.get_y();}
+/*static*/ BigInt getXCoordinate(const Vertex &v) { return v.get_x();}
+/*static*/ BigInt getYCoordinate(const Vertex &v) { return v.get_y();}
 
 void simplifySection(list<Vertex> &m_vertices, list<Vertex>::iterator segment_first, list<Vertex>::iterator segment_last, uint64_t allowedDeviation);
 

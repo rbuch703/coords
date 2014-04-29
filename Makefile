@@ -20,7 +20,7 @@ FLAGS = -g -Wall -Wextra #-DNDEBUG -O2
 #FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
-CCFLAGS = $(FLAGS) -std=c++11
+CCFLAGS = $(FLAGS) -std=c++0x
 LD_FLAGS = #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
