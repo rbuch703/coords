@@ -198,6 +198,34 @@ OSMNode::OSMNode( const uint8_t* data_ptr, uint64_t node_id)
     id = node_id;
 }
 
+OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
+{
+    fseek(idx, node_id*sizeof(uint64_t), SEEK_SET);
+    uint64_t pos;
+    int nRead = fread( &pos, sizeof(uint64_t), 1, idx);
+    /*there is only a magic byte at file position 0. Pos == 0 is the marker representing that no relation 
+      with that id exists */
+    if ((nRead != 1) || (pos == 0))
+    {
+        id = -1;
+        lat = 0;
+        lon = 0;
+        return;
+    }
+
+    fseek(data, pos, SEEK_SET);
+    nRead =  fread(&lat, sizeof(int32_t), 1, data);
+    nRead += fread(&lon, sizeof(int32_t), 1, data);
+    if (nRead != 2)
+    {
+        cout << "Invalid read operation" << endl;
+        exit(0);
+    }
+
+    tags = deserializeTags(data);
+}
+
+
 OSMNode::OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, list<OSMKeyValuePair> node_tags):
         lat(node_lat), lon(node_lon), id(node_id), tags(node_tags) {}
 

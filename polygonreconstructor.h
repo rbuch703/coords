@@ -26,7 +26,7 @@ public:
     
     void clearPolygonList() { res.clear();}
     const list<VertexChain>& getClosedPolygons() const {return res;}
-
+    int getNumOpenEndpoints() const { return openEndPoints.size();}
 private:
     map<Vertex, VertexChain*> openEndPoints;
     list<VertexChain> res;

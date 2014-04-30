@@ -17,6 +17,7 @@ tests/arithmetic_test
 tests/geometry_test
 tests/quadtree_test
 tests/triangulation_test
+extract_md
 
 # ----- ignore compiled objects
 *.o
@@ -56,4 +57,5 @@ cache
 *.dump
 *.csv
 *.pdf
-
+*.bin
+*.gz
