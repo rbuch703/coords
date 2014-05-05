@@ -26,12 +26,16 @@ CCFLAGS = $(FLAGS) -std=c++0x
 LD_FLAGS = -flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
-all: make.dep conv_osmxml data_converter simplifier gl_test make_index extract_md tests
+all: make.dep conv_osmxml data_converter simplifier gl_test make_index extract_md tests intermediate
 #	 @echo [ALL] $<
 
 make_index: make_index.cc
 	@echo [LD ] $@
 	@g++ $^ -o $@
+
+intermediate: 
+	@echo [MKDIR ] $@
+	@mkdir $@
 
 gl_test: $(GL_TEST_OBJ)
 	@echo [LD ] $@

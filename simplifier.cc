@@ -1121,7 +1121,7 @@ void extractBuildings()
         //int d = fputc(ch, f);
         //perror("fputc");
         //assert(d == ch);
-        if (++i % 100000 == 0) cout << (i/1000) << "k buildings read" << endl;
+        if (++i % 100000 == 0) cout << (i/1000) << "k buildings/" << ftell(f)/1000000 << "MB read" << endl;
         OSMIntegratedWay way(f, -1);
         if (! (way.vertices.front() == way.vertices.back()))
            way.vertices.push_back(way.vertices.front());
@@ -1130,7 +1130,7 @@ void extractBuildings()
         //tmp.isClockwise();
         //cout << way << endl;        
     } 
-    clipRecursive( "output/coast/building", "", poly_storage, true);
+    clipRecursive( "output/building", "", poly_storage, true);
 }
 
 int main()
