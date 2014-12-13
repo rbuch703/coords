@@ -216,6 +216,7 @@ OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
     fseek(data, pos, SEEK_SET);
     nRead =  fread(&lat, sizeof(int32_t), 1, data);
     nRead += fread(&lon, sizeof(int32_t), 1, data);
+    id = node_id;
     if (nRead != 2)
     {
         cout << "Invalid read operation" << endl;

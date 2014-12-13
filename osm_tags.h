@@ -10,4 +10,8 @@
     in order for the whole list of remaining pairs to fit nicely into pc memory*/
 extern const char * ignore_keys[];
 extern uint32_t num_ignore_keys;
+
+extern const char * ignore_key_prefixes[];
+extern uint32_t num_ignore_key_prefixes;
+
 #endif

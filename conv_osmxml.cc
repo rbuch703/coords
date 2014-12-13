@@ -9,6 +9,7 @@
 #include <fcntl.h>*/
 #include <assert.h>
 #include <stdint.h>
+#include <fcntl.h>
 #include <unistd.h> //for _SC_PAGESIZE
 
 
@@ -179,10 +180,30 @@ protected:
             
             if ( ignore_key.count(tag->first) ) 
             {
-                list<OSMKeyValuePair>::iterator prev = tag;
+                tag = tags.erase(tag);
+                continue;
+                /*list<OSMKeyValuePair>::iterator prev = tag;
                 tag++;
-                tags.erase(prev);
-            } else tag++;
+                tags.erase(prev);*/
+            } 
+            
+            bool removeTag = false;
+            for (unsigned int i = 0; i < num_ignore_key_prefixes; i++)
+            {
+                if (tag->first.find(ignore_key_prefixes[i]) == 0) //tag starts with ignore-prefix
+                {
+                    removeTag = true;
+                    break;
+                }
+            }
+
+            if (removeTag)
+            {
+                tag = tags.erase(tag);
+                continue;
+            }
+            
+            tag++;
         }
     }
 
@@ -247,7 +268,7 @@ private:
 int main()
 {
 
-    //in_fd = open("isle_of_man.osm", O_RDONLY);
+    //int in_fd = open("andorra-latest.osm", O_RDONLY);
     int in_fd = 0; //default to standard input
     FILE *f = fdopen(in_fd, "rb");
     

@@ -63,14 +63,14 @@ void ensure_mmap_size( mmap_t *map, uint64_t size)
 
     //std::cout << "File can hold at most " << file_no_nodes << " nodes, but " << node_id << " nodes need to be stored" << std::endl;
 
-    if (map->ptr)
+    /*if (map->ptr)
     {
         if (0 != munmap(map->ptr, map->size)) { perror("munmap"); exit(0);}
-    }
+    }*/
     size_t ps = sysconf (_SC_PAGESIZE);
     
-    //increase map file by 50% to reduce the number of times that a resize is necessary;
-    size_t new_file_size = ( (size + ps)*3/2)/ps*ps;   
+    //increase map file by 10% to reduce the number of times that a resize is necessary;
+    size_t new_file_size = ( ((size + ps)*11/10)/ps +1)*ps;   
     //size_t new_file_size = (size+ps-1)/ps*ps;
     assert(new_file_size % ps == 0); //needs to be a multiple of page size for mmap
     if (new_file_size < size) { printf("error resizing memory map\n"); exit(0);}
@@ -78,7 +78,11 @@ void ensure_mmap_size( mmap_t *map, uint64_t size)
    
     //std::cout << "Resizing file to hold " << file_no_nodes << " nodes (" << (file_no_nodes / ps) << " pages)" << std::endl;
     
-    map->ptr = mmap(NULL, new_file_size, PROT_WRITE, MAP_SHARED, map->fd, 0);
+    if (map->ptr)
+        map->ptr = mremap(map->ptr, map->size, new_file_size, MREMAP_MAYMOVE);
+    else
+        map->ptr = mmap(NULL, new_file_size, PROT_WRITE, MAP_SHARED, map->fd, 0);
+        
     if (map == MAP_FAILED) { perror("[ERR]"); exit(0);}
     map->size = new_file_size;
 }
