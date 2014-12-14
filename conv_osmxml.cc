@@ -12,6 +12,8 @@
 #include <fcntl.h>
 #include <unistd.h> //for _SC_PAGESIZE
 
+#include <sys/mman.h>   // for madvise
+
 
 #include <iostream>
 #include <string>
@@ -35,11 +37,12 @@ const char* ways_index_filename=  "intermediate/ways.idx";
 const char* ways_int_data_filename="intermediate/ways_int.data"; // does not need an index, can use the same as 'ways'
 const char* relations_data_filename="intermediate/relations.data";
 const char* relations_index_filename="intermediate/relations.idx";
+string       dataBasePath = "intermediate/";
 
 class OsmXmlDumpingParser: public OsmXmlParser
 {
 public:
-    OsmXmlDumpingParser(FILE * f): OsmXmlParser(f), nNodes(0), nWays(0), nRelations(0)
+    OsmXmlDumpingParser(FILE * f): OsmXmlParser(f), nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
     {
         uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
         assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistency check: #keys==#values
@@ -110,32 +113,52 @@ protected:
     };  
     
     virtual void afterParsingNodes () {
+        cout << "writing mmaped contents to disk" << endl;
         padFile(node_data);
+        
+        /* to clear the caches, we have to:
+         * - force Linux to flush out the dirty areas of the data files using sync_file_range
+         * - advise Linux that all flushed file areas can be evicted from the page cache 
+         *   (that would not have worked on dirty pages).
+        */
+        
+        sync_file_range( fileno(node_data), 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
+        posix_fadvise( fileno(node_data), 0, 0, POSIX_FADV_DONTNEED);
         fclose( node_data ); //don't need node data any more
+        
+        sync_file_range( node_index.fd, 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
+        madvise(node_index.ptr, node_index.size, MADV_DONTNEED);
         free_mmap(&node_index);
         
+        //sync_file_range( vertex_data.fd, 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
+        //madvise(vertex_data.ptr, vertex_data.size, MADV_DONTNEED);
         free_mmap(&vertex_data);
         //re-open the vertex mmap read-only. This should improve Linux' mapping behavior for the next phase,
         //where ways are read and written sequentially, but vertices are read randomly
         vertex_data = init_mmap(vertices_data_filename, true, false); 
-      cout << "== Done parsing Nodes ==" << endl;
+        
+        cout << "== Done parsing Nodes ==" << endl;
     };
     
     virtual void beforeParsingWays () 
     {
         way_index = init_mmap(ways_index_filename);
         
-        way_data = fopen(ways_data_filename, "wb+");
+        way_data = fopen(ways_data_filename, "wb");
         const char* way_magic = "OW10"; //OSM Ways v. 1.0
         fwrite(way_magic, 4, 1, way_data);
         
         //way_int_index = init_mmap("ways_int.idx");
 
-        way_int_data = fopen(ways_int_data_filename, "wb+");
+        way_int_data = fopen(ways_int_data_filename, "wb");
         const char* way_int_magic = "OI10"; //OSM Integrated ways v. 1.0
         fwrite(way_int_magic, 4, 1, way_int_data);
         
         
+        building_data = fopen( (dataBasePath + "buildings.data").c_str(), "wb");
+        highway_data  = fopen( (dataBasePath + "highways.data").c_str(), "wb");
+        landuse_data  = fopen( (dataBasePath + "landuse.data").c_str(), "wb");
+        natural_data  = fopen( (dataBasePath + "natural.data").c_str(), "wb");
 
     };
     
@@ -217,17 +240,47 @@ protected:
         uint32_t* vertex_ptr = (uint32_t*)vertex_data.ptr;
         vertex_ptr[2*node.id]   = node.lat;
         vertex_ptr[2*node.id+1] = node.lon;
+        
+        if (nNodes % 1000000 == 0)
+        {
+            cout << "processed " << (nNodes / 1000000) << "M nodes; writing data to disk ...";
+            cout << " (" << ((ftell(node_data) - node_data_synced_pos) / 1000000) << "MB node data)";
+            cout.flush();
+            //sync_file_range( fileno(node_data), node_data_synced_pos, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
+            //posix_fadvise( fileno(node_data), node_data_synced_pos, 0, POSIX_FADV_DONTNEED);
+            node_data_synced_pos = ftell(node_data);
+            
+            
+            uint32_t page_size = sysconf(_SC_PAGESIZE);
+            
+            uint64_t pos = ((node.id * 2 * sizeof(uint32_t)) / page_size + 1) * page_size;
+            cout << "(" << ((pos - node_index_synced_pos) / 1000000) << "MB node index)";
+            cout.flush();
+            
+            //int res = msync( ((uint8_t*)node_index.ptr) + node_index_synced_pos, (pos - node_index_synced_pos), MS_SYNC);
+            //if (res != 0) { perror("msync"); exit(0); }
+            
+            node_index_synced_pos = pos;
+            //res = madvise( node_index.ptr,  node_index.size, MADV_DONTNEED);
+            //if (res != 0) { perror("madvise node_index"); exit(0);}
+
+            //madvise( vertex_data.ptr, vertex_data.size, MADV_DONTNEED);
+            //if (res != 0) { perror("madvise vertex_data"); exit(0);}
+            cout << " done" << endl;
+            
+            
+        }
     }
     
-    virtual void completedWay ( OSMWay  &way) 
+    virtual void completedWay ( OSMWay  &way)
     {
         nWays++;
         processTags(way.tags);
         // write the way itself to file
-        way.serialize(way_data, &way_index, &symbolic_tags);
+        way.serializeWithIndex(way_data, &way_index, &symbolic_tags);
         
         //convert the way to an integrated way, by replacing the node indices with the actual node lat/lon
-        list<OSMVertex> vertices;
+        /*list<OSMVertex> vertices;
         uint32_t* vertices_ptr = (uint32_t*) vertex_data.ptr;
         for (list<uint64_t>::const_iterator ref = way.refs.begin(); ref != way.refs.end(); ref++)
         {
@@ -244,6 +297,21 @@ protected:
         // (in an integrated way, the uint64_t node refs are replaced by 2xint32_t lat/lon coordinates)
         // thus, a single index is sufficient for both data files
         int_way.serialize(way_int_data, &way_index, &symbolic_tags);
+        */
+        if (way.hasKey("natural"))
+            way.serialize( natural_data,  &symbolic_tags);
+
+        if (way.hasKey("landuse"))
+            way.serialize( landuse_data,  &symbolic_tags);
+
+        if (way.hasKey("building"))
+            way.serialize( building_data, &symbolic_tags);
+
+        if (way.hasKey("highway"))
+            way.serialize( highway_data,  &symbolic_tags);
+
+
+        
     }
     
     virtual void completedRelation( OSMRelation &relation) 
@@ -257,10 +325,13 @@ protected:
 private:
     mmap_t node_index, vertex_data, way_index/*, way_int_index*/, relation_index;
     FILE *node_data, *way_data, *way_int_data, *relation_data;
+    FILE *building_data, *highway_data, *landuse_data, *natural_data;
     map<OSMKeyValuePair, uint8_t> symbolic_tags;
     map<string, string> rename_key; 
     set<string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
     uint64_t nNodes, nWays, nRelations;
+    
+    uint64_t node_data_synced_pos, node_index_synced_pos;
     
 };
 
