@@ -22,6 +22,10 @@ extract_md
 # ----- ignore compiled objects
 *.o
 
+# ----- auto-generated protocol buffer source
+*.pb.h
+*.pb.cc
+
 # ----- ignore OSM data files
 *.osm
 *.osm.bz2

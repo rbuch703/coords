@@ -1,5 +1,5 @@
 
-CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc #geometric_types.cc
+CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc osmformat.pb.cc #geometric_types.cc
 #REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
 SIMP_SRC = simplifier.cc osm_types.cc mem_map.cc
@@ -38,7 +38,7 @@ remap: $(REMAP_OBJ)
 
 build/conv_osmxml: $(CONV_XML_OBJ)
 	@echo [LD ] $@
-	@g++ $^ $(LD_FLAGS) -o $@
+	@g++ $^ $(LD_FLAGS) -lprotobuf -o $@
 
 build/data_converter: $(CONV_OBJ)
 	@echo [LD ] $@
@@ -62,7 +62,10 @@ build/%.o: %.cc
 #	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
 	@g++ $(CCFLAGS) $< -c -o $@
 
-	
+%.pb.cc: %.proto
+	@echo [PBC] $<
+	@protoc --cpp_out=. $<
+
 clean:
 	@echo [CLEAN]
 	@rm -rf *~
