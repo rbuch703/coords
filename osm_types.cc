@@ -33,9 +33,9 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v)
     (key_0, value_0, key_1, value_1, ...)
 
 */
-void serializeTags( const list<OSMKeyValuePair> tags, FILE* file, const map<OSMKeyValuePair, uint8_t> *tag_symbols)
+void serializeTags( const list<OSMKeyValuePair> &tags, FILE* file, const map<OSMKeyValuePair, uint8_t> *tag_symbols)
 {
-    list<OSMKeyValuePair> verbose_tags;
+    /*list<OSMKeyValuePair> verbose_tags;
     list<uint8_t> symbolic_tags;
     
     if (tag_symbols)
@@ -48,28 +48,35 @@ void serializeTags( const list<OSMKeyValuePair> tags, FILE* file, const map<OSMK
                 verbose_tags.push_back(*it);
         }
     } else verbose_tags = tags; //if there are no symbolic tags, everything is verbose
-    
-    assert(symbolic_tags.size() < (1<<16));
-    uint16_t num_symbolic_tags = symbolic_tags.size();
+    */
+    //assert(symbolic_tags.size() < (1<<16));
+    uint16_t num_symbolic_tags = 0;// symbolic_tags.size(); // WARN: disabled symbolic tags
     fwrite(&num_symbolic_tags, sizeof(num_symbolic_tags), 1, file);
     
-    assert(verbose_tags.size() < (1<<16));
-    uint16_t num_verbose_tags = verbose_tags.size();
+    //assert(verbose_tags.size() < (1<<16));
+    assert(tags.size() < (1<<16));
+    uint16_t num_verbose_tags = tags.size();
     fwrite(&num_verbose_tags, sizeof(num_verbose_tags), 1, file);
-    
+    /*
     for (list<uint8_t>::const_iterator it = symbolic_tags.begin(); it!= symbolic_tags.end(); it++)
     {
         uint8_t tmp = *it;
         fwrite( &tmp, sizeof(tmp), 1, file);
-    }
+    }*/
     
-    if (num_verbose_tags == 0) return;
+    //if (num_verbose_tags == 0) return;
+    for (const OSMKeyValuePair &tag : tags)
+    {
+        fwrite( tag.first.c_str(),  strlen(tag.first.c_str()) + 1, 1, file);    //both including their null-termination
+        fwrite( tag.second.c_str(), strlen(tag.second.c_str())+ 1, 1, file);
+    }
 
+    /*
     for (list<OSMKeyValuePair>::const_iterator it = verbose_tags.begin(); it!= verbose_tags.end(); it++)
     {
         fwrite( it->first.c_str(),  strlen(it->first.c_str()) + 1, 1, file);    //both including their null-termination
         fwrite( it->second.c_str(), strlen(it->second.c_str())+ 1, 1, file);
-    }
+    }*/
 }
 
 void fread( void* dest, uint64_t size, FILE* file)
@@ -293,10 +300,9 @@ OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
 
         
 
-void OSMWay::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const
+void OSMWay::serializeWithIndex( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const
 {
     assert (id > 0);  
-
     uint64_t offset = ftello(data_file);    //get offset at which the dumped way *starts*
     
     uint32_t num_node_refs = refs.size();
@@ -313,6 +319,21 @@ void OSMWay::serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValu
     uint64_t* ptr = (uint64_t*)index_map->ptr;
     ptr[id] = offset;
 }
+
+
+void OSMWay::serialize( FILE* data_file, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const
+{
+    assert (id > 0);  
+    
+    uint32_t num_node_refs = refs.size();
+    fwrite(&num_node_refs, sizeof(num_node_refs), 1, data_file);
+
+    for (uint64_t ref : refs)
+        fwrite(&ref, sizeof(ref), 1, data_file);
+    
+    serializeTags(tags, data_file, tag_symbols);
+}
+
 
 bool OSMWay::hasKey(string key) const
 {

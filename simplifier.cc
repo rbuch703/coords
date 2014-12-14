@@ -10,13 +10,24 @@
 #include <boost/foreach.hpp>
 
 #include "osm_types.h"
-#include "polygonreconstructor.h"
-#include "helpers.h"
-#include "quadtree.h"
-#include "triangulation.h"
+#include <polygonreconstructor.h>
+#include <helpers.h>
+#include <quadtree.h>
+//#include <triangulation.h>
 
 
 list<VertexChain> poly_storage;
+
+VertexChain createVertexChain( const list<OSMVertex> &vertices)
+{
+    VertexChain vc;
+    for( const OSMVertex &v: vertices)
+        vc.append( Vertex( v.x, v.y));
+        
+    return vc;
+}
+
+
 
 class OSMEntities
 {
@@ -450,7 +461,7 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
             cout << way << endl;
         assert (way.hasKey("natural") && way["natural"] == "coastline");
         
-        VertexChain s( way.vertices );
+        VertexChain s= createVertexChain( way.vertices );
         if (s.front() == s.back())
         {
             handlePolygon("output/coast/tmp", s);
@@ -583,7 +594,7 @@ void extractCountries()
             //if (way_offset[ way->ref ] == 0) continue;
             //const uint8_t * ptr = (uint8_t*)way_data_map.ptr + way_offset[ way->ref];
             OSMIntegratedWay iw = ways->get(way->ref);//(ptr , way->ref);
-            VertexChain ch(iw.vertices);
+            VertexChain ch= createVertexChain(iw.vertices);
             recon.add(ch);
             //cout << "reconstructor has " << recon.getNumOpenEndpoints() << " open endpoints" << endl;
         }
@@ -1049,7 +1060,7 @@ void extractAreas()
             if (way["waterway"] != "riverbank" && way["natural"] != "water") continue;
         }
         
-        recon.add(VertexChain(way.vertices));
+        recon.add(createVertexChain(way.vertices));
         
         //cout << way << endl;
         
@@ -1087,7 +1098,7 @@ void extractHighways()
             if (way["highway"] != "motorway_link") 
                 continue;
         
-        VertexChain tmp(way.vertices);
+        VertexChain tmp = createVertexChain(way.vertices);
         poly_storage.push_back(tmp);
         //handlePolygon("dummy", tmp);
         //tmp.isClockwise();
@@ -1125,7 +1136,7 @@ void extractBuildings()
         OSMIntegratedWay way(f, -1);
         if (! (way.vertices.front() == way.vertices.back()))
            way.vertices.push_back(way.vertices.front());
-        VertexChain tmp(way.vertices);
+        VertexChain tmp = createVertexChain(way.vertices);
         handlePolygon("dummy", tmp);
         //tmp.isClockwise();
         //cout << way << endl;        

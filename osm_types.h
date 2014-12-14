@@ -58,7 +58,8 @@ struct OSMWay
     OSMWay( uint64_t way_id, list<uint64_t> way_refs, list<OSMKeyValuePair> way_tags);
     OSMWay( const uint8_t* data_ptr, uint64_t way_id);
 
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    void serializeWithIndex( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    void serialize( FILE* data_file, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
