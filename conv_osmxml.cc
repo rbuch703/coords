@@ -22,10 +22,10 @@
 #include <set>
 
 #include "mem_map.h"
-#include "osmxmlparser.h"
+#include "osmParserXml.h"
 #include "osm_types.h"
 #include "osm_tags.h"
-#include "symbolic_tags.h"
+//#include "symbolic_tags.h"
 
 using namespace std;
 
@@ -44,6 +44,7 @@ class OsmXmlDumpingParser: public OsmXmlParser
 public:
     OsmXmlDumpingParser(FILE * f): OsmXmlParser(f), nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
     {
+        /*
         uint32_t nSymbolicTags = sizeof(symbolic_tags_keys) / sizeof(const char*);
         assert( nSymbolicTags = sizeof(symbolic_tags_values) / sizeof(const char*)); //consistency check: #keys==#values
         assert( nSymbolicTags <= (256));  // we assign 8bit numbers to these, so there must not be more than 2^8
@@ -52,7 +53,7 @@ public:
             OSMKeyValuePair kv(symbolic_tags_keys[i], symbolic_tags_values[i]);
             symbolic_tags.insert( pair<OSMKeyValuePair, uint8_t>(kv, i));
         }
-        cout << "Read " << symbolic_tags.size() << " symbolic tags" << endl;
+        cout << "Read " << symbolic_tags.size() << " symbolic tags" << endl;*/
         
         //for situations where several annotation keys exist with the same meaning
         //this dictionary maps them to a common unique key
@@ -234,7 +235,7 @@ protected:
     {
         nNodes++;
         processTags(node.tags);
-        node.serialize(node_data, &node_index, &symbolic_tags);
+        node.serializeWithIndexUpdate(node_data, &node_index);
         
         ensure_mmap_size( &vertex_data, (node.id+1) * 2 * sizeof(uint32_t));
         uint32_t* vertex_ptr = (uint32_t*)vertex_data.ptr;
@@ -277,7 +278,7 @@ protected:
         nWays++;
         processTags(way.tags);
         // write the way itself to file
-        way.serializeWithIndex(way_data, &way_index, &symbolic_tags);
+        way.serializeWithIndexUpdate(way_data, &way_index);
         
         //convert the way to an integrated way, by replacing the node indices with the actual node lat/lon
         /*list<OSMVertex> vertices;
@@ -299,16 +300,16 @@ protected:
         int_way.serialize(way_int_data, &way_index, &symbolic_tags);
         */
         if (way.hasKey("natural"))
-            way.serialize( natural_data,  &symbolic_tags);
+            way.serialize( natural_data);
 
         if (way.hasKey("landuse"))
-            way.serialize( landuse_data,  &symbolic_tags);
+            way.serialize( landuse_data);
 
         if (way.hasKey("building"))
-            way.serialize( building_data, &symbolic_tags);
+            way.serialize( building_data);
 
         if (way.hasKey("highway"))
-            way.serialize( highway_data,  &symbolic_tags);
+            way.serialize( highway_data);
 
 
         
@@ -318,7 +319,7 @@ protected:
     {
         nRelations++;
         processTags(relation.tags);
-        relation.serialize( relation_data, &relation_index, &symbolic_tags);
+        relation.serializeWithIndexUpdate( relation_data, &relation_index);
         
     }
     virtual void doneParsingNodes () {cout << "===============================================" << endl;}
@@ -326,7 +327,7 @@ private:
     mmap_t node_index, vertex_data, way_index/*, way_int_index*/, relation_index;
     FILE *node_data, *way_data, *way_int_data, *relation_data;
     FILE *building_data, *highway_data, *landuse_data, *natural_data;
-    map<OSMKeyValuePair, uint8_t> symbolic_tags;
+    //map<OSMKeyValuePair, uint8_t> symbolic_tags;
     map<string, string> rename_key; 
     set<string> ignore_key;    //ignore key-value pairs which are irrelevant for a viewer application
     uint64_t nNodes, nWays, nRelations;

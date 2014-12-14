@@ -35,7 +35,7 @@ struct OSMNode
     OSMNode( FILE* idx, FILE* data, uint64_t node_id);
     OSMNode( const uint8_t* data_ptr, uint64_t node_id);
         
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
     const string &getValue(string key) const;
     bool hasKey(string key) const;
     const string &operator[](string key) const {return getValue(key);}
@@ -58,8 +58,8 @@ struct OSMWay
     OSMWay( uint64_t way_id, list<uint64_t> way_refs, list<OSMKeyValuePair> way_tags);
     OSMWay( const uint8_t* data_ptr, uint64_t way_id);
 
-    void serializeWithIndex( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
-    void serialize( FILE* data_file, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
+    void serialize( FILE* data_file) const;
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
@@ -86,7 +86,8 @@ struct OSMIntegratedWay
 
     void initFromFile(FILE* src);
 
-    void serialize( FILE* data_file, mmap_t *index_map= NULL, const map<OSMKeyValuePair, uint8_t> *tag_symbols = NULL) const;
+    void serialize( FILE* data_file) const;
+    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
@@ -119,7 +120,7 @@ struct OSMRelation
     OSMRelation( FILE* src, uint64_t rel_id = -1);
     OSMRelation( FILE* idx, FILE* data, uint64_t relation_id);
 
-    void serialize( FILE* data_file, mmap_t *index_map, const map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
     bool hasKey(string key) const;
     const string& getValue(string key) const;
     const string& operator[](string key) const {return getValue(key);}

@@ -1,5 +1,5 @@
 
-CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc #geometric_types.cc
+CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc #geometric_types.cc
 #REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
 SIMP_SRC = simplifier.cc osm_types.cc mem_map.cc
@@ -68,13 +68,13 @@ clean:
 	@rm -rf *~
 	@rm -rf *gcda
 	@rm -rf *gcno
-	@rm -rf conv_osmxml data_converter simplifier geo_unit_tests make_index extract_md remap
+	@rm -rf conv_osmxml data_converter simplifier make_index remap
 	@rm -rf coverage.info callgrind.out.*
 	@rm -rf build/*
 
 make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) 
 	@echo [DEP]
-	@g++ -MM $^ | sed "s/\([[:graph:]]*\)\.o/build\/_\\1.o/g" > make.dep
+	@g++ -MM $^ | sed "s/\([[:graph:]]*\)\.o/build\/\\1.o/g" > make.dep
 
 include make.dep
 

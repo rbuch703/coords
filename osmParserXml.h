@@ -4,10 +4,9 @@
 
 #include <stdio.h>
 
-#include "osm_types.h"
+#include "osmParserInterface.h"
 
-
-class OsmXmlParser
+class OsmXmlParser: IOsmParser
 {
 
 public:
@@ -15,19 +14,6 @@ public:
     ~OsmXmlParser();
     
     void parse();
-protected:
-    virtual void completedNode    ( OSMNode &) = 0;
-    virtual void completedWay     ( OSMWay  &) = 0;
-    virtual void completedRelation( OSMRelation &) = 0;
-
-    virtual void beforeParsingNodes () {};  
-    virtual void beforeParsingWays () {};   
-    virtual void beforeParsingRelations () {}; 
-
-    virtual void afterParsingNodes () {};  
-    virtual void afterParsingWays () {};   
-    virtual void afterParsingRelations () {}; 
-
 private:
 
     void parseNode();    

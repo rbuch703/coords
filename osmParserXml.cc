@@ -1,5 +1,5 @@
 
-#include "osmxmlparser.h"
+#include "osmParserXml.h"
 
 #include <string.h>
 #include <stdlib.h>
