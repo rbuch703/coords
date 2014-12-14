@@ -1,23 +1,25 @@
 
-CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc osmformat.pb.cc #geometric_types.cc
+CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc 
+PB_TEST_SRC = osmParserPbf.cc osmformat.pb.cc fileformat.pb.cc
 #REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
 SIMP_SRC = simplifier.cc osm_types.cc mem_map.cc
 
 CONV_XML_OBJ  = $(patsubst %.cc,build/%.o,$(CONV_XML_SRC))
+PB_TEST_OBJ = $(patsubst %.cc,build/%.o,$(PB_TEST_SRC))
 #REMAP_OBJ  = $(REMAP_SRC:.cc=.o)
 CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
 SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
 
-FLAGS = -g -Wall -Wextra -DNDEBUG -O2 -flto
+FLAGS = -g -Wall -Wextra #-DNDEBUG -O2 -flto
 #FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = -flto -O2 #-fprofile-arcs#--as-needed
+LD_FLAGS = #-flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
 
-all: build make.dep build/conv_osmxml build/simplifier build/data_converter intermediate 
+all: build make.dep build/conv_osmxml build/pb_test build/simplifier build/data_converter intermediate 
 #	 @echo [ALL] $<
 
 build:
@@ -40,21 +42,26 @@ build/conv_osmxml: $(CONV_XML_OBJ)
 	@echo [LD ] $@
 	@g++ $^ $(LD_FLAGS) -lprotobuf -o $@
 
+build/pb_test: $(PB_TEST_OBJ)
+	@echo [LD ] $@
+	@g++ $^ $(LD_FLAGS) -lprotobuf -lz -o $@
+
+
 build/data_converter: $(CONV_OBJ)
 	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(LD_FLAGS) $^ ../GeoLib/build/geolib.a -lgmp -lgmpxx -o $@
+	@g++ $(CCFLAGS) $(LD_FLAGS) $^ GeoLib/build/geolib.a -lgmp -lgmpxx -o $@
 
 build/simplifier: $(SIMP_OBJ)
 	@echo [LD ] $@
-	@g++ $^ $(CCFLAGS) $(LD_FLAGS) ../GeoLib/build/geolib.a -lgmp -lgmpxx -o $@
+	@g++ $^ $(CCFLAGS) $(LD_FLAGS) GeoLib/build/geolib.a -lgmp -lgmpxx -o $@
 
 build/data_converter.o: data_converter.cc
 	@echo [C++] $<
-	@g++ $(CCFLAGS) -I../GeoLib $< -c -o $@
+	@g++ $(CCFLAGS) -IGeoLib $< -c -o $@
 
 build/simplifier.o: simplifier.cc
 	@echo [C++] $<
-	@g++ $(CCFLAGS) -I../GeoLib $< -c -o $@
+	@g++ $(CCFLAGS) -IGeoLib $< -c -o $@
 
 
 build/%.o: %.cc 
@@ -62,7 +69,7 @@ build/%.o: %.cc
 #	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
 	@g++ $(CCFLAGS) $< -c -o $@
 
-%.pb.cc: %.proto
+%.pb.cc %.pb.h: %.proto
 	@echo [PBC] $<
 	@protoc --cpp_out=. $<
 
@@ -75,7 +82,7 @@ clean:
 	@rm -rf coverage.info callgrind.out.*
 	@rm -rf build/*
 
-make.dep: $(CONV_XML_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) 
+make.dep: $(CONV_XML_SRC) $(PB_TEST_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) 
 	@echo [DEP]
 	@g++ -MM $^ | sed "s/\([[:graph:]]*\)\.o/build\/\\1.o/g" > make.dep
 

@@ -6,21 +6,11 @@ syntax: glob
 
 # ----- ignore compiled executables
 conv_osmxml
-dump_kv
 data_converter
-geo_unit_tests
 simplifier
-stats_xmlosm
-gl_test
-make_index
-tests/arithmetic_test
-tests/geometry_test
-tests/quadtree_test
-tests/triangulation_test
-extract_md
 
 # ----- ignore compiled objects
-*.o
+build
 
 # ----- auto-generated protocol buffer source
 *.pb.h
@@ -49,12 +39,7 @@ make.dep
 callgrind.out.*
 massif.out.*
 
-timezones
-coastline
-borders
 intermediate
-output
-cache
 
 *.data
 *.idx

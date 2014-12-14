@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include <boost/foreach.hpp>
-
 #include <iostream>
 #include <fstream>
 #include <list>
@@ -129,14 +127,14 @@ void dumpWays( list<OSMFilterConfig> config)
         //std::cout << rel << endl;
                     
         //cout << rel << endl;
-        BOOST_FOREACH(OSMFilterConfig cfg, config)
+        for (const OSMFilterConfig &cfg : config)
         //for (list<pair<list<OSMKeyValuePair>, FILE* > >::const_iterator it = config.begin(); it != config.end(); it++)
         {
             
             const list<OSMKeyValuePair> &tags = cfg.first;
             FILE* file = cfg.second;
             bool matches = true;
-            BOOST_FOREACH (OSMKeyValuePair tag, tags)
+            for (const OSMKeyValuePair &tag : tags)
             //for (list<OSMKeyValuePair>::const_iterator tag = tags.begin(); tag != tags.end() && matches; tag++)
             {
                 matches &= rel.hasKey(tag.first);
@@ -264,7 +262,7 @@ int main()
 
     dumpWays(extract_config);
     
-    BOOST_FOREACH( const OSMFilterConfig cfg, extract_config)
+    for( const OSMFilterConfig &cfg : extract_config)
         fclose(cfg.second);
     
     //free_mmap(&mmap_node);

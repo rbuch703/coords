@@ -7,7 +7,7 @@
 #include <fstream>
 #include <iostream>
 
-#include <boost/foreach.hpp>
+//#include <boost/foreach.hpp>
 
 #include "osm_types.h"
 #include <polygonreconstructor.h>
@@ -222,15 +222,15 @@ void clipToQuadrants(list<VertexChain> &segments, int32_t mid_x, int32_t mid_y, 
         assert(segments.size() == 0);
     } else
     {
-        BOOST_FOREACH( VertexChain seg, segments)
+        for (VertexChain &seg: segments)
             seg.clipSecondComponent( mid_x, closeSegments, vLeft, vRight);
     }
     
     if (closeSegments)
     {
     #ifndef NDEBUG
-        BOOST_FOREACH( const VertexChain &seg, vLeft)    assert( seg.data().front() == seg.data().back());
-        BOOST_FOREACH( const VertexChain &seg, vRight)   assert( seg.data().front() == seg.data().back());
+        for ( const VertexChain &seg: vLeft)    assert( seg.data().front() == seg.data().back());
+        for ( const VertexChain &seg: vRight)   assert( seg.data().front() == seg.data().back());
     #endif
     }
     
@@ -255,12 +255,12 @@ void clipToLeaves(string file_base, string position, list<VertexChain>& segments
     
     
     uint64_t num_vertices = 0;
-    BOOST_FOREACH( const VertexChain &seg, segments)
+    for( const VertexChain &seg: segments)
         num_vertices+= seg.size();
         
     if (num_vertices <= VERTEX_LIMIT)
     {
-        BOOST_FOREACH( const VertexChain &seg, segments)
+        for( const VertexChain &seg: segments)
             writePolygonToDisk(file_base+position, seg.data(), closeSegments ); 
        
         leaves.insert(position);
@@ -291,7 +291,7 @@ void clipToLevel(string file_base, string position, list<VertexChain>& segments,
     
     if (level == 0)    
     {
-        BOOST_FOREACH( const VertexChain &seg, segments)
+        for( const VertexChain &seg : segments)
             writePolygonToDisk(file_base+position, seg.data(), closeSegments ); 
        
         return;
@@ -320,7 +320,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
     uint64_t VERTEX_LIMIT = 20000;
 
     uint64_t num_vertices = 0;
-    BOOST_FOREACH( const VertexChain &seg, segments)
+    for ( const VertexChain &seg : segments)
         num_vertices+= seg.size();    
 
     for (uint32_t i = level; i; i--) cout << "  ";
@@ -333,13 +333,13 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
 
     if (closeSegments)  //if clipped segments are to be closed, ensure that the original segments represented a closed polygon in the first place
     {
-        BOOST_FOREACH( const VertexChain seg, segments)
+        for ( const VertexChain seg : segments)
             assert( seg.data().front() == seg.data().back());
     }
     
     if (num_vertices < VERTEX_LIMIT)    //few enough vertices to not further subdivide the area --> write everything to disk
     {
-        BOOST_FOREACH( const VertexChain seg, segments)
+        for ( const VertexChain seg : segments)
             writePolygonToDisk(file_base+position, seg.data(), closeSegments ); 
         return; //terminate recursion here (since no further subdivision is necessary)
     }
@@ -355,7 +355,7 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
      */
     createEmptyFile(file_base+position);
     
-    BOOST_FOREACH( const VertexChain seg, segments)
+    for ( const VertexChain &seg : segments)
     {
         //TODO: remove least significant bits of vertex coordinates after simplification:
         /* the simplified vertices are only shown at a given resolution
@@ -396,8 +396,8 @@ void clipRecursive(string file_base, string position, list<VertexChain>& segment
 
     if (closeSegments)
     {
-        BOOST_FOREACH( const VertexChain seg, vLeft)    assert( seg.data().front() == seg.data().back());
-        BOOST_FOREACH( const VertexChain seg, vRight)   assert( seg.data().front() == seg.data().back());
+        for ( const VertexChain seg: vLeft)    assert( seg.data().front() == seg.data().back());
+        for ( const VertexChain seg: vRight)   assert( seg.data().front() == seg.data().back());
     }
     list<VertexChain> vTop, vBottom;
 
@@ -426,7 +426,7 @@ void createTiles(string basename, list<VertexChain> &segments, bool closedPolygo
     clipToLeaves(basename, "", segments, closedPolygons, leaves);
     
     uint64_t highest_depth = 0;
-    BOOST_FOREACH( string s, leaves) 
+    for( const string &s : leaves) 
         highest_depth = max( highest_depth, s.length());
     
     cout << "[INFO] Hierarchy depth is " << highest_depth << endl;;
@@ -480,7 +480,7 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
     const list<VertexChain>& lst = recon.getClosedPolygons();
     cout << "done, found " << lst.size() << endl;
 
-    BOOST_FOREACH ( VertexChain s, lst)         
+    for ( VertexChain s : lst) 
         handlePolygon("output/coast/tmp", s);
     //    poly_storage.push_back(s);
     
@@ -795,7 +795,7 @@ void PointQuadTreeNode::insert( Vertex *p)
         br = new PointQuadTreeNode( mid_x, max_x, mid_y, max_y);
         
         //No need to call insert() for each vertex. The child nodes cannot have been subdivided (since we just created them)
-        BOOST_FOREACH( Vertex *v, vertices)
+        for( Vertex *v : vertices)
         {
             if (v->x <= mid_x)
             {
@@ -835,9 +835,9 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
      */
     PointQuadTreeNode* root = new PointQuadTreeNode( -900000000, 900000000, -1800000000, 1800000000);
     //uint64_t i = 0;
-    BOOST_FOREACH( VertexChain &c, data)
+    for ( VertexChain &c : data)
     {
-        BOOST_FOREACH( Vertex &v, c.internal_data())
+        for( Vertex &v : c.internal_data())
         {
             //i++;
             //if (i % 1000000 == 0) cout << (i/1000000) << "M vertices registered" << endl;
@@ -925,12 +925,7 @@ void simplifyGraph(list<VertexChain> &data, double allowedDeviation)
         
     }
     
-    
     cout << "... aggregated into " << numChains << " final vertex chains" << endl;
-    
-    
-    //BOOST_FOREACH( VertexChain &c, data)
-            
     
 }
 
@@ -1023,7 +1018,7 @@ void extractAreas()
         if (!rel.hasKey("waterway") && !rel.hasKey("natural")) continue;
         if (rel["waterway"] != "riverbank" && rel["natural"] != "water") continue;
         
-        BOOST_FOREACH (OSMRelationMember member, rel.members)
+        for (const OSMRelationMember &member: rel.members)
         {
             if (member.role != "outer") continue;
             if (member.type != ELEMENT::WAY) continue;

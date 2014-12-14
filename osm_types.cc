@@ -10,8 +10,6 @@
 #include <stdlib.h> //for exit()
 #include <stdint.h>
 
-#include <boost/foreach.hpp>
-
 #include "osm_types.h"
 //#include "symbolic_tags.h"
 
