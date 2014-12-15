@@ -116,6 +116,7 @@ struct OSMRelationMember
 
 struct OSMRelation
 {
+    OSMRelation( uint64_t relation_id);
     OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags);
     OSMRelation( const uint8_t* data_ptr, uint64_t relation_id);
     OSMRelation( FILE* src, uint64_t rel_id = -1);

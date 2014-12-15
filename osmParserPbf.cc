@@ -223,6 +223,36 @@ void parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Way> &ways, cons
     
 }
 
+void parseRelations(const google::protobuf::RepeatedPtrField<OSMPBF::Relation> &rels, const StringTable &stringTable)
+{
+    for (const OSMPBF::Relation &rel : rels)
+    {
+        OSMRelation osmRel(rel.id());
+        MUST( rel.keys().size() == rel.vals().size(), "extraneous key or value");
+        MUST( rel.roles_sid().size() == rel.memids().size(), "incomplete (type,role,ref) triple");
+        MUST( rel.roles_sid().size() == rel.types().size(), "incomplete (type,role,ref) triple");
+
+        //osmRel.tags.reserve( rel.keys().size());        
+        for (int i = 0; i < rel.keys().size(); i++)
+            osmRel.tags.push_back( make_pair( stringTable[rel.keys().Get(i)], stringTable[rel.vals().Get(i)] ));
+            
+        int64_t ref = 0;
+        //rel.members.reserve( rel.roles_sid().size());
+        for (int i = 0; i < rel.roles_sid().size(); i++)
+        {
+            ref += rel.memids().Get(i);
+            const string& role = stringTable[rel.roles_sid().Get(i)];
+            OSMPBF::Relation::MemberType iType = (OSMPBF::Relation::MemberType)rel.types().Get(i);
+            
+            ELEMENT type = (iType == OSMPBF::Relation::NODE) ? NODE : 
+                           (iType == OSMPBF::Relation::WAY)  ? WAY :
+                           (iType == OSMPBF::Relation::RELATION) ? RELATION: OTHER;
+            MUST( type == NODE || type == WAY || type == RELATION, "invalid type");
+            osmRel.members.push_back( OSMRelationMember(type, ref, role));
+        }    
+    }
+}
+
 int main(int argc, char** argv)
 {
     
@@ -298,7 +328,7 @@ int main(int argc, char** argv)
                 
                 cout << "\t\tgroup contains " << primGroup.relations().size() << " relations" << endl;
                 if (primGroup.relations().size())
-                    MUST(false, "NOT IMPLEMENTED");
+                    parseRelations( primGroup.relations(), strings);
                 
                 cout << "\t\tgroup contains " << primGroup.changesets().size() << " changesets" << endl;
                 if (primGroup.changesets().size())

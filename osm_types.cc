@@ -459,6 +459,7 @@ ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
 }
 
 //==================================
+OSMRelation::OSMRelation( uint64_t relation_id): id(relation_id) {}
 
 OSMRelation::OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags):
     id(relation_id), members(relation_members), tags(relation_tags) {}
