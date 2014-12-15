@@ -1,7 +1,5 @@
 
 #include "osmParserPbf.h"
-#include "proto/fileformat.pb.h"
-#include "proto/osmformat.pb.h"
 
 #include <arpa/inet.h>  //for ntohl
 
@@ -12,8 +10,9 @@
 #include <assert.h>
 
 #include "osm_types.h"
-
-//a macro similar to assert(), but is not deactivated by NDEBUG
+#include "osmConsumerCounter.h"
+//#include "osmConsumerOrderEnsurer.h"
+//a macro that is similar to assert(), but is not deactivated by NDEBUG
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
 
 using namespace std;
@@ -22,36 +21,33 @@ namespace OSMPBF {
 static const int max_uncompressed_blob_size = 32 * (1 << 20);
 }
 
-class StringTable {
-public:
-    StringTable(const google::protobuf::RepeatedPtrField<string>& src)
-    {
-        table.reserve( src.size());
-        for ( const string &s : src)
-            table.push_back(s);
-    }
+StringTable::StringTable(const google::protobuf::RepeatedPtrField<string>& src)
+{
+    table.reserve( src.size());
+    for ( const string &s : src)
+        table.push_back(s);
+}
     
-    StringTable( const StringTable &other); //prevent copying
-    StringTable& operator=(const StringTable &other); 
-    
-    const string& get(uint32_t idx) const
-    {
-        MUST( idx < table.size(), "range overflow");
-        return table[idx];
-    }
-    
-    const string& operator[](uint32_t idx) const
-    {
-        MUST( idx < table.size(), "range overflow");
-        return table[idx];
-    }
-
-private:
-    vector<string> table;
-};
+const string& StringTable::operator[](uint32_t idx) const
+{
+    MUST( idx < table.size(), "range overflow");
+    return table[idx];
+}
 
 
-void unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unpackBufferOut, uint32_t &unpackedSizeOut)
+OsmParserPbf::OsmParserPbf(FILE * file, OsmBaseConsumer *consumer): f(file), consumer(consumer)
+{
+    unpackBuffer = new uint8_t[OSMPBF::max_uncompressed_blob_size];  
+}
+
+OsmParserPbf::~OsmParserPbf() {
+    delete [] unpackBuffer;
+    //    google::protobuf::ShutdownProtobufLibrary();  //only necessary to satisfy valgrind
+
+}
+
+
+void OsmParserPbf::unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unpackBufferOut, uint32_t &unpackedSizeOut)
 {
     if (blob.has_raw())
     {
@@ -90,7 +86,7 @@ void unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unpackBufferOut, 
 
 }
 
-string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
+string OsmParserPbf::prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
 {
     OSMPBF::BlobHeader header;    
     OSMPBF::Blob blob;
@@ -125,7 +121,7 @@ string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
 
 }
 
-void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &stringTable, int32_t granularity, int64_t lat_offset, int64_t lon_offset)
+void OsmParserPbf::parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &stringTable, int32_t granularity, int64_t lat_offset, int64_t lon_offset)
 {
     //cout << "\t\t\tcontain " << (nodes.has_denseinfo() ? "":"NO ") << "DenseInfo block" << endl;
     int64_t numNodes = nodes.id().size();
@@ -189,6 +185,7 @@ void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &string
             }
             keyValPos ++;   //already observed the "end-of-key-value-list" marker, now step beyond it   
         }        
+        consumer->processNode(node);
         //cout << "\t\t\t" << node << endl; 
         
         prevId = id, prevLat = latRaw, prevLon = lonRaw/*, prevTimeStamp = timeStamp, 
@@ -197,7 +194,7 @@ void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &string
     assert (keyValPos == nodes.keys_vals().size() && "extraneous key/value pair(s)");
 }
 
-void parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Way> &ways, const StringTable &stringTable)
+void OsmParserPbf::parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Way> &ways, const StringTable &stringTable)
 {
 //    cout << "\t\tprimitiveGroup contains " << ways.size() << " ways" << endl;    
     for (const OSMPBF::Way &way : ways)
@@ -220,13 +217,14 @@ void parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Way> &ways, cons
             osmWay.refs.push_back(nodeId);
         } 
 
+        consumer->processWay(osmWay);
 
         //cout << osmWay << endl;
     }
     
 }
 
-void parseRelations(const google::protobuf::RepeatedPtrField<OSMPBF::Relation> &rels, const StringTable &stringTable)
+void OsmParserPbf::parseRelations(const google::protobuf::RepeatedPtrField<OSMPBF::Relation> &rels, const StringTable &stringTable)
 {
     for (const OSMPBF::Relation &rel : rels)
     {
@@ -252,22 +250,14 @@ void parseRelations(const google::protobuf::RepeatedPtrField<OSMPBF::Relation> &
                            (iType == OSMPBF::Relation::RELATION) ? RELATION: OTHER;
             MUST( type == NODE || type == WAY || type == RELATION, "invalid type");
             osmRel.members.push_back( OSMRelationMember(type, ref, role));
-        }    
+        }
+        
+        consumer->processRelation(osmRel);
     }
 }
 
-int main(int argc, char** argv)
-{
-    
-    if (argc < 2)
-    {
-        cout << "usage: " << argv[0] << " inputfile.pbf" << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    uint8_t *unpackBuffer = new uint8_t[OSMPBF::max_uncompressed_blob_size];
-
-    FILE* f = fopen( argv[1], "rb");
+void OsmParserPbf::parse()
+{    
     assert(f);
     int ch;
 
@@ -343,10 +333,24 @@ int main(int argc, char** argv)
         
         } else MUST(false, "invalid header type");
     }
-    
-    delete [] unpackBuffer;
-    fclose(f);
+    consumer->finalize();    
+    //delete [] unpackBuffer;
     //if (!) { cerr << "Failed to parse blob header" << endl; exit(1); }
+}
 
-    google::protobuf::ShutdownProtobufLibrary();
+int main(int argc, char** argv)
+{
+    if (argc < 2)
+    {
+        cout << "usage: " << argv[0] << " inputfile.pbf" << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    FILE* f = fopen( argv[1], "rb");
+    OsmConsumerCounter counter;
+    OsmParserPbf parser(f, &counter);
+    parser.parse();
+    fclose(f);
+
+
 }
