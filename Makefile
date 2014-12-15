@@ -89,7 +89,8 @@ clean:
 	@rm -rf coverage.info callgrind.out.*
 	@rm -rf build/*
 	@rm -rf proto/*.o proto/*.pb.h proto/*.pb.cc
-make.dep: $(CONV_XML_SRC) $(PB_TEST_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) 
+
+make.dep: $(CONV_XML_SRC) $(PB_TEST_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC)
 	@echo [DEP]
 	@g++ -MM $^ | sed "s/\([[:graph:]]*\)\.o/build\/\\1.o/g" > make.dep
 

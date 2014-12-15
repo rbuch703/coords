@@ -106,11 +106,11 @@ string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
 
     size = header.datasize();
     MUST(size <= OSMPBF::max_uncompressed_blob_size, "blob header bigger than allowed 32 MiB" );    
-    cout<< "blob header for block type '" << header.type() << "' with raw size " << size << endl;
+    //cout<< "blob header for block type '" << header.type() << "' with raw size " << size << endl;
     
     MUST(fread(unpackBuffer, size, 1, f) == 1, "fread failed");
 
-    cout << "blob at file position "<< ftello(f) ;
+    cout << "blob at file position "<< (ftello(f) / 1000000) << "M" ;
 
     MUST( blob.ParseFromArray(unpackBuffer, size), "could not parse blob");;
 
@@ -172,20 +172,23 @@ void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &string
         //cout << "lat/lng:" << latRaw << "/" << lonRaw << endl;
         OSMNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id);
         
-        while ( nodes.keys_vals().Get(keyValPos) != 0)
-        { 
-            MUST(keyValPos+1 < nodes.keys_vals().size(), "overflow in key/val id list");
-            int32_t sid = nodes.keys_vals().Get(keyValPos);
-            const string &key = stringTable[sid];
-            sid = nodes.keys_vals().Get(keyValPos+1);
-            MUST(sid != 0, "key without value");
-            const string &value = stringTable[sid];
-            keyValPos += 2;
-            node.tags.push_back(make_pair(key, value));
-            
-        }
-        keyValPos ++;   //already observed the "end-of-key-value-list" marker, now step beyond it   
-        
+        //FIXME: this check is necessary to parse planet dumps; add it to the specification in the wiki
+        if (nodes.keys_vals().size() > 0)   
+        {
+            while ( nodes.keys_vals().Get(keyValPos) != 0)
+            { 
+                MUST(keyValPos+1 < nodes.keys_vals().size(), "overflow in key/val id list");
+                int32_t sid = nodes.keys_vals().Get(keyValPos);
+                const string &key = stringTable[sid];
+                sid = nodes.keys_vals().Get(keyValPos+1);
+                MUST(sid != 0, "key without value");
+                const string &value = stringTable[sid];
+                keyValPos += 2;
+                node.tags.push_back(make_pair(key, value));
+                
+            }
+            keyValPos ++;   //already observed the "end-of-key-value-list" marker, now step beyond it   
+        }        
         //cout << "\t\t\t" << node << endl; 
         
         prevId = id, prevLat = latRaw, prevLon = lonRaw/*, prevTimeStamp = timeStamp, 
@@ -307,14 +310,13 @@ int main(int argc, char** argv)
             //for (const string &s : primBlock.stringtable().s())
             //    strings.push_back(s);
                 
-            cout << "\t" << primBlock.primitivegroup().size() << " primitive groups" << endl;
+            //cout << "\t" << primBlock.primitivegroup().size() << " primitive groups" << endl;
             
             for (const OSMPBF::PrimitiveGroup &primGroup : primBlock.primitivegroup())
             {
-                //if (!primGroup.ways().size())
-                //    continue;
+                //NOTE: more than one of these may be present in a given primitive group
 
-                cout << "\t\tgroup contains " << primGroup.nodes().size() << " nodes" << endl;
+                //cout << "\t\tgroup contains " << primGroup.nodes().size() << " nodes" << endl;
                 if (primGroup.nodes().size())
                     MUST(false, "NOT IMPLEMENTED");
                     
@@ -322,15 +324,15 @@ int main(int argc, char** argv)
                 if (primGroup.has_dense())
                     parseDenseNodes( primGroup.dense(), strings, granularity, lat_offset, lon_offset);
 
-                cout << "\t\tgroup contains " << primGroup.ways().size() << " ways" << endl;
+                //cout << "\t\tgroup contains " << primGroup.ways().size() << " ways" << endl;
                 if (primGroup.ways().size())
                     parseWays( primGroup.ways(), strings);
                 
-                cout << "\t\tgroup contains " << primGroup.relations().size() << " relations" << endl;
+                //cout << "\t\tgroup contains " << primGroup.relations().size() << " relations" << endl;
                 if (primGroup.relations().size())
                     parseRelations( primGroup.relations(), strings);
                 
-                cout << "\t\tgroup contains " << primGroup.changesets().size() << " changesets" << endl;
+                //cout << "\t\tgroup contains " << primGroup.changesets().size() << " changesets" << endl;
                 if (primGroup.changesets().size())
                     MUST(false, "NOT IMPLEMENTED");
                 
