@@ -13,8 +13,9 @@ simplifier
 build
 
 # ----- auto-generated protocol buffer source
-*.pb.h
-*.pb.cc
+proto/*.pb.h
+proto/*.pb.cc
+proto/*.pb.o
 
 # ----- ignore OSM data files
 *.osm

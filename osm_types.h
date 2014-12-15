@@ -30,7 +30,7 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v);
 
 struct OSMNode
 {
-    OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, list<OSMKeyValuePair> node_tags);
+    OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, list<OSMKeyValuePair> node_tags = list<OSMKeyValuePair>() );
     OSMNode( FILE* data_file, uint64_t  offset, uint64_t node_id);
     OSMNode( FILE* idx, FILE* data, uint64_t node_id);
     OSMNode( const uint8_t* data_ptr, uint64_t node_id);

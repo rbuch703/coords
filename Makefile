@@ -1,12 +1,16 @@
 
 CONV_XML_SRC = conv_osmxml.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc 
-PB_TEST_SRC = osmParserPbf.cc osmformat.pb.cc fileformat.pb.cc
+PB_TEST_SRC = osmParserPbf.cc osm_types.cc mem_map.cc
 #REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
 SIMP_SRC = simplifier.cc osm_types.cc mem_map.cc
 
+PROTO_DEF = proto/fileformat.proto proto/osmformat.proto
+PROTO_SRC = $(patsubst %.proto,%.pb.cc,$(PROTO_DEF))
+PROTO_OBJ = $(patsubst %.cc,%.o,$(PROTO_SRC))
+
 CONV_XML_OBJ  = $(patsubst %.cc,build/%.o,$(CONV_XML_SRC))
-PB_TEST_OBJ = $(patsubst %.cc,build/%.o,$(PB_TEST_SRC))
+PB_TEST_OBJ = $(patsubst %.cc,build/%.o,$(PB_TEST_SRC)) $(PROTO_OBJ)
 #REMAP_OBJ  = $(REMAP_SRC:.cc=.o)
 CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
 SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
@@ -18,7 +22,7 @@ CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = #-flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
-
+.SECONDARY: $(PROTO_SRC)
 all: build make.dep build/conv_osmxml build/pb_test build/simplifier build/data_converter intermediate 
 #	 @echo [ALL] $<
 
@@ -66,8 +70,11 @@ build/simplifier.o: simplifier.cc
 
 build/%.o: %.cc 
 	@echo [C++] $<
-#	@g++ $(CCFLAGS) `pkg-config --cflags cairo` $< -c -o $@
 	@g++ $(CCFLAGS) $< -c -o $@
+
+proto/%.o: proto/%.cc
+	@echo [C++] $<
+	@g++ $(CCFLAGS) -I. $< -c -o $@
 
 %.pb.cc %.pb.h: %.proto
 	@echo [PBC] $<
@@ -81,7 +88,7 @@ clean:
 	@rm -rf conv_osmxml data_converter simplifier make_index remap
 	@rm -rf coverage.info callgrind.out.*
 	@rm -rf build/*
-
+	@rm -rf proto/*.o proto/*.pb.h proto/*.pb.cc
 make.dep: $(CONV_XML_SRC) $(PB_TEST_SRC) $(CONV_SRC) $(SIMP_SRC) $(GEO_SRC) 
 	@echo [DEP]
 	@g++ -MM $^ | sed "s/\([[:graph:]]*\)\.o/build\/\\1.o/g" > make.dep

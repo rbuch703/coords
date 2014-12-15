@@ -1,7 +1,7 @@
 
 #include "osmParserPbf.h"
-#include "fileformat.pb.h"
-#include "osmformat.pb.h"
+#include "proto/fileformat.pb.h"
+#include "proto/osmformat.pb.h"
 
 #include <arpa/inet.h>  //for ntohl
 
@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <zlib.h>
 #include <assert.h>
+
+#include "osm_types.h"
 
 using namespace std;
 
@@ -65,7 +67,7 @@ string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
     OSMPBF::Blob blob;
 
     uint32_t size;
-    fread(&size, sizeof(size), 1, f);
+    MUST(fread(&size, sizeof(size), 1, f) == 1, "could not read size indicator");
     size = ntohl(size);
 
     MUST(size <= (1 << 15), "blob header too big");
@@ -92,6 +94,73 @@ string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
     assert(dataSizeOut == (uint32_t)blob.raw_size());
     return header.type();
 
+}
+
+void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const vector<string> &stringTable, int32_t granularity, int64_t lat_offset, int64_t lon_offset)
+{
+    cout << "\t\t\tcontain " << (nodes.has_denseinfo() ? "":"NO ") << "DenseInfo block" << endl;
+    int64_t numNodes = nodes.id().size();
+    cout << "\t\t\tcontain " << numNodes << " nodes" << endl;
+    cout << "\t\t\tgot passed gran/dLat/dLng:" << granularity << "/" << lat_offset << "/" << lon_offset << endl;
+    MUST( nodes.lat().size() == numNodes, "property count mismatch"); 
+    MUST( nodes.lon().size() == numNodes, "property count mismatch"); 
+    
+    bool containsVisibilityInformation = nodes.denseinfo().visible().size();
+    
+    if (nodes.has_denseinfo())
+    {
+        MUST( nodes.denseinfo().version().size() == numNodes, "property count mismatch"); 
+        MUST( nodes.denseinfo().timestamp().size() == numNodes, "property count mismatch"); 
+        MUST( nodes.denseinfo().changeset().size() == numNodes, "property count mismatch"); 
+        MUST( nodes.denseinfo().uid().size() == numNodes, "property count mismatch"); 
+        MUST( nodes.denseinfo().user_sid().size() == numNodes, "property count mismatch"); 
+        MUST( nodes.denseinfo().user_sid().size() == numNodes, "property count mismatch"); 
+        MUST( (!containsVisibilityInformation) ||
+              nodes.denseinfo().visible().size() == numNodes, "property count mismatch"); 
+    }
+        
+    int64_t prevId = 0;
+    int64_t prevLat= 0;
+    int64_t prevLon= 0;
+    int64_t keyValPos = 0;
+/*    int64_t prevTimeStamp=0;
+    int64_t prevChangeset=0;
+    int32_t prevUid = 0;
+    int32_t prevUsid = 0;*/
+    for (int i = 0; i < numNodes; i++)
+    {
+        int64_t id =     prevId +  nodes.id().Get(i);
+        int64_t latRaw = prevLat + nodes.lat().Get(i);
+        int64_t lonRaw = prevLon + nodes.lon().Get(i);
+/*        int64_t timeStamp= prevTimeStamp+ nodes.denseinfo().timestamp().Get(i);
+        int64_t changeset= prevChangeset+ nodes.denseinfo().changeset().Get(i);
+        int32_t uid      = prevUid      + nodes.denseinfo().uid().Get(i);
+        int32_t usid     = prevUsid     + nodes.denseinfo().user_sid().Get(i);
+        bool    visible  = (!containsVisibilityInformation) || nodes.denseinfo().visible().Get(i);*/
+        
+        //cout << "lat/lng:" << latRaw << "/" << lonRaw << endl;
+        OSMNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id);
+        
+        while ( nodes.keys_vals().Get(keyValPos) != 0)
+        { 
+            MUST(keyValPos+1 < nodes.keys_vals().size(), "overflow in key/val id list");
+            int32_t sid = nodes.keys_vals().Get(keyValPos);
+            const string &key = stringTable[sid];
+            sid = nodes.keys_vals().Get(keyValPos+1);
+            MUST(sid != 0, "key without value");
+            const string &value = stringTable[sid];
+            keyValPos += 2;
+            node.tags.push_back(make_pair(key, value));
+            
+        }
+        keyValPos ++;   //already observed the "end-of-key-value-list" marker, now step beyond it   
+        
+        //cout << "\t\t\t" << node << endl; 
+        
+        prevId = id, prevLat = latRaw, prevLon = lonRaw/*, prevTimeStamp = timeStamp, 
+        prevChangeset = changeset,prevUid = uid, prevUsid = usid*/;
+    }
+    assert (keyValPos == nodes.keys_vals().size() && "extraneous key/value pair(s)");
 }
 
 int main(int argc, char** argv)
@@ -122,12 +191,49 @@ int main(int argc, char** argv)
             OSMPBF::HeaderBlock headerBlock;
             MUST( headerBlock.ParseFromArray(unpackBuffer, size), "failed to parse HeaderBlock");
             for (string s: headerBlock.required_features())
-                cout << "\t contains required feature " << s << endl;
+                cout << "\tcontains required feature " << s << endl;
 
             for (string s: headerBlock.optional_features())
-                cout << "\t contains required feature " << s << endl;
+                cout << "\tcontains optional feature " << s << endl;
+                
+            cout << "\twritten by " << headerBlock.writingprogram() << endl;
+
         } else if (blobType == "OSMData")
         {
+            OSMPBF::PrimitiveBlock primBlock;
+            MUST( primBlock.ParseFromArray(unpackBuffer, size), "failed to parse PrimBlock");
+            cout << "\tstringtable has " << primBlock.stringtable().s().size() << " entries" << endl;            
+            vector<string> strings;
+            strings.reserve(primBlock.stringtable().s().size());
+
+            int32_t granularity = primBlock.has_granularity() ? primBlock.granularity() : 100;
+            int64_t lat_offset = primBlock.has_lat_offset() ? primBlock.lat_offset() : 0;
+            int64_t lon_offset = primBlock.has_lon_offset() ? primBlock.lon_offset() : 0;
+            int32_t date_granularity = primBlock.has_date_granularity() ? primBlock.date_granularity() : 1000;
+            cout << "\tgranularity=" << granularity 
+                 << " offset=" << lat_offset << "/" << lon_offset 
+                 << " date_granularity=" << date_granularity << endl;
+            for (const string &s : primBlock.stringtable().s())
+                strings.push_back(s);
+                
+            cout << "\t" << primBlock.primitivegroup().size() << " primitive groups" << endl;
+            
+            for (const OSMPBF::PrimitiveGroup &primGroup : primBlock.primitivegroup())
+            {
+                cout << "\t\tgroup contains " << primGroup.nodes().size() << " nodes" << endl;
+                cout << "\t\tgroup contains " << (primGroup.has_dense() ? "":"NO ") << "dense nodes" << endl;
+                if (primGroup.has_dense())
+                    parseDenseNodes( primGroup.dense(), strings, granularity, lat_offset, lon_offset);
+
+                cout << "\t\tgroup contains " << primGroup.ways().size() << " ways" << endl;
+                cout << "\t\tgroup contains " << primGroup.relations().size() << " relations" << endl;
+                cout << "\t\tgroup contains " << primGroup.changesets().size() << " changesets" << endl;
+                
+            }
+//                cout << "string '" << s << "'" << endl;
+            //cout << "\tfirst string is '" << primBlock.stringtable().s().c_str() << "'" << endl;
+ //           exit(0);
+        
         } else MUST(false, "invalid header type");
     }
     
