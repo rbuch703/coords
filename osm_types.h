@@ -55,6 +55,7 @@ ostream& operator<<(ostream &out, const OSMNode &node);
 
 struct OSMWay
 {
+    OSMWay( uint64_t way_id);
     OSMWay( uint64_t way_id, list<uint64_t> way_refs, list<OSMKeyValuePair> way_tags);
     OSMWay( const uint8_t* data_ptr, uint64_t way_id);
 

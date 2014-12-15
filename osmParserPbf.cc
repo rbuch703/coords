@@ -13,14 +13,43 @@
 
 #include "osm_types.h"
 
+//a macro similar to assert(), but is not deactivated by NDEBUG
+#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
+
 using namespace std;
 
 namespace OSMPBF {
 static const int max_uncompressed_blob_size = 32 * (1 << 20);
 }
 
-//a macro similar to assert(), but is not deactivated by NDEBUG
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
+class StringTable {
+public:
+    StringTable(const google::protobuf::RepeatedPtrField<string>& src)
+    {
+        table.reserve( src.size());
+        for ( const string &s : src)
+            table.push_back(s);
+    }
+    
+    StringTable( const StringTable &other); //prevent copying
+    StringTable& operator=(const StringTable &other); 
+    
+    const string& get(uint32_t idx) const
+    {
+        MUST( idx < table.size(), "range overflow");
+        return table[idx];
+    }
+    
+    const string& operator[](uint32_t idx) const
+    {
+        MUST( idx < table.size(), "range overflow");
+        return table[idx];
+    }
+
+private:
+    vector<string> table;
+};
+
 
 void unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unpackBufferOut, uint32_t &unpackedSizeOut)
 {
@@ -88,7 +117,7 @@ string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
     if (blob.has_raw())
         cout << " contains raw data" << endl;
     if (blob.has_raw_size())
-        cout << " contains compressed data, uncompressed size is " <<  blob.raw_size() << endl;
+        cout << " contains compressed data, " << blob.zlib_data().size() << "-> "<<  blob.raw_size() << " bytes" << endl;
 
     unpackBlob(/*ref*/blob, f, unpackBuffer, /*ref*/dataSizeOut);
     assert(dataSizeOut == (uint32_t)blob.raw_size());
@@ -96,15 +125,16 @@ string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
 
 }
 
-void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const vector<string> &stringTable, int32_t granularity, int64_t lat_offset, int64_t lon_offset)
+void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &stringTable, int32_t granularity, int64_t lat_offset, int64_t lon_offset)
 {
-    cout << "\t\t\tcontain " << (nodes.has_denseinfo() ? "":"NO ") << "DenseInfo block" << endl;
+    //cout << "\t\t\tcontain " << (nodes.has_denseinfo() ? "":"NO ") << "DenseInfo block" << endl;
     int64_t numNodes = nodes.id().size();
-    cout << "\t\t\tcontain " << numNodes << " nodes" << endl;
-    cout << "\t\t\tgot passed gran/dLat/dLng:" << granularity << "/" << lat_offset << "/" << lon_offset << endl;
+    //cout << "\t\t\tcontain " << numNodes << " nodes" << endl;
+    //cout << "\t\t\tgot passed gran/dLat/dLng:" << granularity << "/" << lat_offset << "/" << lon_offset << endl;
     MUST( nodes.lat().size() == numNodes, "property count mismatch"); 
     MUST( nodes.lon().size() == numNodes, "property count mismatch"); 
-    
+
+    bool hasDenseInfo = nodes.has_denseinfo();    
     bool containsVisibilityInformation = nodes.denseinfo().visible().size();
     
     if (nodes.has_denseinfo())
@@ -118,7 +148,8 @@ void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const vector<string> &str
         MUST( (!containsVisibilityInformation) ||
               nodes.denseinfo().visible().size() == numNodes, "property count mismatch"); 
     }
-        
+    
+    MUST(hasDenseInfo, "parsing under absence of denseinfo not implemented");
     int64_t prevId = 0;
     int64_t prevLat= 0;
     int64_t prevLon= 0;
@@ -163,6 +194,35 @@ void parseDenseNodes( const OSMPBF::DenseNodes &nodes, const vector<string> &str
     assert (keyValPos == nodes.keys_vals().size() && "extraneous key/value pair(s)");
 }
 
+void parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Way> &ways, const StringTable &stringTable)
+{
+//    cout << "\t\tprimitiveGroup contains " << ways.size() << " ways" << endl;    
+    for (const OSMPBF::Way &way : ways)
+    {
+        MUST( way.keys().size()== way.vals().size(), "extraneous key or value");
+
+        OSMWay osmWay(way.id());
+
+        //osmWay.tags.reserve( way.keys().size());        
+        for (int i = 0; i < way.keys().size(); i++)
+            osmWay.tags.push_back( make_pair( stringTable[way.keys().Get(i)], stringTable[way.vals().Get(i)] ));
+            
+
+        int64_t nodeId = 0;
+        //osmWay.refs.reserve( way.refs().size());
+        for (int64_t nodeIdRaw : way.refs())
+        {
+            nodeId += nodeIdRaw;
+            MUST(nodeId > 0, "invalid node id");
+            osmWay.refs.push_back(nodeId);
+        } 
+
+
+        //cout << osmWay << endl;
+    }
+    
+}
+
 int main(int argc, char** argv)
 {
     
@@ -202,32 +262,47 @@ int main(int argc, char** argv)
         {
             OSMPBF::PrimitiveBlock primBlock;
             MUST( primBlock.ParseFromArray(unpackBuffer, size), "failed to parse PrimBlock");
-            cout << "\tstringtable has " << primBlock.stringtable().s().size() << " entries" << endl;            
-            vector<string> strings;
-            strings.reserve(primBlock.stringtable().s().size());
+                
+            //cout << "\tstringtable has " << primBlock.stringtable().s().size() << " entries" << endl;            
+            StringTable strings(primBlock.stringtable().s());
+            //vector<string> strings;
 
             int32_t granularity = primBlock.has_granularity() ? primBlock.granularity() : 100;
             int64_t lat_offset = primBlock.has_lat_offset() ? primBlock.lat_offset() : 0;
             int64_t lon_offset = primBlock.has_lon_offset() ? primBlock.lon_offset() : 0;
-            int32_t date_granularity = primBlock.has_date_granularity() ? primBlock.date_granularity() : 1000;
-            cout << "\tgranularity=" << granularity 
+            //int32_t date_granularity = primBlock.has_date_granularity() ? primBlock.date_granularity() : 1000;
+            /*cout << "\tgranularity=" << granularity 
                  << " offset=" << lat_offset << "/" << lon_offset 
-                 << " date_granularity=" << date_granularity << endl;
-            for (const string &s : primBlock.stringtable().s())
-                strings.push_back(s);
+                 << " date_granularity=" << date_granularity << endl;*/
+            //for (const string &s : primBlock.stringtable().s())
+            //    strings.push_back(s);
                 
             cout << "\t" << primBlock.primitivegroup().size() << " primitive groups" << endl;
             
             for (const OSMPBF::PrimitiveGroup &primGroup : primBlock.primitivegroup())
             {
+                //if (!primGroup.ways().size())
+                //    continue;
+
                 cout << "\t\tgroup contains " << primGroup.nodes().size() << " nodes" << endl;
-                cout << "\t\tgroup contains " << (primGroup.has_dense() ? "":"NO ") << "dense nodes" << endl;
+                if (primGroup.nodes().size())
+                    MUST(false, "NOT IMPLEMENTED");
+                    
+                //cout << "\t\tgroup contains " << (primGroup.has_dense() ? "":"NO ") << "dense nodes" << endl;
                 if (primGroup.has_dense())
                     parseDenseNodes( primGroup.dense(), strings, granularity, lat_offset, lon_offset);
 
                 cout << "\t\tgroup contains " << primGroup.ways().size() << " ways" << endl;
+                if (primGroup.ways().size())
+                    parseWays( primGroup.ways(), strings);
+                
                 cout << "\t\tgroup contains " << primGroup.relations().size() << " relations" << endl;
+                if (primGroup.relations().size())
+                    MUST(false, "NOT IMPLEMENTED");
+                
                 cout << "\t\tgroup contains " << primGroup.changesets().size() << " changesets" << endl;
+                if (primGroup.changesets().size())
+                    MUST(false, "NOT IMPLEMENTED");
                 
             }
 //                cout << "string '" << s << "'" << endl;

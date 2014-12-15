@@ -247,6 +247,8 @@ OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
     tags = deserializeTags(data_ptr);
 }
 
+OSMWay::OSMWay(uint64_t way_id): id(way_id) {}
+
         
 
 void OSMWay::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
