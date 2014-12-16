@@ -49,13 +49,10 @@ const char * ignore_key_prefixes[]={
 
 uint32_t num_ignore_key_prefixes = sizeof(ignore_key_prefixes)/ sizeof(const char *);
 
-
 const char * ignore_keys[]={
     "created_by", // author of node/way/relation
     "converted_by",
-
     "note",       //notes are usually information for fellow mappers, but not relevant for viewers;
-    
     "source",      // generic data source
     "3dshapes:ggmodelk",
     "FIXME",
@@ -67,27 +64,19 @@ const char * ignore_keys[]={
     "attribution",
     "odbl",
     "build",
-
     "import",
     "import_uuid",
     "note:import-bati",
     "uic_ref",   //unique international train station id; not needed right now TODO: white-list this later?
     "onkz",      //German telephone area codes ("Ortskennzahl")
-
-
     "AND",      // annotations from a Netherlands database
-    
     "cladr:code",   //annotations from Russian CLADR database
-
     "canvec",   //"CanVec is a digital cartographic reference product produced by Natural Resources Canada."
     "canvec tile",
-    
     "cxx:code",
     "cxx:id",
-    
     "de:amtlicher_gemeindeschluessel",
     "dcgis",
-   
     "dibavod:id",
     
     "educamadrid",

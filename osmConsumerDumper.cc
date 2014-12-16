@@ -42,17 +42,21 @@ static void truncateFile(string filename) {
 OsmConsumerDumper::OsmConsumerDumper(): 
     nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
 {    
+
     //for situations where several annotation keys exist with the same meaning
     //this dictionary maps them to a common unique key
-/*    rename_key.insert( std::pair<std::string, std::string>("postal_code", "addr:postcode"));
-    rename_key.insert( std::pair<std::string, std::string>("url", "website")); //according to OSM specs, "url" is obsolete
-    rename_key.insert( std::pair<std::string, std::string>("phone", "contact:phone"));
-    rename_key.insert( std::pair<std::string, std::string>("fax", "contact:fax"));
-    rename_key.insert( std::pair<std::string, std::string>("email", "contact:email"));
-    rename_key.insert( std::pair<std::string, std::string>("addr:housenumber", "addr:streetnumber"));*/
+    rename_key.insert( "postal_code", "addr:postcode");
+    rename_key.insert( "url", "website"); //according to OSM specs, "url" is obsolete
+    rename_key.insert( "phone", "contact:phone");
+    rename_key.insert( "fax", "contact:fax");
+    rename_key.insert( "email", "contact:email");
+    rename_key.insert( "addr:housenumber", "addr:streetnumber");
     //TODO: replace natural=lake by natural=water
     for (uint32_t i = 0; i < num_ignore_keys; i++)
-        ignore_key.insert(ignore_keys[i]);
+        ignore_key.insert(ignore_keys[i], 0);
+
+    for (uint32_t i = 0; i < num_ignore_key_prefixes; i++)
+        ignoreKeyPrefixes.insert(ignore_key_prefixes[i], 0);
         
     truncateFile(nodes_index_filename);
     truncateFile(nodes_data_filename);
@@ -178,46 +182,42 @@ void OsmConsumerDumper::onAllRelationsConsumed () {
     
 }; 
 
-void OsmConsumerDumper::processTags(list<OSMKeyValuePair> &tags)
-{
-    list<OSMKeyValuePair>::iterator tag = tags.begin();
-    while (tag != tags.end())
-    {
-        if ( rename_key.count(tag->first) ) tag->first = rename_key[tag->first];
-        
-        if ( ignore_key.count(tag->first) ) 
-        {
-            tag = tags.erase(tag);
-            continue;
-            /*list<OSMKeyValuePair>::iterator prev = tag;
-            tag++;
-            tags.erase(prev);*/
-        } 
-        
-        bool removeTag = false;
-        for (unsigned int i = 0; i < num_ignore_key_prefixes; i++)
-        {
-            if (tag->first.find(ignore_key_prefixes[i]) == 0) //tag starts with ignore-prefix
-            {
-                removeTag = true;
-                break;
-            }
-        }
 
-        if (removeTag)
-        {
-            tag = tags.erase(tag);
-            continue;
-        }
+/* modifies the 'tag' to reflect the rename rules. 
+ * @Returns: whether the tag is to be kept (true) or discarded (false) */
+ 
+bool OsmConsumerDumper::processTag(OSMKeyValuePair &tag) const
+{
+    const string* renameValue = rename_key.at(tag.first.c_str());
+    if ( renameValue ) tag.first = *renameValue;
         
-        tag++;
-    }
+    if ( ignore_key.at(tag.first.c_str()) ) 
+        return false;
+        
+    if ( ignoreKeyPrefixes.containsPrefixOf( tag.first.c_str()))
+        return false;
+
+    return true;    
+}
+
+void OsmConsumerDumper::filterTags(vector<OSMKeyValuePair> &tags) const
+{
+    for (uint64_t i = 0; i < tags.size();)
+    {
+        if (processTag(tags[i]) )
+            i++;
+        else
+        {
+            tags[i] = tags[tags.size()-1];
+            tags.pop_back();
+        }   
+    }   
 }
 
 void OsmConsumerDumper::consumeNode( OSMNode &node) 
 {
     nNodes++;
-    processTags(node.tags);
+    filterTags(node.tags);
     node.serializeWithIndexUpdate(node_data, &node_index);
     
     ensure_mmap_size( &vertex_data, (node.id+1) * 2 * sizeof(uint32_t));
@@ -259,7 +259,7 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
 void OsmConsumerDumper::consumeWay ( OSMWay  &way)
 {
     nWays++;
-    processTags(way.tags);
+    filterTags(way.tags);
     // write the way itself to file
     way.serializeWithIndexUpdate(way_data, &way_index);
     
@@ -301,7 +301,7 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
 void OsmConsumerDumper::consumeRelation( OSMRelation &relation) 
 {
     nRelations++;
-    processTags(relation.tags);
+    filterTags(relation.tags);
     relation.serializeWithIndexUpdate( relation_data, &relation_index);
     
 }

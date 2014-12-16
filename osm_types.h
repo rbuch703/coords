@@ -3,8 +3,9 @@
 #define OSM_TYPES_H
 
 #include <string>
-#include <list>
+#include <list> //FIXME: to be removed after all lists are replaced by vectors
 #include <map>
+#include <vector>
 
 #include <stdint.h> 
 #include "mem_map.h"
@@ -30,7 +31,7 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v);
 
 struct OSMNode
 {
-    OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, list<OSMKeyValuePair> node_tags = list<OSMKeyValuePair>() );
+    OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, vector<OSMKeyValuePair> node_tags = vector<OSMKeyValuePair>() );
     OSMNode( FILE* data_file, uint64_t  offset, uint64_t node_id);
     OSMNode( FILE* idx, FILE* data, uint64_t node_id);
     OSMNode( const uint8_t* data_ptr, uint64_t node_id);
@@ -48,7 +49,7 @@ struct OSMNode
     int32_t lat;    //needs to be signed! -180° < lat < 180°
     int32_t lon;    //                     -90° < lon <  90°
     uint64_t id;
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
 };
 
 ostream& operator<<(ostream &out, const OSMNode &node);
@@ -56,7 +57,7 @@ ostream& operator<<(ostream &out, const OSMNode &node);
 struct OSMWay
 {
     OSMWay( uint64_t way_id);
-    OSMWay( uint64_t way_id, list<uint64_t> way_refs, list<OSMKeyValuePair> way_tags);
+    OSMWay( uint64_t way_id, list<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags);
     OSMWay( const uint8_t* data_ptr, uint64_t way_id);
 
     void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
@@ -67,7 +68,7 @@ struct OSMWay
 
     uint64_t id;
     list<uint64_t> refs;
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
 };
 
 ostream& operator<<(ostream &out, const OSMWay &way);
@@ -76,7 +77,7 @@ ostream& operator<<(ostream &out, const OSMWay &way);
 struct OSMIntegratedWay
 {
     //manually constructs the way
-    OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags);
+    OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, vector<OSMKeyValuePair> way_tags);
     //constructs the way based on a memory pointer (e.g. from a mmap) to serialized way data    
     OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id);
     //constructs the way from a file handle whose current position already points to the serialized data
@@ -96,7 +97,7 @@ struct OSMIntegratedWay
 public:
     uint64_t id;
     list<OSMVertex> vertices;
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
 };
 
 ostream& operator<<(ostream &out, const OSMIntegratedWay &way);
@@ -117,7 +118,7 @@ struct OSMRelationMember
 struct OSMRelation
 {
     OSMRelation( uint64_t relation_id);
-    OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags);
+    OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags);
     OSMRelation( const uint8_t* data_ptr, uint64_t relation_id);
     OSMRelation( FILE* src, uint64_t rel_id = -1);
     OSMRelation( FILE* idx, FILE* data, uint64_t relation_id);
@@ -129,10 +130,11 @@ struct OSMRelation
     void initFromFile(FILE* src);
     uint64_t id;
     list<OSMRelationMember> members;
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
 };
 
 ostream& operator<<(ostream &out, const OSMRelation &relation);
 ostream& operator<<(ostream &out, const list<OSMKeyValuePair> &tags);
 
 #endif
+

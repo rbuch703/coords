@@ -111,7 +111,7 @@ void OsmXmlParser::parseNode()
     int32_t lat = degValueToInt(line, "lat"); 
     int32_t lon = degValueToInt(line, "lon");
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
     if (!strstr(line, "/>")) //node contains tags (kv-pairs)
     {
         while (readNextLine())
@@ -135,7 +135,7 @@ void OsmXmlParser::parseWay()
 //        consumer->beforeParsingWays();
 //    }
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
     list<uint64_t> node_refs;
     if (strstr(line, "/>")) //way without node references???
     {
@@ -176,7 +176,7 @@ void OsmXmlParser::parseRelation()
     }
     */
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
     list<OSMRelationMember> members;
     
     if (strstr(line, "/>")) //a relation needs at least one member 

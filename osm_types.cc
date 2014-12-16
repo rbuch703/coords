@@ -31,7 +31,7 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v)
     (key_0, value_0, key_1, value_1, ...)
 
 */
-void serializeTags( const list<OSMKeyValuePair> &tags, FILE* file)
+void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
 {
     assert(tags.size() < (1<<16));
     uint16_t num_tags = tags.size();
@@ -54,14 +54,15 @@ void fread( void* dest, uint64_t size, FILE* file)
     { perror("[ERR] fread"); exit(0);}
 }
 
-list<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
+vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
 {
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
     
     uint16_t num_tags  = *((const uint16_t*)data_ptr);
     data_ptr+=2;
     if (num_tags == 0) return tags;
     
+    tags.reserve(num_tags);
     //const char* str = (const char*)data_ptr;
     while (num_tags--)
     {
@@ -96,12 +97,13 @@ static const char* freadstr(FILE *src)
 
 }
 
-list<OSMKeyValuePair> deserializeTags(FILE* src)
+vector<OSMKeyValuePair> deserializeTags(FILE* src)
 {
-    list<OSMKeyValuePair> tags;
+    vector<OSMKeyValuePair> tags;
     
     uint16_t num_tags;
     fread( &num_tags, sizeof(num_tags), src);
+    tags.reserve(num_tags);
     
     while (num_tags--)
     {
@@ -121,10 +123,10 @@ list<OSMKeyValuePair> deserializeTags(FILE* data_file, uint64_t file_offset)
     return deserializeTags(data_file);
 }*/
 
-ostream& operator<<(ostream &out, const list<OSMKeyValuePair> &tags)
+ostream& operator<<(ostream &out, const vector<OSMKeyValuePair> &tags)
 {
     out << "[";
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+    for (vector<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
     {
         out << "\"" << it->first << "\" = \"" << it->second << "\"";
         if (++it != tags.end()) out << ", ";
@@ -183,7 +185,7 @@ OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
 }
 
 
-OSMNode::OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, list<OSMKeyValuePair> node_tags):
+OSMNode::OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, vector<OSMKeyValuePair> node_tags):
         lat(node_lat), lon(node_lon), id(node_id), tags(node_tags) {}
 
 void OSMNode::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
@@ -207,16 +209,18 @@ void OSMNode::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) cons
 
 bool OSMNode::hasKey(string key) const
 {
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return true;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return true;
+
     return false;
 }
 
 const string& OSMNode::getValue(string key) const
 {
     static const string empty="";
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return it->second;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return kv.second;
+
     return empty;
 }
 
@@ -232,7 +236,7 @@ ostream& operator<<(ostream &out, const OSMNode &node)
     return out;
 }
 
-OSMWay::OSMWay( uint64_t way_id, list<uint64_t> way_refs, list<OSMKeyValuePair> way_tags):
+OSMWay::OSMWay( uint64_t way_id, list<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags):
         id(way_id), refs(way_refs), tags(way_tags) {}
 
 OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
@@ -288,16 +292,18 @@ void OSMWay::serialize( FILE* data_file) const
 
 bool OSMWay::hasKey(string key) const
 {
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return true;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return true;
+
     return false;
 }
 
 const string& OSMWay::getValue(string key) const
 {
     static const string empty="";
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return it->second;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return kv.second;
+
     return empty;
 }
 
@@ -316,7 +322,7 @@ ostream& operator<<(ostream &out, const OSMWay &way)
 
 //===================================
 
-OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, list<OSMKeyValuePair> way_tags):
+OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, vector<OSMKeyValuePair> way_tags):
         id(way_id), vertices(way_vertices), tags(way_tags) {}
 
 OSMIntegratedWay::OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id): id(way_id)
@@ -430,19 +436,20 @@ void OSMIntegratedWay::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_
 
 bool OSMIntegratedWay::hasKey(string key) const
 {
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return true;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return true;
+
     return false;
 }
 
 const string& OSMIntegratedWay::getValue(string key) const
 {
     static const string empty="";
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return it->second;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return kv.second;
+
     return empty;
 }
-
 
 ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
 {
@@ -461,7 +468,7 @@ ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
 //==================================
 OSMRelation::OSMRelation( uint64_t relation_id): id(relation_id) {}
 
-OSMRelation::OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, list<OSMKeyValuePair> relation_tags):
+OSMRelation::OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags):
     id(relation_id), members(relation_members), tags(relation_tags) {}
 
 OSMRelation::OSMRelation( const uint8_t* data_ptr, uint64_t relation_id): id(relation_id)
@@ -574,16 +581,18 @@ void OSMRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
 
 bool OSMRelation::hasKey(string key) const
 {
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return true;
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return true;
+
     return false;
 }
 
 const string& OSMRelation::getValue(string key) const
 {
-    static const string empty = "";
-    for (list<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
-        if (it->first == key) return it->second;
+    static const string empty="";
+    for (const OSMKeyValuePair &kv : tags)
+        if (kv.first == key) return kv.second;
+
     return empty;
 }
 

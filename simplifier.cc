@@ -112,12 +112,12 @@ public:
     OSMRelation get(uint64_t rel_id)
     {
         if (rel_id == 0)
-            return OSMRelation(-1, list<OSMRelationMember>(), list<OSMKeyValuePair>() );
+            return OSMRelation(-1, list<OSMRelationMember>(), vector<OSMKeyValuePair>() );
             
         assert ( rel_id <= num );
         uint64_t idx = ((uint64_t*)idx_map.ptr)[rel_id];
         if (idx == 0)
-            return OSMRelation(-1, list<OSMRelationMember>(), list<OSMKeyValuePair>() );
+            return OSMRelation(-1, list<OSMRelationMember>(), vector<OSMKeyValuePair>() );
         
         assert( idx > 0);
         const uint8_t* dest = ((uint8_t*)data_map.ptr) + idx;
