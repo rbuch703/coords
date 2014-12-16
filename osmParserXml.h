@@ -4,13 +4,13 @@
 
 #include <stdio.h>
 
-#include "osmParserInterface.h"
+#include "osmConsumer.h"
 
-class OsmXmlParser: IOsmParser
+class OsmXmlParser
 {
 
 public:
-    OsmXmlParser(FILE * file);
+    OsmXmlParser(FILE * file, OsmBaseConsumer *consumer);
     ~OsmXmlParser();
     
     void parse();
@@ -23,7 +23,7 @@ private:
     bool readNextLine();
     
 private:
-    
+    OsmBaseConsumer *consumer;
     FILE * in_file; 
     char* line_buffer;
     size_t line_buffer_size;

@@ -6,20 +6,14 @@
 
 class OsmConsumerCounter : public OsmBaseConsumer {
 public:
-    OsmConsumerCounter(): nNodes(0), nWays(0), nRelations(0) {}
+    OsmConsumerCounter();
 
-    virtual void consumeNode    ( OSMNode &)     { nNodes     += 1;}
-    virtual void consumeWay     ( OSMWay  &)     { nWays      += 1;}
-    virtual void consumeRelation( OSMRelation &) { nRelations += 1;}
-
-    virtual void onAllRelationsConsumed () 
-    {
-        cout << "stats: " << nNodes << "/" << nWays << "/" << nRelations << endl; 
-    }
-    
+    virtual void consumeNode    ( OSMNode &);
+    virtual void consumeWay     ( OSMWay  &);
+    virtual void consumeRelation( OSMRelation &);
+    virtual void onAllRelationsConsumed ();
 private:
     uint64_t nNodes, nWays, nRelations;
-
 };
 
 #endif

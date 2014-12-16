@@ -69,7 +69,8 @@ static int32_t degValueToInt(const char* line, const char* key)
     return isNegative? -val : val;
 }
 
-OsmXmlParser::OsmXmlParser(FILE * file): in_file(file), line_buffer(NULL), line_buffer_size(0), numLinesRead(0),
+OsmXmlParser::OsmXmlParser(FILE * file, OsmBaseConsumer *consumer): 
+    consumer(consumer), in_file(file), line_buffer(NULL), line_buffer_size(0), numLinesRead(0), 
     hasParsedNodes(false), hasParsedWays(false), hasParsedRelations(false) { }
 
 OsmXmlParser::~OsmXmlParser() { free (line_buffer); }
@@ -102,12 +103,11 @@ void OsmXmlParser::parse()
             exit(0);
         }
     }
-    afterParsingRelations();
 }
 
 void OsmXmlParser::parseNode()
 {
-    if (!hasParsedNodes) { hasParsedNodes = true; beforeParsingNodes();}
+//    if (!hasParsedNodes) { hasParsedNodes = true; consumer->beforeParsingNodes();}
     int32_t lat = degValueToInt(line, "lat"); 
     int32_t lon = degValueToInt(line, "lon");
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
@@ -124,12 +124,16 @@ void OsmXmlParser::parseNode()
         }
     }
     OSMNode node(lat, lon, id, tags);
-    completedNode(node);
+    consumer->processNode(node);
 }
 
 void OsmXmlParser::parseWay()
 {
-    if (!hasParsedWays) { hasParsedWays = true; afterParsingNodes(); beforeParsingWays();}
+//    if (!hasParsedWays) { 
+//        hasParsedWays = true; 
+//        consumer->afterParsingNodes(); 
+//        consumer->beforeParsingWays();
+//    }
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
     list<OSMKeyValuePair> tags;
     list<uint64_t> node_refs;
@@ -160,12 +164,17 @@ void OsmXmlParser::parseWay()
     }
     
     OSMWay way(id, node_refs, tags);
-    completedWay(way);
+    consumer->processWay(way);
 }
 
 void OsmXmlParser::parseRelation()
 {
-    if (!hasParsedRelations) { hasParsedRelations = true; afterParsingWays(); beforeParsingRelations();}
+/*    if (!hasParsedRelations) { 
+        hasParsedRelations = true; 
+        consumer->afterParsingWays(); 
+        consumer->beforeParsingRelations();
+    }
+    */
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
     list<OSMKeyValuePair> tags;
     list<OSMRelationMember> members;
@@ -202,7 +211,7 @@ void OsmXmlParser::parseRelation()
         } else assert(false && "Unknown tag in relation" );
     }
     OSMRelation rel(id, members, tags);
-    completedRelation(rel);
+    consumer->processRelation(rel);
 }
 
 void OsmXmlParser::parseChangeset()

@@ -338,19 +338,3 @@ void OsmParserPbf::parse()
     //if (!) { cerr << "Failed to parse blob header" << endl; exit(1); }
 }
 
-int main(int argc, char** argv)
-{
-    if (argc < 2)
-    {
-        cout << "usage: " << argv[0] << " inputfile.pbf" << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    FILE* f = fopen( argv[1], "rb");
-    OsmConsumerCounter counter;
-    OsmParserPbf parser(f, &counter);
-    parser.parse();
-    fclose(f);
-
-
-}
