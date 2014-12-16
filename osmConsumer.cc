@@ -1,13 +1,16 @@
 
 #include "osmConsumer.h"
 
+#include <iostream>
+
 //a macro that is similar to assert(), but is not deactivated by NDEBUG
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
 
 
 OsmBaseConsumer::OsmBaseConsumer(): 
         finalized(false), hasConsumedNodes(false), 
-        hasConsumedWays(false), hasConsumedRelations(false) {}
+        hasConsumedWays(false), hasConsumedRelations(false),
+        prevNodeId(0), prevWayId(0), prevRelationId(0) {}
 
 OsmBaseConsumer::~OsmBaseConsumer()
 {
@@ -17,21 +20,26 @@ OsmBaseConsumer::~OsmBaseConsumer()
 
 void OsmBaseConsumer::processNode( OSMNode &node) {
     MUST(!hasConsumedWays && !hasConsumedRelations, "order mismatch: node after way or relation");
+    MUST(node.id > prevNodeId, "node order inversion");
     this->consumeNode(node);
-    hasConsumedNodes = true;      
+    hasConsumedNodes = true;   
+    prevNodeId = node.id;   
 }
 
 void OsmBaseConsumer::processWay( OSMWay &way) {
     MUST(!hasConsumedRelations, "order mismatch: way after relation");
+    MUST(way.id > prevWayId, "way order inversion"); 
     if (!hasConsumedWays)
         this->onAllNodesConsumed();
     
     this->consumeWay(way);
     hasConsumedWays = true;
+    prevWayId = way.id;
 }
 
 void OsmBaseConsumer::processRelation( OSMRelation &relation)
 {
+    MUST(relation.id > prevRelationId, "relation order inversion"); 
     /* Normally, the first call to processWay() triggers the execution of
      * onFinalNodeConsumed(). But if no way was present in the input data,
      * that never happened. The next if block makes up for that case
@@ -47,6 +55,7 @@ void OsmBaseConsumer::processRelation( OSMRelation &relation)
     
     this->consumeRelation(relation);
     hasConsumedRelations = true;
+    prevRelationId = relation.id;
 }
 
 
@@ -74,6 +83,11 @@ void OsmBaseConsumer::finalize() {
     
     this->onAllRelationsConsumed();
     hasConsumedRelations = true;
+    
+    std::cout << "highest IDs: node:" << prevNodeId << ", way:" << prevWayId 
+              << ", relation:" << prevRelationId << std::endl;
+              
+    finalized = true;
 }
     
 

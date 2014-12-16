@@ -35,7 +35,7 @@ public:
 private:
     bool finalized;
     bool hasConsumedNodes, hasConsumedWays, hasConsumedRelations;
-
+    uint64_t prevNodeId, prevWayId, prevRelationId;
 };
 
 

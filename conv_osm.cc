@@ -18,8 +18,8 @@ int main(int argc, char** argv)
 
     FILE* f = fopen( argv[1], "rb");
     
-    OsmConsumerDumper counter;
-    OsmConsumerIdRemapper remapper( &counter);
+    OsmConsumerDumper dumper;
+    OsmConsumerIdRemapper remapper( &dumper);
     OsmParserPbf parser(f, &remapper);
     parser.parse();
     

@@ -4,8 +4,7 @@
 
 #include "osmConsumer.h"
 
-typedef pair<uint64_t, int64_t> RemapEntry;
-
+class Remap;
 
 class OsmConsumerIdRemapper : public OsmBaseConsumer
 {
@@ -14,9 +13,6 @@ public:
     OsmConsumerIdRemapper(OsmBaseConsumer *innerConsumer);
     virtual ~OsmConsumerIdRemapper();    
 protected:
-    RemapEntry getRemapEntry(uint64_t nodeId);
-    void appendRemapEntry(uint64_t nodeId, int64_t offset);
-
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
     virtual void consumeRelation( OSMRelation &);
@@ -26,10 +22,6 @@ protected:
 
 private:
     OsmBaseConsumer *innerConsumer;
-    RemapEntry *remap;
-    int numRemapEntries;
-    int maxNumRemapEntries;
-    uint64_t nextFreeId;
-    uint64_t nextNodeId; 
+    Remap *nodeRemap, *wayRemap, *relationRemap; 
 };
 #endif
