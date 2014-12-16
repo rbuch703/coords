@@ -1,6 +1,6 @@
 
 CONV_OSM_SRC = conv_osm.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc\
-               osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc 
+               osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc osmConsumerIdRemapper.cc
 #PB_TEST_SRC = osmParserPbf.cc osm_types.cc mem_map.cc
 #REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
 CONV_SRC = data_converter.cc osm_types.cc mem_map.cc

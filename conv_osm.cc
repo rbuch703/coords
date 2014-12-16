@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "osmConsumerCounter.h"
 #include "osmConsumerDumper.h"
+#include "osmConsumerIdRemapper.h"
 #include "osmParserPbf.h"
 #include "osmParserXml.h"
 
@@ -17,8 +18,9 @@ int main(int argc, char** argv)
 
     FILE* f = fopen( argv[1], "rb");
     
-    OsmConsumerCounter counter;
-    OsmParserPbf parser(f, &counter);
+    OsmConsumerDumper counter;
+    OsmConsumerIdRemapper remapper( &counter);
+    OsmParserPbf parser(f, &remapper);
     parser.parse();
     
     fclose(f);

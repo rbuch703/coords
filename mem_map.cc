@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+//#include <iostream>
+
 mmap_t init_mmap ( const char* file_name, bool readable, bool writeable)
 {
     assert(readable || writeable);  //no use otherwise
@@ -70,20 +72,20 @@ void ensure_mmap_size( mmap_t *map, uint64_t size)
     size_t ps = sysconf (_SC_PAGESIZE);
     
     //increase map file by 10% to reduce the number of times that a resize is necessary;
-    size_t new_file_size = ( ((size + ps)*11/10)/ps +1)*ps;   
+    size_t new_file_size = ( ( size * 11 / 10) / ps +1) * ps;
     //size_t new_file_size = (size+ps-1)/ps*ps;
     assert(new_file_size % ps == 0); //needs to be a multiple of page size for mmap
     if (new_file_size < size) { printf("error resizing memory map\n"); exit(0);}
     if (0 != ftruncate(map->fd, new_file_size)) { perror("[ERR]"); exit(0);}
    
-    //std::cout << "Resizing file to hold " << file_no_nodes << " nodes (" << (file_no_nodes / ps) << " pages)" << std::endl;
+    //std::cout << "Resizing map " << map->size << " -> " << new_file_size << std::endl;
     
     if (map->ptr)
         map->ptr = mremap(map->ptr, map->size, new_file_size, MREMAP_MAYMOVE);
     else
         map->ptr = mmap(NULL, new_file_size, PROT_WRITE, MAP_SHARED, map->fd, 0);
         
-    if (map == MAP_FAILED) { perror("[ERR]"); exit(0);}
+    if (map->ptr == MAP_FAILED) { perror("[ERR]"); exit(0);}
     map->size = new_file_size;
 }
 

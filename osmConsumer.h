@@ -15,8 +15,8 @@ public:
     void processRelation( OSMRelation &relation);
     void finalize();
 
-//only the protected members are to be overriden to specialize this class
-protected:
+//only these members are to be overridden to specialize this class
+public:
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
     virtual void consumeRelation( OSMRelation &);
