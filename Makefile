@@ -1,10 +1,10 @@
 
-CONV_OSM_SRC = conv_osm.cc mem_map.cc osm_types.cc osm_tags.cc osmParserXml.cc\
+CONV_OSM_SRC = conv_osm.cc mem_map.cc osmTypes.cc osm_tags.cc osmParserXml.cc\
                osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc osmConsumerIdRemapper.cc
 #PB_TEST_SRC = osmParserPbf.cc osm_types.cc mem_map.cc
 #REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
-CONV_SRC = data_converter.cc osm_types.cc mem_map.cc
-SIMP_SRC = simplifier.cc osm_types.cc mem_map.cc
+CONV_SRC = data_converter.cc osmTypes.cc mem_map.cc
+SIMP_SRC = simplifier.cc osmTypes.cc mem_map.cc
 
 PROTO_DEF = proto/fileformat.proto proto/osmformat.proto
 PROTO_SRC = $(patsubst %.proto,%.pb.cc,$(PROTO_DEF))
@@ -24,7 +24,8 @@ CCFLAGS = $(FLAGS) -std=c++11
 LD_FLAGS = #-flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
 .SECONDARY: $(PROTO_SRC)
-all: build make.dep build/conv_osm build/simplifier build/data_converter intermediate 
+all: build make.dep build/conv_osm  intermediate 
+#build/simplifier build/data_converter
 #	 @echo [ALL] $<
 
 build:

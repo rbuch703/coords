@@ -9,7 +9,7 @@
 #include <zlib.h>
 #include <assert.h>
 
-#include "osm_types.h"
+#include "osmTypes.h"
 #include "osmConsumerCounter.h"
 //#include "osmConsumerOrderEnsurer.h"
 //a macro that is similar to assert(), but is not deactivated by NDEBUG
@@ -214,7 +214,7 @@ void OsmParserPbf::parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Wa
         {
             nodeId += nodeIdRaw;
             MUST(nodeId > 0, "invalid node id");
-            osmWay.refs.push_back(nodeId);
+            osmWay.refs.push_back( (OsmGeoPosition){.id = (uint64_t)nodeId} );
         } 
 
         consumer->processWay(osmWay);

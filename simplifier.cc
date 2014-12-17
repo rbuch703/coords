@@ -9,7 +9,7 @@
 
 //#include <boost/foreach.hpp>
 
-#include "osm_types.h"
+#include "osmTypes.h"
 #include <polygonreconstructor.h>
 #include <helpers.h>
 #include <quadtree.h>
@@ -92,13 +92,13 @@ class Ways: public OSMEntities
 public:
     Ways(string indexFilename, string  dataFileName): OSMEntities( indexFilename, dataFileName) {}
 
-    OSMIntegratedWay get(uint64_t way_id)
+    OSMWay get(uint64_t way_id)
     {
         assert ( way_id <= num );
         uint64_t idx = ((uint64_t*)idx_map.ptr)[way_id];
         assert( idx > 0);
         const uint8_t* dest = ((uint8_t*)data_map.ptr) + idx;
-        return OSMIntegratedWay( dest, way_id);
+        return OSMWay( dest, way_id);
     }
 
 };
@@ -456,7 +456,7 @@ void reconstructCoastline(FILE * src)//, list<VertexChain> &poly_storage)
         int i = fgetc(src);
         if (i == EOF) break;
         ungetc(i, src);
-        OSMIntegratedWay way(src);
+        OSMWay way(src, -1);
         if (way["natural"] != "coastline")
             cout << way << endl;
         assert (way.hasKey("natural") && way["natural"] == "coastline");

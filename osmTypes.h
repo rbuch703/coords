@@ -54,53 +54,54 @@ struct OSMNode
 
 ostream& operator<<(ostream &out, const OSMNode &node);
 
+typedef union 
+{
+        uint64_t id;
+        struct {
+            uint32_t lat, lng;
+        } geo;
+} OsmGeoPosition;
+
 struct OSMWay
 {
     OSMWay( uint64_t way_id);
     OSMWay( uint64_t way_id, list<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags);
     OSMWay( const uint8_t* data_ptr, uint64_t way_id);
 
-    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
-    void serialize( FILE* data_file) const;
+    void serialize( FILE* data_file, mmap_t *index_map) const;
     bool hasKey(string key) const;
     const string &getValue(string key) const;
     const string &operator[](string key) const {return getValue(key);}
 
     uint64_t id;
-    list<uint64_t> refs;
+    list<OsmGeoPosition> refs;
     vector<OSMKeyValuePair> tags;
 };
 
 ostream& operator<<(ostream &out, const OSMWay &way);
 
-// a representation of an OSM way that includes the data of all of its nodes (as opposed to just references to them)
-struct OSMIntegratedWay
-{
-    //manually constructs the way
-    OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, vector<OSMKeyValuePair> way_tags);
-    //constructs the way based on a memory pointer (e.g. from a mmap) to serialized way data    
-    OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id);
-    //constructs the way from a file handle whose current position already points to the serialized data
-    OSMIntegratedWay( FILE* src, uint64_t way_id = -1);
-    /*constructs the way from files: the first file contains an index of where each way is stored in the second file
-      neither one has to point to the specific way that is sought */
-    OSMIntegratedWay( FILE* idx, FILE* data, uint64_t way_id);
-
-    void initFromFile(FILE* src);
-
-    void serialize( FILE* data_file) const;
-    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
-    bool hasKey(string key) const;
-    const string &getValue(string key) const;
-    const string &operator[](string key) const {return getValue(key);}
-//    PolygonSegment toPolygonSegment() const;
+class OsmLightweightWay {
 public:
+     OsmLightweightWay( FILE* src, uint64_t way_id = -1);
+    ~OsmLightweightWay ();
+
+     OsmLightweightWay( const OsmLightweightWay &other); //disable copy constructor
+     OsmLightweightWay &operator=(const OsmLightweightWay &other); // .. and assignment operator
+
+    
+    OsmGeoPosition *vertices;
+    uint16_t numVertices; //ways are guaranteed to have no more than 2000 nodes by the OSM specs
+
+    uint8_t *tagBytes;
+    uint32_t numTagBytes;
+    
     uint64_t id;
-    list<OSMVertex> vertices;
-    vector<OSMKeyValuePair> tags;
 };
 
-ostream& operator<<(ostream &out, const OSMIntegratedWay &way);
+ostream& operator<<(ostream &out, const OsmLightweightWay &way);
+
+
+
 struct OSMRelationMember
 {
     OSMRelationMember( ELEMENT member_type, uint64_t member_ref, string member_role):

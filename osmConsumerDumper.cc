@@ -16,7 +16,7 @@
 #include "mem_map.h"
 #include "osmParserXml.h"
 #include "osmConsumerDumper.h"
-#include "osm_types.h"
+#include "osmTypes.h"
 #include "osm_tags.h"
 //#include "symbolic_tags.h"
 
@@ -27,7 +27,7 @@ const char* nodes_index_filename= "intermediate/nodes.idx";
 const char* vertices_data_filename =    "vertices.data";    //put it onto the SSD for fast random access
 const char* ways_data_filename =  "intermediate/ways.data";
 const char* ways_index_filename=  "intermediate/ways.idx";
-const char* ways_int_data_filename="intermediate/ways_int.data"; // does not need an index, can use the same as 'ways'
+//const char* ways_int_data_filename="intermediate/ways_int.data"; // does not need an index, can use the same as 'ways'
 const char* relations_data_filename="intermediate/relations.data";
 const char* relations_index_filename="intermediate/relations.idx";
 string       outputBasePath = "intermediate/";
@@ -63,7 +63,7 @@ OsmConsumerDumper::OsmConsumerDumper():
     truncateFile(vertices_data_filename);
     truncateFile(ways_index_filename);
     truncateFile(ways_data_filename);
-    truncateFile(ways_int_data_filename);
+//    truncateFile(ways_int_data_filename);
     truncateFile(relations_index_filename);
     truncateFile(relations_data_filename);
 
@@ -136,16 +136,16 @@ void OsmConsumerDumper::onAllNodesConsumed () {
     
     //way_int_index = init_mmap("ways_int.idx");
 
-    way_int_data = fopen(ways_int_data_filename, "wb");
+/*    way_int_data = fopen(ways_int_data_filename, "wb");
     const char* way_int_magic = "OI10"; //OSM Integrated ways v. 1.0
     fwrite(way_int_magic, 4, 1, way_int_data);
+*/  
     
-    
-    building_data = fopen( (outputBasePath + "buildings.data").c_str(), "wb");
+/*    building_data = fopen( (outputBasePath + "buildings.data").c_str(), "wb");
     highway_data  = fopen( (outputBasePath + "highways.data").c_str(), "wb");
     landuse_data  = fopen( (outputBasePath + "landuse.data").c_str(), "wb");
     natural_data  = fopen( (outputBasePath + "natural.data").c_str(), "wb");
-
+*/
 };
 
 
@@ -157,8 +157,8 @@ void OsmConsumerDumper::onAllWaysConsumed () {
     padFile(way_data);
     fclose(way_data);
     
-    padFile(way_int_data);
-    fclose(way_int_data);
+//    padFile(way_int_data);
+//    fclose(way_int_data);
     
     cout << "== Done parsing Ways ==" << endl;
 
@@ -261,7 +261,7 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
     nWays++;
     filterTags(way.tags);
     // write the way itself to file
-    way.serializeWithIndexUpdate(way_data, &way_index);
+    way.serialize(way_data, &way_index);
     
     //convert the way to an integrated way, by replacing the node indices with the actual node lat/lon
     /*list<OSMVertex> vertices;
@@ -282,7 +282,7 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
     // thus, a single index is sufficient for both data files
     int_way.serialize(way_int_data, &way_index, &symbolic_tags);
     */
-    if (way.hasKey("natural"))
+/*    if (way.hasKey("natural"))
         way.serialize( natural_data);
 
     if (way.hasKey("landuse"))
@@ -293,7 +293,7 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
 
     if (way.hasKey("highway"))
         way.serialize( highway_data);
-
+*/
 
     
 }

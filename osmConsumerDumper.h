@@ -27,9 +27,9 @@ private:
     void filterTags(vector<OSMKeyValuePair> &tags) const;
 
 private:
-    mmap_t node_index, vertex_data, way_index/*, way_int_index*/, relation_index;
-    FILE *node_data, *way_data, *way_int_data, *relation_data;
-    FILE *building_data, *highway_data, *landuse_data, *natural_data;
+    mmap_t node_index, vertex_data, way_index, relation_index;
+    FILE *node_data, *way_data, *relation_data;
+    //FILE *building_data, *highway_data, *landuse_data, *natural_data;
     //map<OSMKeyValuePair, uint8_t> symbolic_tags;
     RadixTree<string> rename_key; 
     RadixTree<int> ignore_key, ignoreKeyPrefixes;    //ignore key-value pairs which are irrelevant for a viewer application

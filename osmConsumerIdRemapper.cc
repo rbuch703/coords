@@ -136,8 +136,8 @@ void OsmConsumerIdRemapper::consumeWay     ( OSMWay  &way)
 { 
     way.id = wayRemap->remapId(way.id);
     
-    for (uint64_t &ref : way.refs)
-        ref = this->nodeRemap->getRemappedId(ref);
+    for (OsmGeoPosition &pos : way.refs)
+        pos.id = this->nodeRemap->getRemappedId(pos.id);
 
     //cout << way << endl;
     innerConsumer->consumeWay(way);

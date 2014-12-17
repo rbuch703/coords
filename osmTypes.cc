@@ -10,10 +10,13 @@
 #include <stdlib.h> //for exit()
 #include <stdint.h>
 
-#include "osm_types.h"
+#include "osmTypes.h"
 //#include "symbolic_tags.h"
 
 #include <iostream>
+
+#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
+
 
 std::ostream& operator <<(std::ostream& os, const OSMVertex v)
 {
@@ -23,9 +26,7 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v)
 
 
 /** on-file layout for tags :
-    uint16_t num_symbolic_tags;
-    uint16_t num_verbose_tags;  //TODO: are these really necessary?
-    uint8_t symbolic_tags[num_symbolic_tags];
+    uint16_t num_verbose_tags;
     uint32_t verbose_tag_data_len; (total data size of all verbose tags, in bytes); optional, present only if num_verbose_tags > 0
     <2*num_verbose_tags> zero-terminated strings containing interleaved keys and values 
     (key_0, value_0, key_1, value_1, ...)
@@ -36,6 +37,15 @@ void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
     assert(tags.size() < (1<<16));
     uint16_t num_tags = tags.size();
     fwrite(&num_tags, sizeof(num_tags), 1, file);
+
+    uint32_t numTagBytes = 0;
+    for (const OSMKeyValuePair &tag : tags)
+    {
+        numTagBytes += strlen(tag.first.c_str()) + 1;
+        numTagBytes += strlen(tag.second.c_str()) + 1;
+    }
+    //storing this total size is redundant, but makes reading the tags back from file much faster 
+    fwrite(&numTagBytes, sizeof(numTagBytes), 1, file);
 
     for (const OSMKeyValuePair &tag : tags)
     {
@@ -60,12 +70,26 @@ vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
     
     uint16_t num_tags  = *((const uint16_t*)data_ptr);
     data_ptr+=2;
-    if (num_tags == 0) return tags;
+    
+    /* just skip over numTagBytes without actually reading it.
+     * We don't need this value for memory mapped input. It is stored only to 
+       speed up reading back tags from files using the FILE* API*/
+    //uint32_t numTagBytes = *((const uint32_t*)data_ptr);
+    data_ptr +=4; 
+    if (num_tags == 0) {return tags; }
     
     tags.reserve(num_tags);
     //const char* str = (const char*)data_ptr;
     while (num_tags--)
     {
+        /* NOTE: using the pointers into pata_ptr as string/char* would not be
+         *       safe beyond the scopof this method: the data pointer is not
+         *       guaranteed to stay valid. It may be deallocated, munmap'ed or
+         *       mremap'ed, invalidating the strings/char* along with it.
+         *       This loop is safe, because OSMKeyValuePair stores std::strings
+         *       and not the raw char*, and creating the strings from the char*
+         *       also creates a copy of the string data being pointed to.
+        */ 
         const char* key = (const char*)data_ptr;
         data_ptr += strlen( (const char*)data_ptr)+1;
         tags.push_back( OSMKeyValuePair( key, (const char*)data_ptr));
@@ -76,6 +100,7 @@ vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
     
 }
 
+/*
 static const char* freadstr(FILE *src)
 {
     static char* buf = (char*) malloc(1);
@@ -95,7 +120,7 @@ static const char* freadstr(FILE *src)
     } while (!feof(src));
     return buf;
 
-}
+}*/
 
 vector<OSMKeyValuePair> deserializeTags(FILE* src)
 {
@@ -105,11 +130,28 @@ vector<OSMKeyValuePair> deserializeTags(FILE* src)
     fread( &num_tags, sizeof(num_tags), src);
     tags.reserve(num_tags);
     
+    uint32_t numTagBytes;
+    fread( &numTagBytes, sizeof(numTagBytes), src);
+    char* tagBytes = new char[numTagBytes];
+    char* beyondTagBytes = tagBytes + numTagBytes;
+    
     while (num_tags--)
     {
-        string key = freadstr(src);
-        string value = freadstr(src);
-        tags.push_back( OSMKeyValuePair( key, value));
+        /* NOTE: using the pointers into pata_ptr as string/char* would not be
+         *       safe beyond the scopof this method: the data pointer is not
+         *       guaranteed to stay valid. It may be deallocated, munmap'ed or
+         *       mremap'ed, invalidating the strings/char* along with it.
+         *       This loop is safe, because OSMKeyValuePair stores std::strings
+         *       and not the raw char*, and creating the strings from the char*
+         *       also creates a copy of the string data being pointed to.
+        */ 
+        const char* key = (const char*)tagBytes;
+        tagBytes += strlen( (const char*)tagBytes)+1;
+        assert(tagBytes < beyondTagBytes);
+        
+        tags.push_back( OSMKeyValuePair( key, (const char*)tagBytes));
+        tagBytes += strlen( (const char*)tagBytes)+1;
+        assert(tagBytes < beyondTagBytes);
     }
     
     return tags;
@@ -237,15 +279,19 @@ ostream& operator<<(ostream &out, const OSMNode &node)
 }
 
 OSMWay::OSMWay( uint64_t way_id, list<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags):
-        id(way_id), refs(way_refs), tags(way_tags) {}
+        id(way_id), tags(way_tags)  
+{ 
+    for (uint64_t ref : way_refs)
+        refs.push_back( (OsmGeoPosition){.id = ref} );
+}
 
 OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
 {
-    uint32_t num_node_refs = *(uint32_t*)data_ptr;
-    data_ptr+=4;
+    uint16_t num_node_refs = *(uint16_t*)data_ptr;
+    data_ptr+= sizeof(uint16_t);
     while (num_node_refs--)
     {
-        refs.push_back( *(uint64_t*)data_ptr);
+        refs.push_back( (OsmGeoPosition){.id = *(uint64_t*)data_ptr} );
         data_ptr+=8;
     }
     tags = deserializeTags(data_ptr);
@@ -255,38 +301,27 @@ OSMWay::OSMWay(uint64_t way_id): id(way_id) {}
 
         
 
-void OSMWay::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
+void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
 {
     assert (id > 0);  
-    uint64_t offset = ftello(data_file);    //get offset at which the dumped way *starts*
+    //get offset at which the dumped way *starts*
+    uint64_t offset = index_map ? ftello(data_file) : 0;
     
-    uint32_t num_node_refs = refs.size();
+    MUST(refs.size() <= 2000, "#refs in way beyond what's allowed by spec");
+    uint16_t num_node_refs = refs.size();
     fwrite(&num_node_refs, sizeof(num_node_refs), 1, data_file);
     
-    for (list<uint64_t>::const_iterator it = refs.begin(); it != refs.end(); it++)
+    for (OsmGeoPosition ref : refs)
+        fwrite(&ref, sizeof(ref), 1, data_file);
+    
+    serializeTags(tags, data_file);
+
+    if (index_map)
     {
-        uint64_t ref = *it;
-        fwrite(&ref, sizeof(ref), 1, data_file);
+        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
+        uint64_t* ptr = (uint64_t*)index_map->ptr;
+        ptr[id] = offset;
     }
-    
-    serializeTags(tags, data_file);
-    ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-    uint64_t* ptr = (uint64_t*)index_map->ptr;
-    ptr[id] = offset;
-}
-
-
-void OSMWay::serialize( FILE* data_file) const
-{
-    assert (id > 0);  
-    
-    uint32_t num_node_refs = refs.size();
-    fwrite(&num_node_refs, sizeof(num_node_refs), 1, data_file);
-
-    for (uint64_t ref : refs)
-        fwrite(&ref, sizeof(ref), 1, data_file);
-    
-    serializeTags(tags, data_file);
 }
 
 
@@ -310,160 +345,52 @@ const string& OSMWay::getValue(string key) const
 ostream& operator<<(ostream &out, const OSMWay &way)
 {
     out << "Way " << way.id << " (";
-    for (list<uint64_t>::const_iterator it = way.refs.begin(); it!= way.refs.end(); it++)
-    {
-        out << *it;
-        if (++it != way.refs.end()) out << ", ";
-        it--;
-    }
+    for ( OsmGeoPosition pos : way.refs)
+        out << pos.id << ", ";
+
     out << ") " << way.tags;
     return out;
 }
 
-//===================================
-
-OSMIntegratedWay::OSMIntegratedWay( uint64_t way_id, list<OSMVertex> way_vertices, vector<OSMKeyValuePair> way_tags):
-        id(way_id), vertices(way_vertices), tags(way_tags) {}
-
-OSMIntegratedWay::OSMIntegratedWay( const uint8_t* &data_ptr, uint64_t way_id): id(way_id)
+//==================================
+OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): vertices(NULL), tagBytes(NULL), id(way_id)
 {
-    uint32_t num_vertices = *(uint32_t*)data_ptr;
-    data_ptr+=4;
-    while (num_vertices--)
-    {
-        int32_t lat = *(int32_t*)data_ptr;
-        data_ptr+=4;
-        int32_t lon = *(int32_t*)data_ptr;
-        data_ptr+=4;
-        vertices.push_back( OSMVertex(lat, lon));
-    }
-    tags = deserializeTags(data_ptr);
-}
-
-void OSMIntegratedWay::initFromFile(FILE* src)
-{
-    uint32_t num_vertices;// = vertices.size();
-    fread(&num_vertices, sizeof(num_vertices), src);
-    while (num_vertices--)
-    {
-        int32_t lat;
-        size_t num_read = fread(&lat, sizeof(lat), 1, src);
-        if (num_read != 1)
-        {
-            cout << "Invalid read operation" << endl;
-            exit(0);
-        }
+    MUST( 1 == fread(&this->numVertices, sizeof(uint16_t), 1, src), "read failure");
         
-        int32_t lon;
-        num_read = fread(&lon, sizeof(lon), 1, src);
-        if (num_read != 1)
-        {
-            cout << "Invalid read operation" << endl;
-            exit(0);
-        }
-
-        vertices.push_back( OSMVertex(lat, lon));
-    }
-    tags = deserializeTags(src);
-}
-
-OSMIntegratedWay::OSMIntegratedWay( FILE* src, uint64_t way_id): id(way_id)
-{
-    this->initFromFile(src);
-}
-
-OSMIntegratedWay::OSMIntegratedWay( FILE* idx, FILE* data, uint64_t way_id): id(way_id)
-{
-    fseek(idx, way_id*sizeof(uint64_t), SEEK_SET);
-    uint64_t pos;
-    int nRead = fread( &pos, sizeof(uint64_t), 1, idx);
-    /*there is only a magic byte at file position 0. Pos == 0 is the marker representing that no relation 
-      with that id exists */
-    if ((nRead != 1) || (pos == 0)) 
+    if (this->numVertices)
     {
-        id = -1;
-        return;
+        this->vertices = new OsmGeoPosition[this->numVertices];
+        MUST( 1 == fread(this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, src), "read failure");
     }
 
-    fseek(data, pos, SEEK_SET);
-    this->initFromFile(data);
-}
-
-void OSMIntegratedWay::serialize( FILE* data_file) const
-{
-    assert (id > 0);  
-
-    uint32_t num_vertices = vertices.size();
-    fwrite(&num_vertices, sizeof(num_vertices), 1, data_file);
+    fseek(src, 2, SEEK_CUR);    //skip uint16_t "numTags";    
+    MUST( 1 == fread(&this->numTagBytes, sizeof(uint32_t), 1, src), "read failure");
+    assert(this->numTagBytes <= 1<<17);
     
-    for (OSMVertex v : vertices)
+    if (this->numTagBytes)
     {
-        fwrite(&v, sizeof(v), 1, data_file);
-        fwrite(&v, sizeof(v), 1, data_file);
-
-    }
-    
-    serializeTags(tags, data_file);
-}
-
-void OSMIntegratedWay::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
-{
-    assert (id > 0);  
-
-    uint64_t offset = ftello(data_file);    //get offset at which the dumped way *starts*
-    
-    uint32_t num_vertices = vertices.size();
-    fwrite(&num_vertices, sizeof(num_vertices), 1, data_file);
-    
-    for (list<OSMVertex>::const_iterator it = vertices.begin(); it != vertices.end(); it++)
-    {
-        int32_t lat = it->x;
-        fwrite(&lat, sizeof(lat), 1, data_file);
-        int32_t lon = it->y;
-        fwrite(&lon, sizeof(lon), 1, data_file);
-    }
-    
-    serializeTags(tags, data_file);
-    
-    if (index_map)
-    {
-        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-        uint64_t* ptr = (uint64_t*)index_map->ptr;
-        assert (ptr[id] == 0 || ptr[id] == offset);
-        ptr[id] = offset;
+        this->tagBytes = new uint8_t[this->numTagBytes];
+        MUST( 1 == fread(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, src), "read failure");
     }
 }
 
-bool OSMIntegratedWay::hasKey(string key) const
+OsmLightweightWay::~OsmLightweightWay()
 {
-    for (const OSMKeyValuePair &kv : tags)
-        if (kv.first == key) return true;
-
-    return false;
+    delete [] vertices;
+    delete [] tagBytes;
 }
 
-const string& OSMIntegratedWay::getValue(string key) const
-{
-    static const string empty="";
-    for (const OSMKeyValuePair &kv : tags)
-        if (kv.first == key) return kv.second;
-
-    return empty;
-}
-
-ostream& operator<<(ostream &out, const OSMIntegratedWay &way)
+ostream& operator<<(ostream &out, const OsmLightweightWay &way)
 {
     out << "Way " << way.id << " (";
-    for (list<OSMVertex>::const_iterator it = way.vertices.begin(); it!= way.vertices.end(); it++)
-    {
-        OSMVertex v = *it;
-        out << v;
-        if (++it != way.vertices.end()) out << ", ";
-        it--;
-    }
-    out << ") " << way.tags;
+    for ( int i = 0; i < way.numVertices; i++)
+        out << way.vertices[i].id << ", ";
+
+    out << ") - " << way.numTagBytes << " tag bytes";
     return out;
+
 }
+
 
 //==================================
 OSMRelation::OSMRelation( uint64_t relation_id): id(relation_id) {}

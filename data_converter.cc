@@ -9,7 +9,7 @@
 #include <list>
 #include <set>
 
-#include "osm_types.h"
+#include "osmTypes.h"
 //#include "mem_map.h"
 #include <helpers.h>
 //#include "polygonreconstructor.h"
