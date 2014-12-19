@@ -20,6 +20,8 @@
 #include "osm_tags.h"
 //#include "symbolic_tags.h"
 
+#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
+
 using namespace std;
 
 const char* nodes_data_filename = "intermediate/nodes.data";
@@ -260,6 +262,24 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
 {
     nWays++;
     filterTags(way.tags);
+    
+    for (OsmGeoPosition &pos : way.refs)
+    {
+        /*The 'vertices' array is a union between a 2x32bit lat/lng pair, and a 64bit id
+          For the iterative replacement of vertex ids by lat/lng pairs, we need to know
+          whether the value read is a lat/lng pair or an id.
+          In an lat/lng pair the lat values range between -900.000.000 and 900.000.000 (+/- 90°),
+          which means their second-most-significant and most significant bits are always identical
+          (for negative values, both are '1', for positive values, both are '0').
+          So to signal the presence of an ID (as oppose to a lat/lng pair), we set the 
+          most-significant bit to '1', while the second-most-significant stays zero (making the id 
+          value different from any possible lat/lng pair).
+            
+         */
+        MUST( (pos.geo.lat & (0x80000000| 0x40000000)) == 0, "vertex id out of bounds"); 
+        pos.geo.lat |= 0x80000000; 
+    }
+
     // write the way itself to file
     way.serialize(way_data, &way_index);
     

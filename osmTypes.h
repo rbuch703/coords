@@ -82,18 +82,23 @@ ostream& operator<<(ostream &out, const OSMWay &way);
 
 class OsmLightweightWay {
 public:
-     OsmLightweightWay( FILE* src, uint64_t way_id = -1);
+    OsmLightweightWay( FILE* src, uint64_t way_id = -1);
+    OsmLightweightWay( uint8_t* data_ptr, uint64_t way_id);
     ~OsmLightweightWay ();
 
-     OsmLightweightWay( const OsmLightweightWay &other); //disable copy constructor
-     OsmLightweightWay &operator=(const OsmLightweightWay &other); // .. and assignment operator
+    OsmLightweightWay( const OsmLightweightWay &other); //disable copy constructor
+    OsmLightweightWay &operator=(const OsmLightweightWay &other); // .. and assignment operator
 
+    void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
+
+    bool     isDataMapped; //true when 'tagBytes' and 'vertices' point to areas inside a memory map
     
     OsmGeoPosition *vertices;
     uint16_t numVertices; //ways are guaranteed to have no more than 2000 nodes by the OSM specs
 
     uint8_t *tagBytes;
     uint32_t numTagBytes;
+    uint16_t numTags;
     
     uint64_t id;
 };

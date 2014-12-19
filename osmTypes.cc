@@ -15,7 +15,7 @@
 
 #include <iostream>
 
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
+#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
 
 std::ostream& operator <<(std::ostream& os, const OSMVertex v)
@@ -133,8 +133,10 @@ vector<OSMKeyValuePair> deserializeTags(FILE* src)
     uint32_t numTagBytes;
     fread( &numTagBytes, sizeof(numTagBytes), src);
     char* tagBytes = new char[numTagBytes];
+#ifndef NDEBUG 
     char* beyondTagBytes = tagBytes + numTagBytes;
-    
+#endif
+
     while (num_tags--)
     {
         /* NOTE: using the pointers into pata_ptr as string/char* would not be
@@ -353,7 +355,8 @@ ostream& operator<<(ostream &out, const OSMWay &way)
 }
 
 //==================================
-OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): vertices(NULL), tagBytes(NULL), id(way_id)
+OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): 
+        isDataMapped(false), vertices(NULL), tagBytes(NULL), id(way_id)
 {
     MUST( 1 == fread(&this->numVertices, sizeof(uint16_t), 1, src), "read failure");
         
@@ -362,8 +365,9 @@ OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): vertices(NULL
         this->vertices = new OsmGeoPosition[this->numVertices];
         MUST( 1 == fread(this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, src), "read failure");
     }
-
-    fseek(src, 2, SEEK_CUR);    //skip uint16_t "numTags";    
+    
+    //lightweight ways don't need the numTags themselves, but they are required to re-serialize the way 
+    MUST( 1 == fread(&this->numTags,    sizeof(uint16_t), 1, src), "read failure");
     MUST( 1 == fread(&this->numTagBytes, sizeof(uint32_t), 1, src), "read failure");
     assert(this->numTagBytes <= 1<<17);
     
@@ -374,10 +378,46 @@ OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): vertices(NULL
     }
 }
 
+OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr, uint64_t way_id): 
+    isDataMapped(true), id(way_id)
+{
+    this->numVertices = *( (uint16_t*)(dataPtr));
+    this->vertices = (OsmGeoPosition*)(dataPtr + 2);
+    dataPtr += (2 + sizeof(OsmGeoPosition) * this->numVertices);
+
+    this->numTags = *((uint16_t*)dataPtr);
+    this->numTagBytes  = *((uint32_t*) (dataPtr + 2));
+    this->tagBytes = (dataPtr + 6); 
+}
+
+
 OsmLightweightWay::~OsmLightweightWay()
 {
-    delete [] vertices;
-    delete [] tagBytes;
+    if (!isDataMapped)
+    {
+        delete [] vertices;
+        delete [] tagBytes;
+    }
+}
+
+void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
+{
+    assert (id > 0);  
+    //get offset at which the dumped way *starts*
+    //uint64_t offset = index_map ? ftello(dest) : 0;
+    
+    MUST(this->numVertices <= 2000, "#refs in way beyond what's allowed by spec");
+    MUST(1 == fwrite(&this->numVertices, sizeof(this->numVertices), 1, dest), "write error");
+
+    if(this->numVertices > 0)
+        MUST(1 == fwrite( this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, dest), "write error");
+
+    assert(this->numTagBytes <= 1<<17);
+    MUST( 1 == fwrite(&this->numTags,     sizeof(uint16_t), 1, dest), "write error");
+    MUST( 1 == fwrite(&this->numTagBytes, sizeof(uint32_t), 1, dest), "write error");
+    
+    if (this->numTagBytes > 0)
+        MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
 }
 
 ostream& operator<<(ostream &out, const OsmLightweightWay &way)

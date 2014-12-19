@@ -1,30 +1,28 @@
 
 CONV_OSM_SRC = conv_osm.cc mem_map.cc osmTypes.cc osm_tags.cc osmParserXml.cc\
                osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc osmConsumerIdRemapper.cc
-#PB_TEST_SRC = osmParserPbf.cc osm_types.cc mem_map.cc
-#REMAP_SRC = remapper.cc mem_map.cc osm_types.cc osm_tags.cc osmxmlparser.cc idRemappingParser.cc
-CONV_SRC = data_converter.cc osmTypes.cc mem_map.cc
-SIMP_SRC = simplifier.cc osmTypes.cc mem_map.cc
+WAYINT_SRC = wayIntegrator.cc mem_map.cc osmTypes.cc
+#CONV_SRC = data_converter.cc osmTypes.cc mem_map.cc
+#SIMP_SRC = simplifier.cc osmTypes.cc mem_map.cc
 
 PROTO_DEF = proto/fileformat.proto proto/osmformat.proto
 PROTO_SRC = $(patsubst %.proto,%.pb.cc,$(PROTO_DEF))
 PROTO_OBJ = $(patsubst %.cc,%.o,$(PROTO_SRC))
 
 CONV_OSM_OBJ  = $(patsubst %.cc,build/%.o,$(CONV_OSM_SRC)) $(PROTO_OBJ)
-#PB_TEST_OBJ = $(patsubst %.cc,build/%.o,$(PB_TEST_SRC)) $(PROTO_OBJ)
-#REMAP_OBJ  = $(REMAP_SRC:.cc=.o)
-CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
-SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
+WAYINT_OBJ    = $(patsubst %.cc,build/%.o,$(WAYINT_SRC))
+#CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
+#SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
 
-FLAGS = -g -Wall -Wextra #-DNDEBUG -O2 -flto
+FLAGS = -g -Wall -Wextra -DNDEBUG -O2 -flto
 #FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = #-flto -O2 #-fprofile-arcs#--as-needed
+LD_FLAGS = -flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
 .SECONDARY: $(PROTO_SRC)
-all: build make.dep build/conv_osm  intermediate 
+all: build make.dep build/conv_osm  intermediate build/wayInt 
 #build/simplifier build/data_converter
 #	 @echo [ALL] $<
 
@@ -40,29 +38,13 @@ intermediate:
 	@echo [MKDIR ] $@
 	@mkdir $@
 
-remap: $(REMAP_OBJ)
+build/wayInt: $(WAYINT_OBJ)
 	@echo [LD ] $@
 	@g++ $^  $(LD_FLAGS) -o $@
 
 build/conv_osm: $(CONV_OSM_OBJ)
 	@echo [LD ] $@
 	@g++ $^ $(LD_FLAGS) -lprotobuf -lz -o $@
-
-build/data_converter: $(CONV_OBJ)
-	@echo [LD ] $@
-	@g++ $(CCFLAGS) $(LD_FLAGS) $^ GeoLib/build/geolib.a -lgmp -lgmpxx -o $@
-
-build/simplifier: $(SIMP_OBJ)
-	@echo [LD ] $@
-	@g++ $^ $(CCFLAGS) $(LD_FLAGS) GeoLib/build/geolib.a -lgmp -lgmpxx -o $@
-
-build/data_converter.o: data_converter.cc
-	@echo [C++] $<
-	@g++ $(CCFLAGS) -IGeoLib $< -c -o $@
-
-build/simplifier.o: simplifier.cc
-	@echo [C++] $<
-	@g++ $(CCFLAGS) -IGeoLib $< -c -o $@
 
 
 build/%.o: %.cc 
