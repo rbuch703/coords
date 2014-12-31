@@ -210,8 +210,8 @@ OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
     if ((nRead != 1) || (pos == 0))
     {
         id = -1;
-        lat = 0;
-        lon = 0;
+        lat = INVALID_LAT_LNG;
+        lon = INVALID_LAT_LNG;
         return;
     }
 
@@ -284,7 +284,7 @@ OSMWay::OSMWay( uint64_t way_id, list<uint64_t> way_refs, vector<OSMKeyValuePair
         id(way_id), tags(way_tags)  
 { 
     for (uint64_t ref : way_refs)
-        refs.push_back( (OsmGeoPosition){.id = ref} );
+        refs.push_back( (OsmGeoPosition){.id = ref, .lat=INVALID_LAT_LNG, .lng = INVALID_LAT_LNG} );
 }
 
 OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
@@ -293,8 +293,10 @@ OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
     data_ptr+= sizeof(uint16_t);
     while (num_node_refs--)
     {
-        refs.push_back( (OsmGeoPosition){.id = *(uint64_t*)data_ptr} );
-        data_ptr+=8;
+        refs.push_back( (OsmGeoPosition){ .id = *(uint64_t*)data_ptr, 
+                                          .lat = ((int32_t*)data_ptr)[2],
+                                          .lng = ((int32_t*)data_ptr)[3]} );
+        data_ptr+= (sizeof(uint64_t) + 2* sizeof(int32_t));
     }
     tags = deserializeTags(data_ptr);
 }
@@ -312,9 +314,11 @@ void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
     MUST(refs.size() <= 2000, "#refs in way beyond what's allowed by spec");
     uint16_t num_node_refs = refs.size();
     fwrite(&num_node_refs, sizeof(num_node_refs), 1, data_file);
+
+    assert(sizeof(OsmGeoPosition) == sizeof(uint64_t) + 2* sizeof(uint32_t));
     
-    for (OsmGeoPosition ref : refs)
-        fwrite(&ref, sizeof(ref), 1, data_file);
+    for (OsmGeoPosition pos : refs)
+        fwrite(&pos, sizeof(pos), 1, data_file);
     
     serializeTags(tags, data_file);
 

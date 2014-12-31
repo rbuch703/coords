@@ -214,7 +214,9 @@ void OsmParserPbf::parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Wa
         {
             nodeId += nodeIdRaw;
             MUST(nodeId > 0, "invalid node id");
-            osmWay.refs.push_back( (OsmGeoPosition){.id = (uint64_t)nodeId} );
+            osmWay.refs.push_back( (OsmGeoPosition){.id = (uint64_t)nodeId,
+                                                    .lat= INVALID_LAT_LNG,
+                                                    .lng= INVALID_LAT_LNG} );
         } 
 
         consumer->processWay(osmWay);

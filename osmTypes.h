@@ -54,12 +54,18 @@ struct OSMNode
 
 ostream& operator<<(ostream &out, const OSMNode &node);
 
-typedef union 
+/** 0x7FFFFFFF is the maximum positive value in signed ints, i.e. ~ 2.1 billion
+ *  In OSMs int32_t lat/lng storage, this corresponds to ~ 210°, which is outside
+ *  the valid range for latitude and longitude, and this can be used to mark
+ *  invalid entries.
+ *  note: 0xFFFFFFFF in two's complement is -1, and thus a valid lat/lng value.
+ **/ 
+const int32_t INVALID_LAT_LNG = 0x7FFFFFFF;
+
+typedef struct 
 {
-        uint64_t id;
-        struct {
-            uint32_t lat, lng;
-        } geo;
+    uint64_t id;
+    int32_t lat, lng;
 } OsmGeoPosition;
 
 struct OSMWay
