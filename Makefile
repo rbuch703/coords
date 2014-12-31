@@ -1,7 +1,7 @@
 
 CONV_OSM_SRC = conv_osm.cc mem_map.cc osmTypes.cc osm_tags.cc osmParserXml.cc\
                osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc osmConsumerIdRemapper.cc
-WAYINT_SRC = wayIntegrator.cc mem_map.cc osmTypes.cc
+WAYINT_SRC = wayIntegrator.cc reverseIndex.cc mem_map.cc osmTypes.cc
 #CONV_SRC = data_converter.cc osmTypes.cc mem_map.cc
 #SIMP_SRC = simplifier.cc osmTypes.cc mem_map.cc
 
@@ -14,12 +14,12 @@ WAYINT_OBJ    = $(patsubst %.cc,build/%.o,$(WAYINT_SRC))
 #CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
 #SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
 
-FLAGS = -g -Wall -Wextra -DNDEBUG -O2 -flto
+FLAGS = -g -Wall -Wextra -DNDEBUG #-O2 -flto
 #FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = -flto -O2 #-fprofile-arcs#--as-needed
+LD_FLAGS = #-flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
 .SECONDARY: $(PROTO_SRC)
 all: build make.dep build/conv_osm  intermediate build/wayInt 
@@ -69,7 +69,7 @@ clean:
 	@rm -rf build/*
 	@rm -rf proto/*.o proto/*.pb.h proto/*.pb.cc
 
-make.dep: $(CONV_OSM_SRC) $(CONV_SRC) $(SIMP_SRC)
+make.dep: $(CONV_OSM_SRC) $(WAYINT_SRC) 
 	@echo [DEP]
 	@g++ -MM -MG $^ | sed "s/\([[:graph:]]*\)\.o/build\/\\1.o/g" > make.dep
 

@@ -6,6 +6,7 @@
 
 #include "mem_map.h"
 #include "osmTypes.h"
+#include "reverseIndex.h"
 
 const uint64_t MAX_MMAP_SIZE = 5000ll * 1000 * 1000; //500 MB 
 
@@ -16,6 +17,7 @@ using namespace std;
 
 int main()
 {
+    ReverseIndex reverseNodeIndex("nodeReverse.idx", "nodeReverse.aux");
     mmap_t mapVertices = init_mmap("vertices.data", true, false);
     mmap_t mapWayIndex = init_mmap("intermediate/ways.idx", true, false);
     mmap_t mapWayData  = init_mmap("intermediate/ways.data", true, true);
@@ -78,6 +80,7 @@ int main()
                 
                 if (nodeId >= i*nVerticesPerRun && nodeId < (i+1)*nVerticesPerRun)
                 {
+                    reverseNodeIndex.addReferenceFromWay(nodeId, way.id);
                     way.vertices[j].lat = vertexPos[2*nodeId];
                     way.vertices[j].lng = vertexPos[2*nodeId+1];
                 }

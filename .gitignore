@@ -44,6 +44,7 @@ intermediate
 
 *.data
 *.idx
+*.aux
 *.dump
 *.csv
 *.pdf
