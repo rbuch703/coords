@@ -230,7 +230,7 @@ void OsmParserPbf::parseRelations(const google::protobuf::RepeatedPtrField<OSMPB
 {
     for (const OSMPBF::Relation &rel : rels)
     {
-        OSMRelation osmRel(rel.id());
+        OsmRelation osmRel(rel.id());
         MUST( rel.keys().size() == rel.vals().size(), "extraneous key or value");
         MUST( rel.roles_sid().size() == rel.memids().size(), "incomplete (type,role,ref) triple");
         MUST( rel.roles_sid().size() == rel.types().size(), "incomplete (type,role,ref) triple");
@@ -251,7 +251,7 @@ void OsmParserPbf::parseRelations(const google::protobuf::RepeatedPtrField<OSMPB
                            (iType == OSMPBF::Relation::WAY)  ? WAY :
                            (iType == OSMPBF::Relation::RELATION) ? RELATION: OTHER;
             MUST( type == NODE || type == WAY || type == RELATION, "invalid type");
-            osmRel.members.push_back( OSMRelationMember(type, ref, role));
+            osmRel.members.push_back( OsmRelationMember(type, ref, role));
         }
         
         consumer->processRelation(osmRel);

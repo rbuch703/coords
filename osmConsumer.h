@@ -12,14 +12,14 @@ public:
     virtual ~OsmBaseConsumer();
     void processNode( OSMNode &node);
     void processWay( OSMWay &way);
-    void processRelation( OSMRelation &relation);
+    void processRelation( OsmRelation &relation);
     void finalize();
 
 //only these members are to be overridden to specialize this class
 public:
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
-    virtual void consumeRelation( OSMRelation &);
+    virtual void consumeRelation( OsmRelation &);
 
         /* The onAll*Consumed() methods are guaranteed 
            - to be called exactly once during parsing,

@@ -10,7 +10,7 @@ public:
 
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
-    virtual void consumeRelation( OSMRelation &);
+    virtual void consumeRelation( OsmRelation &);
     virtual void onAllRelationsConsumed ();
 private:
     uint64_t nNodes, nWays, nRelations;

@@ -15,7 +15,7 @@ public:
 protected:
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
-    virtual void consumeRelation( OSMRelation &);
+    virtual void consumeRelation( OsmRelation &);
     virtual void onAllNodesConsumed();
     virtual void onAllWaysConsumed();
     virtual void onAllRelationsConsumed();

@@ -437,12 +437,12 @@ ostream& operator<<(ostream &out, const OsmLightweightWay &way)
 
 
 //==================================
-OSMRelation::OSMRelation( uint64_t relation_id): id(relation_id) {}
+OsmRelation::OsmRelation( uint64_t relation_id): id(relation_id) {}
 
-OSMRelation::OSMRelation( uint64_t relation_id, list<OSMRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags):
+OsmRelation::OsmRelation( uint64_t relation_id, list<OsmRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags):
     id(relation_id), members(relation_members), tags(relation_tags) {}
 
-OSMRelation::OSMRelation( const uint8_t* data_ptr, uint64_t relation_id): id(relation_id)
+OsmRelation::OsmRelation( const uint8_t* data_ptr, uint64_t relation_id): id(relation_id)
 {
     uint32_t num_members = *(uint32_t*)data_ptr;
     data_ptr+=4;
@@ -458,14 +458,14 @@ OSMRelation::OSMRelation( const uint8_t* data_ptr, uint64_t relation_id): id(rel
         data_ptr+=sizeof(uint64_t);
         const char* role = (const char*)data_ptr;
         data_ptr+=strlen(role)+1;  //including zero termination
-        members.push_back( OSMRelationMember(type, ref, role));
+        members.push_back( OsmRelationMember(type, ref, role));
     }
    
     tags = deserializeTags(data_ptr);
 }
 
 
-void OSMRelation::initFromFile(FILE* src)
+void OsmRelation::initFromFile(FILE* src)
 {
     uint32_t num_members;
     if (1 != fread(&num_members, sizeof(num_members), 1, src)) return;
@@ -483,20 +483,20 @@ void OSMRelation::initFromFile(FILE* src)
         while ( (i = fgetc(src)) != EOF  && i != '\0')
             s+=i;
         //data_ptr+=strlen(role)+1;  //including zero termination
-        members.push_back( OSMRelationMember(type, ref, s));
+        members.push_back( OsmRelationMember(type, ref, s));
     }
    
     tags = deserializeTags(src);
 
 }
 
-OSMRelation::OSMRelation( FILE* src, uint64_t rel_id): id(rel_id)
+OsmRelation::OsmRelation( FILE* src, uint64_t rel_id): id(rel_id)
 {
     this->initFromFile(src);
 }
 
 
-OSMRelation::OSMRelation( FILE* idx, FILE* data, uint64_t relation_id): id(relation_id)
+OsmRelation::OsmRelation( FILE* idx, FILE* data, uint64_t relation_id): id(relation_id)
 {
     fseek(idx, relation_id*sizeof(uint64_t), SEEK_SET);
     uint64_t pos;
@@ -514,7 +514,7 @@ OSMRelation::OSMRelation( FILE* idx, FILE* data, uint64_t relation_id): id(relat
 }
 
 
-void OSMRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
+void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
 {
     assert (id > 0);  
 
@@ -525,10 +525,10 @@ void OSMRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
     fwrite(&num_members, sizeof(num_members), 1, data_file);
     
     /*uint32_t members_data_size = 0;
-    for (list<OSMRelationMember>::const_iterator it = members.begin(); it != members.end(); it++)
+    for (list<OsmRelationMember>::const_iterator it = members.begin(); it != members.end(); it++)
         members_data_size += it->getDataSize();
     */
-    for (list<OSMRelationMember>::const_iterator it = members.begin(); it != members.end(); it++)
+    for (list<OsmRelationMember>::const_iterator it = members.begin(); it != members.end(); it++)
     {
         ELEMENT type = it->type;
         fwrite(&type, sizeof(type), 1, data_file);
@@ -541,7 +541,7 @@ void OSMRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
     }
         
     
-//    list<OSMRelationMember> members;
+//    list<OsmRelationMember> members;
 
     serializeTags(tags, data_file);
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
@@ -550,7 +550,7 @@ void OSMRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
     
 }
 
-bool OSMRelation::hasKey(string key) const
+bool OsmRelation::hasKey(string key) const
 {
     for (const OSMKeyValuePair &kv : tags)
         if (kv.first == key) return true;
@@ -558,7 +558,7 @@ bool OSMRelation::hasKey(string key) const
     return false;
 }
 
-const string& OSMRelation::getValue(string key) const
+const string& OsmRelation::getValue(string key) const
 {
     static const string empty="";
     for (const OSMKeyValuePair &kv : tags)
@@ -567,20 +567,20 @@ const string& OSMRelation::getValue(string key) const
     return empty;
 }
 
-ostream& operator<<(ostream &out, const OSMRelation &relation)
+ostream& operator<<(ostream &out, const OsmRelation &relation)
 {
     static const char* ELEMENT_NAMES[] = {"node", "way", "relation", "changeset", "other"};
     out << "Relation " << relation.id << " ";
-    for (list<OSMRelationMember>::const_iterator it = relation.members.begin(); it!= relation.members.end(); it++)
+    for (const OsmRelationMember &mbr : relation.members)
     {
-        out << " (" << it->role << " " <<ELEMENT_NAMES[it->type] << " " << it->ref << ")" ;
+        out << " (" << mbr.role << " " <<ELEMENT_NAMES[mbr.type] << " " << mbr.ref << ")" ;
     }
     
     out << " "<< relation.tags;
     return out;
 }
 
-uint32_t OSMRelationMember::getDataSize() const 
+uint32_t OsmRelationMember::getDataSize() const 
 { 
     return sizeof(ELEMENT) + sizeof(uint64_t) + strlen(role.c_str()) + 1; //1 byte for NULL-termination
 } 

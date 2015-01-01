@@ -177,7 +177,7 @@ void OsmXmlParser::parseRelation()
     */
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
     vector<OSMKeyValuePair> tags;
-    list<OSMRelationMember> members;
+    list<OsmRelationMember> members;
     
     if (strstr(line, "/>")) //a relation needs at least one member 
     {
@@ -201,7 +201,7 @@ void OsmXmlParser::parseRelation()
             uint64_t ref = strtoul( getValue(line, "ref"), NULL, 10);
             string role = getValue(line, "role");
             
-            members.push_back (OSMRelationMember(type, ref, role));
+            members.push_back (OsmRelationMember(type, ref, role));
         }
         else if (strncmp(line, "<tag", 4) == 0)
         {
@@ -210,7 +210,7 @@ void OsmXmlParser::parseRelation()
             tags.push_back( OSMKeyValuePair(key, val));
         } else assert(false && "Unknown tag in relation" );
     }
-    OSMRelation rel(id, members, tags);
+    OsmRelation rel(id, members, tags);
     consumer->processRelation(rel);
 }
 

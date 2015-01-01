@@ -37,7 +37,7 @@ void OsmBaseConsumer::processWay( OSMWay &way) {
     prevWayId = way.id;
 }
 
-void OsmBaseConsumer::processRelation( OSMRelation &relation)
+void OsmBaseConsumer::processRelation( OsmRelation &relation)
 {
     MUST(relation.id > prevRelationId, "relation order inversion"); 
     /* Normally, the first call to processWay() triggers the execution of
@@ -62,7 +62,7 @@ void OsmBaseConsumer::processRelation( OSMRelation &relation)
 //stubs, to be overridden by a derived class
 void OsmBaseConsumer::consumeNode    ( OSMNode &) {};
 void OsmBaseConsumer::consumeWay     ( OSMWay  &) {};
-void OsmBaseConsumer::consumeRelation( OSMRelation &) {};
+void OsmBaseConsumer::consumeRelation( OsmRelation &) {};
 void OsmBaseConsumer::onAllNodesConsumed () {};  
 void OsmBaseConsumer::onAllWaysConsumed () {};   
 void OsmBaseConsumer::onAllRelationsConsumed () {}; 

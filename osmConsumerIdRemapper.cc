@@ -144,7 +144,7 @@ void OsmConsumerIdRemapper::consumeWay     ( OSMWay  &way)
 
 }
 
-void OsmConsumerIdRemapper::consumeRelation( OSMRelation &relation) 
+void OsmConsumerIdRemapper::consumeRelation( OsmRelation &relation) 
 { 
     /* WARNING: we cannot reliably remap relation IDs in a single pass:
      *          The current remapping process requires all relation IDs to be remapped
@@ -157,7 +157,7 @@ void OsmConsumerIdRemapper::consumeRelation( OSMRelation &relation)
      *          the storage requirements.
      */
 
-    for (OSMRelationMember &mbr : relation.members)
+    for (OsmRelationMember &mbr : relation.members)
         switch (mbr.type)
         {
             case NODE: mbr.ref = this->nodeRemap->getRemappedId(mbr.ref); break;

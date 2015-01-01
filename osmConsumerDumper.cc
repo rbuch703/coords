@@ -301,7 +301,7 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
     
 }
 
-void OsmConsumerDumper::consumeRelation( OSMRelation &relation) 
+void OsmConsumerDumper::consumeRelation( OsmRelation &relation) 
 {
     nRelations++;
     filterTags(relation.tags);

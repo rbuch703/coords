@@ -21,7 +21,7 @@ protected:
 
     virtual void consumeNode( OSMNode &node);
     virtual void consumeWay ( OSMWay  &way);
-    virtual void consumeRelation( OSMRelation &relation); 
+    virtual void consumeRelation( OsmRelation &relation); 
 private:
     bool processTag(OSMKeyValuePair &tag) const;
     void filterTags(vector<OSMKeyValuePair> &tags) const;
