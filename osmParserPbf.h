@@ -14,12 +14,12 @@ using GoogleList = google::protobuf::RepeatedPtrField<T>;
 
 class StringTable {
 public:
-    StringTable(const GoogleList<string>& src);        
+    StringTable(const GoogleList<std::string>& src);        
     StringTable( const StringTable &other); //not defined to prevent copying
     StringTable& operator=(const StringTable &other); //not defined to prevent copying
-        const string& operator[](uint32_t idx) const;
+        const std::string& operator[](uint32_t idx) const;
 private:
-    vector<string> table;
+    std::vector<std::string> table;
 };
 
 
@@ -34,7 +34,7 @@ public:
 private:
 
     void   unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unpackBufferOut, uint32_t &unpackedSizeOut);
-    string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut);
+    std::string prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut);
     void   parseDenseNodes( const OSMPBF::DenseNodes &nodes, const StringTable &stringTable, int32_t granularity, int64_t lat_offset, int64_t lon_offset);
     void   parseWays(const GoogleList<OSMPBF::Way> &ways, const StringTable &stringTable);
     void   parseRelations(const GoogleList<OSMPBF::Relation> &rels, const StringTable &stringTable);

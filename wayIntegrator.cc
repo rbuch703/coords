@@ -5,7 +5,7 @@
 #include <sys/mman.h>
 
 #include "mem_map.h"
-#include "osmTypes.h"
+#include "osmMappedTypes.h"
 #include "reverseIndex.h"
 
 const uint64_t MAX_MMAP_SIZE = 5000ll * 1000 * 1000; //500 MB 
@@ -48,7 +48,7 @@ int main()
     ReverseIndex reverseRelationIndex(  "relationReverse.idx",  "relationReverse.aux");
     mmap_t mapVertices = init_mmap("vertices.data", true, false);
 
-    OsmLightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
+    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
     RelationStore relationStore("intermediate/relations.idx", "intermediate/relations.data");
 
 

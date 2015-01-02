@@ -15,19 +15,22 @@
 
 #include <iostream>
 
+
+using namespace std;
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
 
+/*
 std::ostream& operator <<(std::ostream& os, const OSMVertex v)
 {
     os << "( " << v.x << ", " << v.y << ")";
     return os;
-}
+}*/
 
 
 /** on-file layout for tags :
     uint16_t num_verbose_tags;
-    uint32_t verbose_tag_data_len; (total data size of all verbose tags, in bytes); optional, present only if num_verbose_tags > 0
+    uint32_t verbose_tag_data_len; (total data size of all verbose tags, in bytes); optional, present only if   num_verbose_tags > 0
     <2*num_verbose_tags> zero-terminated strings containing interleaved keys and values 
     (key_0, value_0, key_1, value_1, ...)
 
@@ -280,7 +283,7 @@ ostream& operator<<(ostream &out, const OSMNode &node)
     return out;
 }
 
-OSMWay::OSMWay( uint64_t way_id, list<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags):
+OSMWay::OSMWay( uint64_t way_id, vector<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags):
         id(way_id), tags(way_tags)  
 { 
     for (uint64_t ref : way_refs)
@@ -358,88 +361,12 @@ ostream& operator<<(ostream &out, const OSMWay &way)
     return out;
 }
 
-//==================================
-OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): 
-        isDataMapped(false), vertices(NULL), tagBytes(NULL), id(way_id)
-{
-    MUST( 1 == fread(&this->numVertices, sizeof(uint16_t), 1, src), "read failure");
-        
-    if (this->numVertices)
-    {
-        this->vertices = new OsmGeoPosition[this->numVertices];
-        MUST( 1 == fread(this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, src), "read failure");
-    }
-    
-    //lightweight ways don't need the numTags themselves, but they are required to re-serialize the way 
-    MUST( 1 == fread(&this->numTags,    sizeof(uint16_t), 1, src), "read failure");
-    MUST( 1 == fread(&this->numTagBytes, sizeof(uint32_t), 1, src), "read failure");
-    assert(this->numTagBytes <= 1<<17);
-    
-    if (this->numTagBytes)
-    {
-        this->tagBytes = new uint8_t[this->numTagBytes];
-        MUST( 1 == fread(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, src), "read failure");
-    }
-}
-
-OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr, uint64_t way_id): 
-    isDataMapped(true), id(way_id)
-{
-    this->numVertices = *( (uint16_t*)(dataPtr));
-    this->vertices = (OsmGeoPosition*)(dataPtr + 2);
-    dataPtr += (2 + sizeof(OsmGeoPosition) * this->numVertices);
-
-    this->numTags = *((uint16_t*)dataPtr);
-    this->numTagBytes  = *((uint32_t*) (dataPtr + 2));
-    this->tagBytes = (dataPtr + 6); 
-}
-
-
-OsmLightweightWay::~OsmLightweightWay()
-{
-    if (!isDataMapped)
-    {
-        delete [] vertices;
-        delete [] tagBytes;
-    }
-}
-
-void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
-{
-    assert (id > 0);  
-    //get offset at which the dumped way *starts*
-    //uint64_t offset = index_map ? ftello(dest) : 0;
-    
-    MUST(this->numVertices <= 2000, "#refs in way beyond what's allowed by spec");
-    MUST(1 == fwrite(&this->numVertices, sizeof(this->numVertices), 1, dest), "write error");
-
-    if(this->numVertices > 0)
-        MUST(1 == fwrite( this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, dest), "write error");
-
-    assert(this->numTagBytes <= 1<<17);
-    MUST( 1 == fwrite(&this->numTags,     sizeof(uint16_t), 1, dest), "write error");
-    MUST( 1 == fwrite(&this->numTagBytes, sizeof(uint32_t), 1, dest), "write error");
-    
-    if (this->numTagBytes > 0)
-        MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
-}
-
-ostream& operator<<(ostream &out, const OsmLightweightWay &way)
-{
-    out << "Way " << way.id << " (";
-    for ( int i = 0; i < way.numVertices; i++)
-        out << way.vertices[i].id << ", ";
-
-    out << ") - " << way.numTagBytes << " tag bytes";
-    return out;
-
-}
 
 
 //==================================
 OsmRelation::OsmRelation( uint64_t relation_id): id(relation_id) {}
 
-OsmRelation::OsmRelation( uint64_t relation_id, list<OsmRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags):
+OsmRelation::OsmRelation( uint64_t relation_id, vector<OsmRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags):
     id(relation_id), members(relation_members), tags(relation_tags) {}
 
 OsmRelation::OsmRelation( const uint8_t* data_ptr, uint64_t relation_id): id(relation_id)
@@ -524,25 +451,14 @@ void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
     uint32_t num_members = members.size();
     fwrite(&num_members, sizeof(num_members), 1, data_file);
     
-    /*uint32_t members_data_size = 0;
-    for (list<OsmRelationMember>::const_iterator it = members.begin(); it != members.end(); it++)
-        members_data_size += it->getDataSize();
-    */
-    for (list<OsmRelationMember>::const_iterator it = members.begin(); it != members.end(); it++)
+    for (const OsmRelationMember &mbr : members)
     {
-        ELEMENT type = it->type;
-        fwrite(&type, sizeof(type), 1, data_file);
-        
-        uint64_t ref = it->ref;
-        fwrite(&ref, sizeof(ref), 1, data_file);
-        
-        const char* str = it->role.c_str();
+        fwrite(&mbr.type, sizeof(mbr.type), 1, data_file);
+        fwrite(&mbr.ref, sizeof(mbr.ref), 1, data_file);        
+        const char* str = mbr.role.c_str();
         fwrite(str, strlen(str)+1, 1, data_file);
     }
         
-    
-//    list<OsmRelationMember> members;
-
     serializeTags(tags, data_file);
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
     uint64_t* ptr = (uint64_t*)index_map->ptr;

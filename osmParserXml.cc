@@ -6,6 +6,9 @@
 #include <assert.h>
 
 #include <iostream>
+
+using namespace std;
+
 static const char* getValue(const char* line, const char* key)
 {
     static char* buffer = NULL;
@@ -136,7 +139,7 @@ void OsmXmlParser::parseWay()
 //    }
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
     vector<OSMKeyValuePair> tags;
-    list<uint64_t> node_refs;
+    vector<uint64_t> node_refs;
     if (strstr(line, "/>")) //way without node references???
     {
         cout << "[WARN] way " << id << " has no node references" << endl;
@@ -177,7 +180,7 @@ void OsmXmlParser::parseRelation()
     */
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
     vector<OSMKeyValuePair> tags;
-    list<OsmRelationMember> members;
+    vector<OsmRelationMember> members;
     
     if (strstr(line, "/>")) //a relation needs at least one member 
     {
