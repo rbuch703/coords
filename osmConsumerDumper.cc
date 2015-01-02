@@ -229,9 +229,9 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
     
     if (nNodes % 1000000 == 0)
     {
+        cout << endl << "\e[1A";
         cout << "processed " << (nNodes / 1000000) << "M nodes; writing data to disk ...";
         cout << " (" << ((ftell(node_data) - node_data_synced_pos) / 1000000) << "MB node data)";
-        cout.flush();
         //sync_file_range( fileno(node_data), node_data_synced_pos, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
         //posix_fadvise( fileno(node_data), node_data_synced_pos, 0, POSIX_FADV_DONTNEED);
         node_data_synced_pos = ftell(node_data);
@@ -252,7 +252,8 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
 
         //madvise( vertex_data.ptr, vertex_data.size, MADV_DONTNEED);
         //if (res != 0) { perror("madvise vertex_data"); exit(0);}
-        cout << " done" << endl;
+        cout << " done";
+        cout << endl << endl << "\e[2A" << "\e[s";
         
         
     }

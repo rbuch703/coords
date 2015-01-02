@@ -46,8 +46,10 @@ static void deleteChildren(RadixTreeNode<t> &node)
     delete node.value;
 }
 
-bool containsPrefixOf(const char* key) const
+bool containsPrefixOf(const char* keyName) const
 {
+    const unsigned char* key = (const unsigned char*)keyName;
+
     const RadixTreeNode<t> *pos = &root;
         
     while (*key)
@@ -68,8 +70,10 @@ bool containsPrefixOf(const char* key) const
     return pos->value;    
 }
 
-void insert(const char* key, const t& value)
+void insert(const char* keyName, const t& value)
 {
+    const unsigned char* key = (const unsigned char*)keyName;
+
     RadixTreeNode<t> *pos = &root;
     while (*key)
     {
@@ -106,8 +110,9 @@ void traverse(RadixTreeNode<t> *pos, vector<char> &path, int depth = 0)
     
 }
 
-const t* at(const char* key) const
+const t* at(const char* keyName) const
 {
+    const unsigned char* key = (const unsigned char*)keyName;
     const RadixTreeNode<t> *pos = &root;
     while (*key)
     {

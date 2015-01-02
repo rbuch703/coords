@@ -14,12 +14,12 @@ WAYINT_OBJ    = $(patsubst %.cc,build/%.o,$(WAYINT_SRC))
 #CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
 #SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
 
-FLAGS = -g -Wall -Wextra -DNDEBUG #-O2 -flto
+FLAGS = -g -Wall -Wextra -DNDEBUG #-fsanitize=address -fno-omit-frame-pointer #-O2 -flto
 #FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99
 CCFLAGS = $(FLAGS) -std=c++11
-LD_FLAGS = #-flto -O2 #-fprofile-arcs#--as-needed
+LD_FLAGS = #-fsanitize=address#-flto -O2 #-fprofile-arcs#--as-needed
 .PHONY: all clean
 .SECONDARY: $(PROTO_SRC)
 all: build make.dep build/conv_osm  intermediate build/wayInt 

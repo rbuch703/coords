@@ -106,14 +106,17 @@ string OsmParserPbf::prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataS
     
     MUST(fread(unpackBuffer, size, 1, f) == 1, "fread failed");
 
+    cout << "\e[u" << endl; //move cursor to saved position
     cout << "blob at file position "<< (ftello(f) / 1000000) << "M" ;
 
-    MUST( blob.ParseFromArray(unpackBuffer, size), "could not parse blob");;
+    MUST( blob.ParseFromArray(unpackBuffer, size), "could not parse blob");
 
     if (blob.has_raw())
-        cout << " contains raw data" << endl;
+        cout << " contains raw data";
     if (blob.has_raw_size())
-        cout << " contains compressed data, " << blob.zlib_data().size() << "-> "<<  blob.raw_size() << " bytes" << endl;
+        cout << " contains compressed data, " << blob.zlib_data().size() << "-> "<<  blob.raw_size() << " bytes";
+        
+    cout << "\e[K" << endl;
 
     unpackBlob(/*ref*/blob, f, unpackBuffer, /*ref*/dataSizeOut);
     assert(dataSizeOut == (uint32_t)blob.raw_size());
@@ -262,7 +265,8 @@ void OsmParserPbf::parse()
 {    
     assert(f);
     int ch;
-
+    cout << endl << endl << "\e[2A"; //reserve 2 lines of space for message
+    cout << "\e[s"; //mark cursor position for future status updates
     while ( (ch = fgetc(f)) != EOF)
     {
         ungetc(ch, f);
@@ -282,7 +286,8 @@ void OsmParserPbf::parse()
                 cout << "\tcontains optional feature " << s << endl;
                 
             cout << "\twritten by " << headerBlock.writingprogram() << endl;
-
+            cout << endl << endl << "\e[2A";
+            cout << "\e[s"; //mark cursor position for future status updates
         } else if (blobType == "OSMData")
         {
             OSMPBF::PrimitiveBlock primBlock;
