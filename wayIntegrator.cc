@@ -20,26 +20,6 @@ using namespace std;
      method has resolved the position itself, or if it was already resolved.
 *
 */
-bool tryResolveLatLng(OsmGeoPosition &pos, uint64_t minResolvableId, uint64_t beyondResolvableId, int32_t* vertexPos)
-{
-    /* lat and lng are resolved at the same time, so either both values
-     * have to be valid, or none of them must be.*/ 
-    MUST( (pos.lat == INVALID_LAT_LNG) == (pos.lng == INVALID_LAT_LNG), "invalid lat/lng pair" );
-    if (pos.lat != INVALID_LAT_LNG)
-        return true;   //already resolved to lat/lng pair
-    
-    uint64_t nodeId = pos.id;
-    
-    if (nodeId >= minResolvableId && nodeId < beyondResolvableId)
-    {
-        pos.lat = vertexPos[2*nodeId];
-        pos.lng = vertexPos[2*nodeId+1];
-        return true;
-    }
-    
-    return false; 
-
-}
 
 int main()
 {
@@ -89,22 +69,28 @@ int main()
             pos += 1;
             if (pos % 100000 == 0)
                 cout << (pos / 1000) << "k ways processed" << endl;
-            for (OsmGeoPosition &pos : way.getVertices() )
+            for (OsmGeoPosition &node : way.getVertices() )
             //for (int j = 0; j < way.numVertices; j++)
             {
-                bool wasResolved = pos.lat != INVALID_LAT_LNG;
-                /*bool isResolved = */wasResolved ? true: 
-                    tryResolveLatLng( pos, i*nVerticesPerRun, (i+1)*nVerticesPerRun, vertexPos);
-                    
-                //if (!wasResolved && isResolved)
+                /* lat and lng are resolved at the same time, so either both values
+                 * have to be valid, or none of them must be.*/ 
+                MUST( (node.lat == INVALID_LAT_LNG) == (node.lng == INVALID_LAT_LNG), "invalid lat/lng pair" );
+                if (node.lat != INVALID_LAT_LNG)
+                    continue;   //already resolved to lat/lng pair
+                
+                if (node.id >= (i*nVerticesPerRun) && node.id < (i+1)*nVerticesPerRun)
+                {
+                    int32_t *base = (vertexPos - (i*nVerticesPerRun));
+                    node.lat = base[2*node.id];
+                    node.lng = base[2*node.id+1];
                 //    reverseNodeIndex.addReferenceFromWay( pos.id, way.id);
+                }
+            }
 
-             }
-
+        }
         if ( 0 !=  madvise( vertexPos, vertexWindowSize, MADV_DONTNEED))
             perror("madvise");
         munmap(vertexPos, vertexWindowSize);
-        }
     }
 
 
