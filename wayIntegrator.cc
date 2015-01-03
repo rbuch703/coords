@@ -8,7 +8,7 @@
 #include "osmMappedTypes.h"
 #include "reverseIndex.h"
 
-const uint64_t MAX_MMAP_SIZE = 5000ll * 1000 * 1000; //500 MB 
+const uint64_t MAX_MMAP_SIZE = 8000ll * 1000 * 1000; //500 MB 
 
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
@@ -46,15 +46,15 @@ int main()
     ReverseIndex reverseNodeIndex("nodeReverse.idx", "nodeReverse.aux");
     ReverseIndex reverseWayIndex(  "wayReverse.idx",  "wayReverse.aux");
     ReverseIndex reverseRelationIndex(  "relationReverse.idx",  "relationReverse.aux");
-    mmap_t mapVertices = init_mmap("vertices.data", true, false);
+    //mmap_t mapVertices = init_mmap("vertices.data", true, false);
+    FILE* fVertices = fopen("vertices.data", "rb");
+    fseek( fVertices, 0, SEEK_END);
+    uint64_t numVertices = ftell(fVertices) / (2* sizeof(int32_t));
+    //fclose(fVertices);
+    
 
     LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
     RelationStore relationStore("intermediate/relations.idx", "intermediate/relations.data");
-
-
-    int32_t *vertexPos = (int32_t*)mapVertices.ptr;
-         
-    uint64_t numVertices = mapVertices.size / (2* sizeof(int32_t));
     
     cout << "data set consists of " << (numVertices/1000000) << "M vertices" << endl;
     
@@ -65,37 +65,45 @@ int main()
     assert( nRuns * MAX_MMAP_SIZE >= numVertexBytes);
     uint64_t nVerticesPerRun = (numVertices + nRuns -1) / nRuns;
     assert( nRuns * nVerticesPerRun >= numVertices);
-    cout << "will process vertices in " << nRuns << " runs à " << nVerticesPerRun << " vertices." << endl;
-
     uint64_t vertexWindowSize = nVerticesPerRun * (2* sizeof(uint32_t));
 
-    //cout << "vertex map address space: " << vertexPos << " (" << (mapVertices.size/1000000) << "MB)" << endl;
+    cout << "will process vertices in " << nRuns << " runs à " << nVerticesPerRun 
+         << " vertices (" << (vertexWindowSize / 1000000) << "MB)" << endl;
+
+
     for (uint64_t i = 0; i < nRuns; i++)
     {
         if (nRuns > 1)
-        {
-            cout << "starting run " << i << ", mlocking vertex range @" 
-             << (vertexPos + i * vertexWindowSize) << " (" << (vertexWindowSize/1000000) << "MB) ...";
-            cout.flush();
-        }
-/*        int res = mlock( vertexPos + i * vertexWindowSize, vertexWindowSize);
-
-        if (res == 0)
-            cout << " done." << endl;
-        else
-        {
-            perror("mlock");
-            cout << "mlock failed. You may not have the corresponding permissions or your ulimit may be set too low" << endl; 
-        }*/
+            cout << "starting run " << i << endl;
+        /*
+        cout << "[DEBUG] paging in vertex range ... ";
+        cout.flush();*/
+        int32_t *vertexPos = (int32_t*) 
+            mmap(NULL, vertexWindowSize, PROT_READ, MAP_SHARED /*| MAP_POPULATE*/,
+                 fileno(fVertices), i * vertexWindowSize);
+         cout << "done." << endl;
         
+        uint64_t pos = 0;
         for (OsmLightweightWay way : wayStore)
         {
-            for (int j = 0; j < way.numVertices; j++)
+            pos += 1;
+            if (pos % 100000 == 0)
+                cout << (pos / 1000) << "k ways processed" << endl;
+            for (OsmGeoPosition &pos : way.getVertices() )
+            //for (int j = 0; j < way.numVertices; j++)
             {
-                tryResolveLatLng( way.vertices[j], i*nVerticesPerRun, (i+1)*nVerticesPerRun, vertexPos);
-                reverseNodeIndex.addReferenceFromWay( way.vertices[j].id, way.id);
+                bool wasResolved = pos.lat != INVALID_LAT_LNG;
+                /*bool isResolved = */wasResolved ? true: 
+                    tryResolveLatLng( pos, i*nVerticesPerRun, (i+1)*nVerticesPerRun, vertexPos);
+                    
+                //if (!wasResolved && isResolved)
+                //    reverseNodeIndex.addReferenceFromWay( pos.id, way.id);
 
              }
+
+        if ( 0 !=  madvise( vertexPos, vertexWindowSize, MADV_DONTNEED))
+            perror("madvise");
+        munmap(vertexPos, vertexWindowSize);
         }
     }
 

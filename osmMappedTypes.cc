@@ -1,6 +1,6 @@
 
 #include "osmMappedTypes.h"
-
+#include <string.h> //for strlen
 #include <iostream>
 
 using namespace std;
@@ -71,6 +71,41 @@ void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
     if (this->numTagBytes > 0)
         MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
 }
+
+std::map<std::string, std::string> OsmLightweightWay::getTags() const
+{
+    map<string, string> tags;
+    const char *tagPos = (const char*)this->tagBytes;
+    const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
+    while (tagPos < tagEnd)
+    {
+        const char* key = tagPos;
+        tagPos += (strlen(tagPos) + 1);
+        const char* value=tagPos;
+        tagPos += (strlen(tagPos) + 1);
+        tags.insert( make_pair( string(key), string(value) ) );
+    }
+    
+    
+    assert(tags.count() == this->numTags);
+    return tags;
+}
+
+bool OsmLightweightWay::hasKey( const char* key) const
+{
+    map<string, string> tags;
+    const char *tagPos = (const char*)this->tagBytes;
+    const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
+    while (tagPos < tagEnd)
+    {
+        //const char* key = tagPos;
+        if (strcmp(tagPos, key) == 0) return true;
+        tagPos += (strlen(tagPos) + 1); //skip beyond the key
+        tagPos += (strlen(tagPos) + 1); //skip beyond the corresponding value
+    }
+    return false;
+}
+
 
 ostream& operator<<(ostream &out, const OsmLightweightWay &way)
 {

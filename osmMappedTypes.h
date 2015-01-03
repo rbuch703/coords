@@ -7,6 +7,16 @@
 
 #include "osmTypes.h"
 
+template <typename T>
+class ArrayIterator {
+public:
+    ArrayIterator(T* begin, T* end): beginPos(begin), endPos(end) {};
+    
+    T* begin() const { return beginPos;}
+    T* end() const   { return endPos;}
+private:
+    T *beginPos, *endPos;
+};
 
 class OsmLightweightWay {
 public:
@@ -20,11 +30,14 @@ public:
 
     void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     
+    std::map<std::string, std::string> getTags() const;
+    bool hasKey(const char* key) const;
     /** true when 'tagBytes' and 'vertices' point to areas inside a memory map,
         and thus any changes to 'tagBytes' and 'vertices' will directly change
         the data in the underlying file */
     bool     isDataMapped; 
-    
+
+    ArrayIterator<OsmGeoPosition> getVertices() { return ArrayIterator<OsmGeoPosition>(vertices, vertices + numVertices);}    
     OsmGeoPosition *vertices;
     /*ways are guaranteed to have no more than 2000 nodes by the OSM specs, 
       so a uint16_t is sufficient */
