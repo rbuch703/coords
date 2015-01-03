@@ -1,6 +1,10 @@
 
 #include "osmMappedTypes.h"
 #include <string.h> //for strlen
+#include <fcntl.h>  //for sync_file_range()
+#include <sys/mman.h>   //for madvise()
+#include <unistd.h> //for sysconf()
+
 #include <iostream>
 
 using namespace std;
@@ -145,6 +149,42 @@ bool LightweightWayStore::exists(uint64_t wayId) const
         
     return wayIndex[wayId] != 0;
 }
+
+void LightweightWayStore::syncRange(uint64_t lowWayId, uint64_t highWayId) const
+{
+    uint64_t *wayIndex = (uint64_t*)mapWayIndex.ptr;
+    while (!wayIndex[lowWayId] && lowWayId < getMaxNumWays()) lowWayId++;
+    while (!wayIndex[highWayId] && highWayId < getMaxNumWays()) highWayId++;
+
+    if (lowWayId > getMaxNumWays() ) return;
+    if (highWayId > getMaxNumWays())
+        highWayId = getMaxNumWays();
+    if (lowWayId >= highWayId) return;
+    
+    uint64_t lowPos = wayIndex[lowWayId];
+    uint64_t highPos= wayIndex[highWayId];
+    
+    
+    int res = sync_file_range(mapWayData.fd, lowPos, highPos - lowPos, 
+                              SYNC_FILE_RANGE_WAIT_BEFORE | SYNC_FILE_RANGE_WRITE | SYNC_FILE_RANGE_WAIT_AFTER);
+    if (res != 0)
+        perror("sync_file_range");
+
+    assert(highPos > lowPos);
+    //cout << "syncing file range " << lowPos << " -> " << highPos << endl;
+
+    uint64_t addr = ((uint64_t)mapWayData.ptr) + lowPos;
+    size_t pageSize = sysconf (_SC_PAGESIZE);
+
+    addr = addr / pageSize * pageSize;
+
+    res = madvise(  (void*)addr, highPos - lowPos, MADV_DONTNEED);
+    if (res != 0)
+        perror("madvise");
+
+    
+}
+
 
 LightweightWayStore::LightweightWayIterator LightweightWayStore::begin() 
 { 

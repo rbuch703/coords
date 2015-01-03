@@ -29,7 +29,6 @@ public:
     OsmLightweightWay &operator=(const OsmLightweightWay &other);
 
     void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
-    
     std::map<std::string, std::string> getTags() const;
     bool hasKey(const char* key) const;
     /** true when 'tagBytes' and 'vertices' point to areas inside a memory map,
@@ -58,6 +57,7 @@ public:
     LightweightWayStore(const char* indexFileName, const char* dataFileName);
     OsmLightweightWay operator[](uint64_t wayId);
     bool exists(uint64_t wayId) const;
+    void syncRange(uint64_t lowWayId, uint64_t highWayId) const ;
 
 private:
     class LightweightWayIterator;
