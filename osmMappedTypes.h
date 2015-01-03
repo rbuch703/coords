@@ -18,6 +18,18 @@ private:
     T *beginPos, *endPos;
 };
 
+template <typename T>
+class ConstArrayIterator {
+public:
+    ConstArrayIterator(const T* begin, const T* end): beginPos(begin), endPos(end) {};
+    
+    const T* begin() const { return beginPos;}
+    const T* end() const   { return endPos;}
+private:
+    const T *beginPos, *endPos;
+};
+
+
 class OsmLightweightWay {
 public:
     OsmLightweightWay( FILE* src, uint64_t way_id = -1);
@@ -30,6 +42,8 @@ public:
 
     void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     std::map<std::string, std::string> getTags() const;
+    
+    uint64_t size() const;
     bool hasKey(const char* key) const;
     /** true when 'tagBytes' and 'vertices' point to areas inside a memory map,
         and thus any changes to 'tagBytes' and 'vertices' will directly change
@@ -37,6 +51,9 @@ public:
     bool     isDataMapped; 
 
     ArrayIterator<OsmGeoPosition> getVertices() { return ArrayIterator<OsmGeoPosition>(vertices, vertices + numVertices);}    
+
+    ConstArrayIterator<OsmGeoPosition> getVertices() const { return ConstArrayIterator<OsmGeoPosition>(vertices, vertices + numVertices);}    
+
     OsmGeoPosition *vertices;
     /*ways are guaranteed to have no more than 2000 nodes by the OSM specs, 
       so a uint16_t is sufficient */

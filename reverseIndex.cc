@@ -236,7 +236,7 @@ void ReverseIndex::addReferenceFromRelation(uint64_t targetId, uint64_t relation
         return;
     }
     
-    assert ((pos[targetId) != 0 && !(pos[targetId] & IS_WAY_REFERENCE));
+    assert ((pos[targetId]) != 0 && !(pos[targetId] & IS_WAY_REFERENCE));
     
     RefList refList( &auxIndex, pos[targetId]);
     uint64_t res = refList.add( relationId);

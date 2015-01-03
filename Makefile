@@ -17,7 +17,7 @@ TILER_OBJ    = $(patsubst %.cc,build/%.o,$(TILER_SRC))
 #CONV_OBJ = $(patsubst %.cc,build/%.o,$(CONV_SRC))
 #SIMP_OBJ = $(patsubst %.cc,build/%.o,$(SIMP_SRC))
 
-FLAGS = -g -Wall -Wextra -DNDEBUG #-fsanitize=address -fno-omit-frame-pointer #-O2 -flto
+FLAGS = -g -Wall -Wextra #-DNDEBUG -fsanitize=address -fno-omit-frame-pointer #-O2 -flto
 #FLAGS = -ftrapv -g -Wall -Wextra 
 #FLAGS = -ftrapv -g -Wall -Wextra -fprofile-arcs -ftest-coverage
 CFLAGS = $(FLAGS) -std=c99

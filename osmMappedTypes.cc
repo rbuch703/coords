@@ -46,6 +46,11 @@ OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr, uint64_t way_id):
     this->tagBytes = (dataPtr + 6); 
 }
 
+uint64_t OsmLightweightWay::size() const {
+    return   sizeof(numVertices) + numVertices* sizeof(OsmGeoPosition) 
+           + sizeof(numTags) + sizeof(numTagBytes) + numTagBytes;
+}
+
 
 OsmLightweightWay::~OsmLightweightWay()
 {
@@ -76,6 +81,7 @@ void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
         MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
 }
 
+
 std::map<std::string, std::string> OsmLightweightWay::getTags() const
 {
     map<string, string> tags;
@@ -90,8 +96,7 @@ std::map<std::string, std::string> OsmLightweightWay::getTags() const
         tags.insert( make_pair( string(key), string(value) ) );
     }
     
-    
-    assert(tags.count() == this->numTags);
+    assert(tags.size() == this->numTags);
     return tags;
 }
 
