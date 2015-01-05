@@ -151,6 +151,8 @@ LightweightWayStore::LightweightWayStore(const char* indexFileName, const char* 
     mapWayIndex = init_mmap(indexFileName, true, false);
     mapWayData  = init_mmap(dataFileName, true, true);
 
+    madvise( mapWayData.ptr, mapWayData.size, MADV_SEQUENTIAL);
+
 }
 
 

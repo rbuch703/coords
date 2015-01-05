@@ -11,7 +11,7 @@ ctx = cairo.Context (surface);
 ctx.scale(500, -500);
 ctx.translate(1, -1);
 
-ctx.set_line_width (1/500)
+ctx.set_line_width (1/2000)
 ctx.set_source_rgb(0.0, 0.0, 0.0);
 
 def lngToWebMercator(lng):

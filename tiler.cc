@@ -71,7 +71,7 @@ public:
         bounds(bounds), fileName(fileName), size(0), maxNodeSize(maxNodeSize),
         topLeftChild(NULL), topRightChild(NULL), bottomLeftChild(NULL), bottomRightChild(NULL) 
         {
-            fData = fopen(fileName, "w+b");
+            fData = fopen(fileName, "wb+"); //open for reading and writing; truncate file
             if (!fData) {perror("fopen"); exit(0);}
              
         }
@@ -80,6 +80,7 @@ public:
     {
         if (fData)
         {
+            assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
             uint64_t posBefore = ftell(fData);
             way.serialize(fData);
             assert( ftell(fData) - posBefore == way.size());
@@ -116,20 +117,24 @@ public:
     }
     
     void subdivide(uint64_t maxNodeSize) {
-        //cout << "testing meta-node " << fileName << " for subdivision " << endl;
         
         if (fData == NULL)
-            fData = fopen(fileName.c_str(), "ab+");
+            fData = fopen(fileName.c_str(), "ab+"); // open for reading and writing; append) keep file contents.
         
         fseek(fData, 0, SEEK_END);  //should be a noop for opening with mode "a"
         uint64_t size = ftell(fData);
+
+//        cout << "testing meta-node " << fileName << " with size " << (size/1000) << "kB for subdivision " << endl;
         
-        if (size > maxNodeSize) //no subdivision necessary
+        if (size > maxNodeSize) 
         {
             /* this will also rewind the file before reading,
              * and close the file descriptor afterwards. */
             subdivide();    
         }
+        else //no subdivision necessary
+            cout << "\tno need to subdivide node " << fileName << endl;
+
         
         if (fData)
         {
@@ -152,23 +157,21 @@ private:
         int32_t latMid = (((int64_t)bounds.latMax) + bounds.latMin) / 2;    //would overflow in int32_t
         int32_t lngMid = (((int64_t)bounds.lngMax) + bounds.lngMin) / 2;
         assert(fData && !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-        topLeftChild = new StorageNode( (fileName+"0").c_str(),  
-                            GeoAABB( latMid, bounds.latMax, bounds.lngMin, lngMid), maxNodeSize);
+        GeoAABB aabbTopLeft(            latMid, bounds.latMax, bounds.lngMin, lngMid       );
+        GeoAABB aabbTopRight(           latMid, bounds.latMax,        lngMid, bounds.lngMax);
+        GeoAABB aabbBottomLeft(  bounds.latMin,        latMid, bounds.lngMin, lngMid       );
+        GeoAABB aabbBottomRight( bounds.latMin,        latMid,        lngMid, bounds.lngMax);
         
-        topRightChild= new StorageNode( (fileName+"1").c_str(),  
-                            GeoAABB( latMid, bounds.latMax, lngMid, bounds.lngMax), maxNodeSize);
-                            
-        bottomLeftChild = new StorageNode( (fileName+"2").c_str(),  
-                            GeoAABB( bounds.latMin, latMid, bounds.lngMin, lngMid), maxNodeSize);
-        
-        bottomRightChild= new StorageNode( (fileName+"3").c_str(),  
-                            GeoAABB( bounds.latMin, latMid, lngMid, bounds.lngMax), maxNodeSize);
+        topLeftChild =    new StorageNode( (fileName+"0").c_str(), aabbTopLeft,     maxNodeSize);
+        topRightChild=    new StorageNode( (fileName+"1").c_str(), aabbTopRight,    maxNodeSize);
+        bottomLeftChild = new StorageNode( (fileName+"2").c_str(), aabbBottomLeft,  maxNodeSize);
+        bottomRightChild= new StorageNode( (fileName+"3").c_str(), aabbBottomRight, maxNodeSize);
         
         //topRightChild
         
         rewind(fData);  //reset file read to beginning of file, clear EOF flag
         assert(ftell(fData) == 0);
-        char ch;
+        int ch;
         while ( (ch = fgetc(fData)) != EOF)
         {
             ungetc( ch, fData);
@@ -216,7 +219,7 @@ int main()
     StorageNode storage("nodes/node", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
     uint64_t numHighways = 0;
     uint64_t pos = 0;
-    
+
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
          << (MAX_META_NODE_SIZE/1000000) << "MB." << endl;
     for (OsmLightweightWay way: wayStore)
@@ -224,8 +227,8 @@ int main()
         pos += 1;
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
-        
-        if (!way.hasKey("highway"))
+                
+       if (!way.hasKey("highway"))
             continue;
         
 
@@ -235,7 +238,7 @@ int main()
         numHighways += 1;
     }
     cout << "stats: data set contains " << (numHighways/1000) << "k roads." << endl;   
-        
+    
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
          << (MAX_NODE_SIZE/1000000) << "MB." << endl;
 //    exit(0);
