@@ -6,7 +6,8 @@
 
 using namespace std;
 
-const uint64_t MAX_NODE_SIZE = 50ll * 1000 * 1000;
+const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
+const uint64_t MAX_NODE_SIZE      =   5ll * 1000 * 1000;
 
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
@@ -66,8 +67,8 @@ ostream& operator<<(ostream &os, const GeoAABB &aabb)
 class StorageNode {
 
 public:
-    StorageNode(const char*fileName, const GeoAABB &bounds): 
-        bounds(bounds), fileName(fileName), size(0),
+    StorageNode(const char*fileName, const GeoAABB &bounds, uint64_t maxNodeSize): 
+        bounds(bounds), fileName(fileName), size(0), maxNodeSize(maxNodeSize),
         topLeftChild(NULL), topRightChild(NULL), bottomLeftChild(NULL), bottomRightChild(NULL) 
         {
             fData = fopen(fileName, "w+b");
@@ -84,7 +85,7 @@ public:
             assert( ftell(fData) - posBefore == way.size());
             size += way.size();
 
-            if (size > MAX_NODE_SIZE)
+            if (size > maxNodeSize)
                 subdivide();
 
         } else
@@ -99,6 +100,49 @@ public:
         }
         
     }
+
+    void closeFiles()
+    {
+        if (fData)
+        {
+            fclose(fData);
+            fData = NULL;
+        }
+        
+        if (topLeftChild)     topLeftChild->    closeFiles();
+        if (topRightChild)    topRightChild->   closeFiles();
+        if (bottomLeftChild)  bottomLeftChild-> closeFiles();
+        if (bottomRightChild) bottomRightChild->closeFiles();
+    }
+    
+    void subdivide(uint64_t maxNodeSize) {
+        //cout << "testing meta-node " << fileName << " for subdivision " << endl;
+        
+        if (fData == NULL)
+            fData = fopen(fileName.c_str(), "ab+");
+        
+        fseek(fData, 0, SEEK_END);  //should be a noop for opening with mode "a"
+        uint64_t size = ftell(fData);
+        
+        if (size > maxNodeSize) //no subdivision necessary
+        {
+            /* this will also rewind the file before reading,
+             * and close the file descriptor afterwards. */
+            subdivide();    
+        }
+        
+        if (fData)
+        {
+            fclose(fData);
+            fData = NULL;
+        }
+        
+        if (topLeftChild)     topLeftChild->    subdivide(maxNodeSize);
+        if (topRightChild)    topRightChild->   subdivide(maxNodeSize);
+        if (bottomLeftChild)  bottomLeftChild-> subdivide(maxNodeSize);
+        if (bottomRightChild) bottomRightChild->subdivide(maxNodeSize);
+    }
+
 private:
 
     void subdivide() {
@@ -109,16 +153,16 @@ private:
         int32_t lngMid = (((int64_t)bounds.lngMax) + bounds.lngMin) / 2;
         assert(fData && !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
         topLeftChild = new StorageNode( (fileName+"0").c_str(),  
-                            GeoAABB( latMid, bounds.latMax, bounds.lngMin, lngMid));
+                            GeoAABB( latMid, bounds.latMax, bounds.lngMin, lngMid), maxNodeSize);
         
         topRightChild= new StorageNode( (fileName+"1").c_str(),  
-                            GeoAABB( latMid, bounds.latMax, lngMid, bounds.lngMax));
+                            GeoAABB( latMid, bounds.latMax, lngMid, bounds.lngMax), maxNodeSize);
                             
         bottomLeftChild = new StorageNode( (fileName+"2").c_str(),  
-                            GeoAABB( bounds.latMin, latMid, bounds.lngMin, lngMid));
+                            GeoAABB( bounds.latMin, latMid, bounds.lngMin, lngMid), maxNodeSize);
         
         bottomRightChild= new StorageNode( (fileName+"3").c_str(),  
-                            GeoAABB( bounds.latMin, latMid, lngMid, bounds.lngMax));
+                            GeoAABB( bounds.latMin, latMid, lngMid, bounds.lngMax), maxNodeSize);
         
         //topRightChild
         
@@ -145,11 +189,13 @@ private:
         }
         
         fclose(fData);
-        
-        fData = fopen(fileName.c_str(), "wb"); //delete file contents
+        /* All contents of this node have been distributed to its four subnodes.
+         * So the node itself can now be deleted.
+         * Here, we only delete its contents and keep the empty file to act as a marker that
+         * subnodes may exist. */
+        fData = fopen(fileName.c_str(), "wb"); 
         fclose(fData);
         fData = NULL;
-        //unlink(fileName.c_str());
         
         cout << "done" << endl;
     }
@@ -157,6 +203,7 @@ private:
     FILE* fData;
     string fileName;
     uint64_t size;
+    uint64_t maxNodeSize;
     StorageNode *topLeftChild, *topRightChild, *bottomLeftChild, *bottomRightChild;
 
 };
@@ -165,14 +212,17 @@ int main()
 {
     LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
 
-    StorageNode storage("nodes/node", GeoAABB::getWorldBounds());
+    StorageNode storage("nodes/node", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
     uint64_t numHighways = 0;
     uint64_t pos = 0;
+    
+    cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
+         << (MAX_META_NODE_SIZE/1000000) << "MB." << endl;
     for (OsmLightweightWay way: wayStore)
     {
         pos += 1;
-        if (pos % 10000 == 0)
-            cout << (pos / 1000) << "k ways read" << endl;
+        if (pos % 1000000 == 0)
+            cout << (pos / 1000000) << "M ways read" << endl;
         
         if (!way.hasKey("highway"))
             continue;
@@ -183,7 +233,19 @@ int main()
         //cout << way << endl; 
         numHighways += 1;
     }
+    cout << "stats: data set contains " << (numHighways/1000) << "k roads." << endl;   
+        
+    cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
+         << (MAX_NODE_SIZE/1000000) << "MB." << endl;
+//    exit(0);
+    /* the number of concurrently open files for a given process is limited by the OS (
+       e.g. to ~1000 for normal user accounts on linux. Keeping all node files open
+       concurrently may easily exceed that limit. But in stage 2, we only need to keep
+       open the file descriptors of the current meta node we are subdividing and its 
+       children. So we can close all other file descriptors for now. */
+    storage.closeFiles();
+    storage.subdivide(MAX_NODE_SIZE);
  
-    cout << numHighways << " roads" << endl;   
+    cout << "done." << endl;
     return EXIT_SUCCESS;
 }
