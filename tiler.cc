@@ -197,8 +197,9 @@ private:
         fclose(fData);
         fData = NULL;
         
-        cout << "done" << endl;
     }
+
+private:
     GeoAABB bounds;
     FILE* fData;
     string fileName;

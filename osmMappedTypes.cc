@@ -102,7 +102,6 @@ std::map<std::string, std::string> OsmLightweightWay::getTags() const
 
 bool OsmLightweightWay::hasKey( const char* key) const
 {
-    map<string, string> tags;
     const char *tagPos = (const char*)this->tagBytes;
     const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
     while (tagPos < tagEnd)
@@ -113,6 +112,24 @@ bool OsmLightweightWay::hasKey( const char* key) const
         tagPos += (strlen(tagPos) + 1); //skip beyond the corresponding value
     }
     return false;
+}
+
+string OsmLightweightWay::getValue( const char* key) const
+{
+    const char *tagPos = (const char*)this->tagBytes;
+    const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
+    while (tagPos < tagEnd)
+    {
+        //const char* key = tagPos;
+        if (strcmp(tagPos, key) == 0)   //found matching key; corresponding value is stored right behind it 
+        {
+            tagPos += (strlen(tagPos) + 1); //skip beyond the key
+            return tagPos;
+        }
+        tagPos += (strlen(tagPos) + 1); //skip beyond the key
+        tagPos += (strlen(tagPos) + 1); //skip beyond the corresponding value
+    }
+    return "";
 }
 
 

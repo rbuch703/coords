@@ -45,6 +45,7 @@ public:
     
     uint64_t size() const;
     bool hasKey(const char* key) const;
+    std::string getValue(const char* key) const;
     /** true when 'tagBytes' and 'vertices' point to areas inside a memory map,
         and thus any changes to 'tagBytes' and 'vertices' will directly change
         the data in the underlying file */
