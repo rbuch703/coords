@@ -4,13 +4,18 @@
 #include <fcntl.h>  //for sync_file_range()
 #include <sys/mman.h>   //for madvise()
 #include <unistd.h> //for sysconf()
-
+#include <string.h> //for memcpy
 #include <iostream>
 
 using namespace std;
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
 //==================================
+
+OsmLightweightWay::OsmLightweightWay() : isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), numTags(0), id(0)
+{    
+}
+
 OsmLightweightWay::OsmLightweightWay( FILE* src): 
         isDataMapped(false), vertices(NULL), tagBytes(NULL)
 {
@@ -48,6 +53,51 @@ OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr):
     this->numTagBytes  = *((uint32_t*) (dataPtr + 2));
     this->tagBytes = (dataPtr + 6); 
 }
+
+
+OsmLightweightWay::OsmLightweightWay( const OsmLightweightWay &other): isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), numTags(0), id(0)
+{
+    if (this == &other) return;
+    
+    *this = other;
+}
+
+
+OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
+{
+    if (this == &other)
+        return (*this);
+
+
+    if (!this->isDataMapped)
+    {
+        delete [] this->vertices;
+        delete [] this->tagBytes;
+    }
+    
+    
+    this->id = other.id;
+    this->numVertices = other.numVertices;
+    this->numTags = other.numTags;
+    this->numTagBytes = other.numTagBytes;
+    this->isDataMapped= other.isDataMapped;
+    
+    if (this->isDataMapped) //'other' did not have ownership of its 'vertices' and 'tagBytes' anyways, so we can share them as well
+    {
+        this->vertices = other.vertices;
+        this->tagBytes = other.tagBytes;
+    } else
+    {
+        this->vertices = new OsmGeoPosition[this->numVertices];
+        memcpy( this->vertices, other.vertices, this->numVertices * sizeof(OsmGeoPosition) );
+        
+        this->tagBytes = new uint8_t[this->numTagBytes];
+        memcpy( this->tagBytes, other.tagBytes, this->numTagBytes * sizeof( uint8_t));
+    }
+    
+    return (*this);
+}
+
 
 uint64_t OsmLightweightWay::size() const {
     return   sizeof(id) 

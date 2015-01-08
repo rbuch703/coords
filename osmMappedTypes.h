@@ -32,12 +32,12 @@ private:
 
 class OsmLightweightWay {
 public:
+    OsmLightweightWay();
     OsmLightweightWay( FILE* src);
     OsmLightweightWay( uint8_t* data_ptr);
+    OsmLightweightWay( const OsmLightweightWay &other);
     ~OsmLightweightWay ();
 
-    //disable copy constructor and assignment operator
-    OsmLightweightWay( const OsmLightweightWay &other); 
     OsmLightweightWay &operator=(const OsmLightweightWay &other);
 
     void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
@@ -49,12 +49,12 @@ public:
     /** true when 'tagBytes' and 'vertices' point to areas inside a memory map,
         and thus any changes to 'tagBytes' and 'vertices' will directly change
         the data in the underlying file */
-    bool     isDataMapped; 
 
     ArrayIterator<OsmGeoPosition> getVertices() { return ArrayIterator<OsmGeoPosition>(vertices, vertices + numVertices);}    
 
     ConstArrayIterator<OsmGeoPosition> getVertices() const { return ConstArrayIterator<OsmGeoPosition>(vertices, vertices + numVertices);}    
 
+    bool     isDataMapped; 
     OsmGeoPosition *vertices;
     /*ways are guaranteed to have no more than 2000 nodes by the OSM specs, 
       so a uint16_t is sufficient */
