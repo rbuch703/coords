@@ -11,9 +11,10 @@ using namespace std;
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
 //==================================
-OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id): 
-        isDataMapped(false), vertices(NULL), tagBytes(NULL), id(way_id)
+OsmLightweightWay::OsmLightweightWay( FILE* src): 
+        isDataMapped(false), vertices(NULL), tagBytes(NULL)
 {
+    MUST( 1 == fread(&this->id, sizeof(this->id), 1, src), "read failure");
     MUST( 1 == fread(&this->numVertices, sizeof(uint16_t), 1, src), "read failure");
         
     if (this->numVertices)
@@ -34,9 +35,11 @@ OsmLightweightWay::OsmLightweightWay( FILE* src, uint64_t way_id):
     }
 }
 
-OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr, uint64_t way_id): 
-    isDataMapped(true), id(way_id)
+OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr): 
+    isDataMapped(true)
 {
+    this->id = *( (uint64_t*)dataPtr);
+    dataPtr += sizeof( uint64_t);
     this->numVertices = *( (uint16_t*)(dataPtr));
     this->vertices = (OsmGeoPosition*)(dataPtr + 2);
     dataPtr += (2 + sizeof(OsmGeoPosition) * this->numVertices);
@@ -47,14 +50,15 @@ OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr, uint64_t way_id):
 }
 
 uint64_t OsmLightweightWay::size() const {
-    return   sizeof(numVertices) + numVertices* sizeof(OsmGeoPosition) 
+    return   sizeof(id) 
+           + sizeof(numVertices) + numVertices* sizeof(OsmGeoPosition) 
            + sizeof(numTags) + sizeof(numTagBytes) + numTagBytes;
 }
 
 
 OsmLightweightWay::~OsmLightweightWay()
 {
-    if (!isDataMapped)
+    if (!isDataMapped)  // if 'vectices' and 'tagBytes' are not pointers to pre-allocated storage
     {
         delete [] vertices;
         delete [] tagBytes;
@@ -63,9 +67,10 @@ OsmLightweightWay::~OsmLightweightWay()
 
 void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
 {
-    assert (id > 0);  
+    assert (id > 0);
     //get offset at which the dumped way *starts*
     //uint64_t offset = index_map ? ftello(dest) : 0;
+    MUST(1 == fwrite(&this->id, sizeof(this->id), 1, dest), "write error");
     
     MUST(this->numVertices <= 2000, "#refs in way beyond what's allowed by spec");
     MUST(1 == fwrite(&this->numVertices, sizeof(this->numVertices), 1, dest), "write error");
@@ -161,7 +166,7 @@ OsmLightweightWay LightweightWayStore::operator[](uint64_t wayId)
     uint64_t *wayIndex = (uint64_t*)mapWayIndex.ptr;
     assert(wayIndex[wayId] != 0 && "trying to access non-existent way");
     uint64_t wayPos = wayIndex[wayId];
-    return OsmLightweightWay((uint8_t*)mapWayData.ptr + wayPos, wayId);
+    return OsmLightweightWay((uint8_t*)mapWayData.ptr + wayPos);
 
 }
 

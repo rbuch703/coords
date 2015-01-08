@@ -32,8 +32,8 @@ private:
 
 class OsmLightweightWay {
 public:
-    OsmLightweightWay( FILE* src, uint64_t way_id = -1);
-    OsmLightweightWay( uint8_t* data_ptr, uint64_t way_id);
+    OsmLightweightWay( FILE* src);
+    OsmLightweightWay( uint8_t* data_ptr);
     ~OsmLightweightWay ();
 
     //disable copy constructor and assignment operator

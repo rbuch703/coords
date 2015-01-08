@@ -290,8 +290,10 @@ OSMWay::OSMWay( uint64_t way_id, vector<uint64_t> way_refs, vector<OSMKeyValuePa
         refs.push_back( (OsmGeoPosition){.id = ref, .lat=INVALID_LAT_LNG, .lng = INVALID_LAT_LNG} );
 }
 
-OSMWay::OSMWay( const uint8_t* data_ptr, uint64_t way_id): id(way_id)
+OSMWay::OSMWay( const uint8_t* data_ptr)
 {
+    this->id = *(uint64_t*)data_ptr;
+    data_ptr += sizeof( uint64_t );
     uint16_t num_node_refs = *(uint16_t*)data_ptr;
     data_ptr+= sizeof(uint16_t);
     while (num_node_refs--)
@@ -313,8 +315,11 @@ void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
     assert (id > 0);  
     //get offset at which the dumped way *starts*
     uint64_t offset = index_map ? ftello(data_file) : 0;
+
+    MUST( 1 == fwrite(&this->id, sizeof(this->id), 1, data_file), "write error");
+
     
-    MUST(refs.size() <= 2000, "#refs in way beyond what's allowed by spec");
+    MUST(refs.size() <= 2000, "#refs in way is beyond what's allowed by OSM spec");
     uint16_t num_node_refs = refs.size();
     fwrite(&num_node_refs, sizeof(num_node_refs), 1, data_file);
 

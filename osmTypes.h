@@ -72,7 +72,7 @@ struct OSMWay
 {
     OSMWay( uint64_t way_id);
     OSMWay( uint64_t way_id, std::vector<uint64_t> way_refs, std::vector<OSMKeyValuePair> way_tags);
-    OSMWay( const uint8_t* data_ptr, uint64_t way_id);
+    OSMWay( const uint8_t* data_ptr);
 
     void serialize( FILE* data_file, mmap_t *index_map) const;
     bool hasKey(std::string key) const;
