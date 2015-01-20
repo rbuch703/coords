@@ -36,13 +36,20 @@ public:
  **/ 
 const int32_t INVALID_LAT_LNG = 0x7FFFFFFF;
 
+/* on-disk format for OsmNode:
+    - uint64_t id
+    - uint32_t version
+    - int32_t lat
+    - int32_t lon
+    - <tags>
+*/
 
 struct OSMNode
 {
-    OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, std::vector<OSMKeyValuePair> node_tags = std::vector<OSMKeyValuePair>() );
-    OSMNode( FILE* data_file, uint64_t  offset, uint64_t node_id);
-    OSMNode( FILE* idx, FILE* data, uint64_t node_id);
-    OSMNode( const uint8_t* data_ptr, uint64_t node_id);
+    OSMNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+//    OSMNode( FILE* data_file, uint64_t  offset, uint64_t node_id);
+//    OSMNode( FILE* idx, FILE* data, uint64_t node_id);
+    OSMNode( const uint8_t* data_ptr);
         
     void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
     const std::string &getValue(std::string key) const;
@@ -54,9 +61,10 @@ struct OSMNode
     bool operator< (const OSMNode &other) const;
     
 //    OSMVertex toVertex() const {return OSMVertex(lat, lon);}
+    uint64_t id;
+    uint32_t version;
     int32_t lat;    //needs to be signed! -180° < lat < 180°
     int32_t lon;    //                     -90° < lon <  90°
-    uint64_t id;
     std::vector<OSMKeyValuePair> tags;
 };
 
@@ -68,10 +76,14 @@ typedef struct
     int32_t lat, lng;
 } OsmGeoPosition;
 
+
 struct OSMWay
 {
-    OSMWay( uint64_t way_id);
-    OSMWay( uint64_t way_id, std::vector<uint64_t> way_refs, std::vector<OSMKeyValuePair> way_tags);
+//    OSMWay( uint64_t way_id);
+    OSMWay( uint64_t way_id, uint32_t version, 
+            std::vector<uint64_t> refs = std::vector<uint64_t>(), 
+            std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+            
     OSMWay( const uint8_t* data_ptr);
 
     void serialize( FILE* data_file, mmap_t *index_map) const;
@@ -80,6 +92,7 @@ struct OSMWay
     const std::string &operator[](std::string key) const {return getValue(key);}
 
     uint64_t id;
+    uint32_t version;
     std::vector<OsmGeoPosition> refs;
     std::vector<OSMKeyValuePair> tags;
 };
@@ -102,11 +115,13 @@ struct OsmRelationMember
 
 struct OsmRelation
 {
-    OsmRelation( uint64_t relation_id);
-    OsmRelation( uint64_t relation_id, std::vector<OsmRelationMember> relation_members, std::vector<OSMKeyValuePair> relation_tags);
-    OsmRelation( const uint8_t* data_ptr, uint64_t relation_id);
-    OsmRelation( FILE* src, uint64_t rel_id = -1);
-    OsmRelation( FILE* idx, FILE* data, uint64_t relation_id);
+    //OsmRelation( uint64_t relation_id);
+    OsmRelation( uint64_t id, uint32_t version, 
+                std::vector<OsmRelationMember> members = std::vector<OsmRelationMember>(), 
+                std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+    OsmRelation( const uint8_t* data_ptr);
+/*    OsmRelation( FILE* src, uint64_t rel_id = -1);
+    OsmRelation( FILE* idx, FILE* data, uint64_t relation_id);*/
 
     void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
     bool hasKey(std::string key) const;
@@ -114,6 +129,7 @@ struct OsmRelation
     const std::string& operator[](std::string key) const {return getValue(key);}
     void initFromFile(FILE* src);
     uint64_t id;
+    uint32_t version;
     std::vector<OsmRelationMember> members;
     std::vector<OSMKeyValuePair> tags;
 };

@@ -7,7 +7,7 @@
 using namespace std;
 
 const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
-const uint64_t MAX_NODE_SIZE      = 500ll * 1000 * 1000;
+const uint64_t MAX_NODE_SIZE      =   1ll * 1000 * 1000;
 
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
@@ -216,7 +216,7 @@ int main()
 {
     LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
 
-    StorageNode storage("nodes/admin.bin", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+    StorageNode storage("nodes/road", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
     uint64_t numHighways = 0;
     uint64_t pos = 0;
 
@@ -227,21 +227,24 @@ int main()
         pos += 1;
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
-        /*
+        
         if (!way.hasKey("highway"))
             continue;
 
         string highwayType = way.getValue("highway");
-        if ((highwayType  !=  "primary") && (highwayType  !=  "trunk") && (highwayType  !=  "motorway"))
-            continue;
-        */
-       
+        //if ((highwayType  !=  "primary") && (highwayType  !=  "trunk") && (highwayType  !=  "motorway"))
+        //    continue;
         
+       
+        /*
         if (!way.hasKey("boundary"))
             continue;
 
         if (way.getValue("boundary") != "administrative")
-            continue;
+            continue;*/
+        /*
+        if (!way.hasKey("building") || way.getValue("building") == "no")
+            continue;*/
 
         //cout << way << endl; 
         storage.add(way, getBounds(way) );

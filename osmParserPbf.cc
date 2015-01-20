@@ -162,6 +162,7 @@ void OsmParserPbf::parseDenseNodes( const OSMPBF::DenseNodes &nodes, const Strin
         int64_t id =     prevId +  nodes.id().Get(i);
         int64_t latRaw = prevLat + nodes.lat().Get(i);
         int64_t lonRaw = prevLon + nodes.lon().Get(i);
+        int32_t version= nodes.denseinfo().version().Get(i);
 /*        int64_t timeStamp= prevTimeStamp+ nodes.denseinfo().timestamp().Get(i);
         int64_t changeset= prevChangeset+ nodes.denseinfo().changeset().Get(i);
         int32_t uid      = prevUid      + nodes.denseinfo().uid().Get(i);
@@ -169,7 +170,7 @@ void OsmParserPbf::parseDenseNodes( const OSMPBF::DenseNodes &nodes, const Strin
         bool    visible  = (!containsVisibilityInformation) || nodes.denseinfo().visible().Get(i);*/
         
         //cout << "lat/lng:" << latRaw << "/" << lonRaw << endl;
-        OSMNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id);
+        OSMNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id, version);
         
         //FIXME: this check is necessary to parse planet dumps; add it to the specification in the wiki
         if (nodes.keys_vals().size() > 0)   
@@ -203,8 +204,9 @@ void OsmParserPbf::parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Wa
     for (const OSMPBF::Way &way : ways)
     {
         MUST( way.keys().size()== way.vals().size(), "extraneous key or value");
-
-        OSMWay osmWay(way.id());
+        int32_t version = way.has_info() && way.info().has_version() ? 
+            way.info().version() : 1;
+        OSMWay osmWay(way.id(), version);
 
         //osmWay.tags.reserve( way.keys().size());        
         for (int i = 0; i < way.keys().size(); i++)
@@ -233,7 +235,10 @@ void OsmParserPbf::parseRelations(const google::protobuf::RepeatedPtrField<OSMPB
 {
     for (const OSMPBF::Relation &rel : rels)
     {
-        OsmRelation osmRel(rel.id());
+        int32_t version = rel.has_info() && rel.info().has_version() ? 
+            rel.info().version() : 1;
+
+        OsmRelation osmRel(rel.id(), version);
         MUST( rel.keys().size() == rel.vals().size(), "extraneous key or value");
         MUST( rel.roles_sid().size() == rel.memids().size(), "incomplete (type,role,ref) triple");
         MUST( rel.roles_sid().size() == rel.types().size(), "incomplete (type,role,ref) triple");

@@ -103,28 +103,6 @@ vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
     
 }
 
-/*
-static const char* freadstr(FILE *src)
-{
-    static char* buf = (char*) malloc(1);
-    static uint32_t buf_size = 1;
-
-    uint32_t idx = 0;
-    do
-    {
-        if (idx >= buf_size)
-        {
-            buf = (char*)realloc(buf, buf_size*2);
-            buf_size = buf_size*2;
-        }
-        buf[idx] = fgetc(src);
-        if (buf[idx] == '\0') return buf;
-        idx++;
-    } while (!feof(src));
-    return buf;
-
-}*/
-
 vector<OSMKeyValuePair> deserializeTags(FILE* src)
 {
     vector<OSMKeyValuePair> tags;
@@ -193,16 +171,24 @@ OSMNode::OSMNode( FILE* data_file, uint64_t offset, uint64_t node_id)
     id = node_id;
 }*/
 
-OSMNode::OSMNode( const uint8_t* data_ptr, uint64_t node_id)
+OSMNode::OSMNode( const uint8_t* data_ptr)
 {
+    id = *(uint64_t*)data_ptr;
+    data_ptr += sizeof(uint64_t);
+
+    version = *(uint32_t*)data_ptr;
+    data_ptr+= sizeof(uint32_t);
+    
     lat = *(int32_t*)data_ptr;
     data_ptr+=4;
+
     lon = *(int32_t*)data_ptr;
     data_ptr+=4;
+
     tags = deserializeTags(data_ptr);
-    id = node_id;
 }
 
+#if 0
 OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
 {
     fseek(idx, node_id*sizeof(uint64_t), SEEK_SET);
@@ -230,23 +216,24 @@ OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
 
     tags = deserializeTags(data);
 }
+#endif
 
+OSMNode::OSMNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OSMKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
 
-OSMNode::OSMNode( int32_t node_lat, int32_t node_lon, uint64_t  node_id, vector<OSMKeyValuePair> node_tags):
-        lat(node_lat), lon(node_lon), id(node_id), tags(node_tags) {}
-
-void OSMNode::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
+void OSMNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
 {
     /** temporary nodes in OSM editors are allowed to have negative node IDs, 
       * but those in the official maps are guaranteed to be positive.
       * Also, negative ids would mess up the memory map (would lead to negative indices*/
     assert (id > 0);  
 
-    uint64_t offset = ftello(data_file);    //get offset at which the dumped node *starts*
-    fwrite( &lat, sizeof(lat), 1, data_file);
-    fwrite( &lon, sizeof(lon), 1, data_file);
+    uint64_t offset = ftello(dataFile);    //get offset at which the dumped node *starts*
+    fwrite( &id,      sizeof(id),      1, dataFile);
+    fwrite( &version, sizeof(version), 1, dataFile);
+    fwrite( &lat,     sizeof(lat),     1, dataFile);
+    fwrite( &lon,     sizeof(lon),     1, dataFile);
 
-    serializeTags( tags, data_file );
+    serializeTags( tags, dataFile );
 
     //std::cout << id << endl;    
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
@@ -283,8 +270,9 @@ ostream& operator<<(ostream &out, const OSMNode &node)
     return out;
 }
 
-OSMWay::OSMWay( uint64_t way_id, vector<uint64_t> way_refs, vector<OSMKeyValuePair> way_tags):
-        id(way_id), tags(way_tags)  
+OSMWay::OSMWay( uint64_t id, uint32_t version, 
+            std::vector<uint64_t> way_refs, std::vector<OSMKeyValuePair> tags):
+        id(id), version(version), tags(tags)  
 { 
     for (uint64_t ref : way_refs)
         refs.push_back( (OsmGeoPosition){.id = ref, .lat=INVALID_LAT_LNG, .lng = INVALID_LAT_LNG} );
@@ -294,8 +282,13 @@ OSMWay::OSMWay( const uint8_t* data_ptr)
 {
     this->id = *(uint64_t*)data_ptr;
     data_ptr += sizeof( uint64_t );
+    
+    this->version = *(uint32_t*)data_ptr;
+    data_ptr += sizeof( uint32_t );
+    
     uint16_t num_node_refs = *(uint16_t*)data_ptr;
     data_ptr+= sizeof(uint16_t);
+    
     while (num_node_refs--)
     {
         refs.push_back( (OsmGeoPosition){ .id = *(uint64_t*)data_ptr, 
@@ -306,7 +299,7 @@ OSMWay::OSMWay( const uint8_t* data_ptr)
     tags = deserializeTags(data_ptr);
 }
 
-OSMWay::OSMWay(uint64_t way_id): id(way_id) {}
+//OSMWay::OSMWay(uint64_t way_id): id(way_id) {}
 
         
 
@@ -317,6 +310,7 @@ void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
     uint64_t offset = index_map ? ftello(data_file) : 0;
 
     MUST( 1 == fwrite(&this->id, sizeof(this->id), 1, data_file), "write error");
+    MUST( 1 == fwrite(&this->version, sizeof(this->version), 1, data_file), "write error");
 
     
     MUST(refs.size() <= 2000, "#refs in way is beyond what's allowed by OSM spec");
@@ -369,13 +363,18 @@ ostream& operator<<(ostream &out, const OSMWay &way)
 
 
 //==================================
-OsmRelation::OsmRelation( uint64_t relation_id): id(relation_id) {}
+//OsmRelation::OsmRelation( uint64_t relation_id): id(relation_id) {}
 
-OsmRelation::OsmRelation( uint64_t relation_id, vector<OsmRelationMember> relation_members, vector<OSMKeyValuePair> relation_tags):
-    id(relation_id), members(relation_members), tags(relation_tags) {}
+OsmRelation::OsmRelation( uint64_t id, uint32_t version, vector<OsmRelationMember> members, vector<OSMKeyValuePair> tags): id(id), version(version), members(members), tags(tags) {}
 
-OsmRelation::OsmRelation( const uint8_t* data_ptr, uint64_t relation_id): id(relation_id)
+OsmRelation::OsmRelation( const uint8_t* data_ptr)
 {
+    id = *(uint64_t*)data_ptr;
+    data_ptr += sizeof(uint64_t);
+    
+    version = *(uint32_t*)data_ptr;
+    data_ptr += sizeof(uint32_t);
+
     uint32_t num_members = *(uint32_t*)data_ptr;
     data_ptr+=4;
 
@@ -422,6 +421,7 @@ void OsmRelation::initFromFile(FILE* src)
 
 }
 
+#if 0
 OsmRelation::OsmRelation( FILE* src, uint64_t rel_id): id(rel_id)
 {
     this->initFromFile(src);
@@ -444,13 +444,15 @@ OsmRelation::OsmRelation( FILE* idx, FILE* data, uint64_t relation_id): id(relat
     fseek(data, pos, SEEK_SET);
     this->initFromFile(data);
 }
-
+#endif
 
 void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
 {
     assert (id > 0);  
 
     uint64_t offset = ftello(data_file);    //get offset at which the dumped way *starts*
+    fwrite( &id, sizeof(id), 1, data_file);
+    fwrite( &version, sizeof(version), 1, data_file);
     
     assert(members.size() < (1<<16));
     uint32_t num_members = members.size();

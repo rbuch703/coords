@@ -113,7 +113,8 @@ void OsmXmlParser::parseNode()
 //    if (!hasParsedNodes) { hasParsedNodes = true; consumer->beforeParsingNodes();}
     int32_t lat = degValueToInt(line, "lat"); 
     int32_t lon = degValueToInt(line, "lon");
-    int64_t id = strtoul(getValue(line, "id"), NULL, 10);
+    uint64_t id = strtoull(getValue(line, "id"), NULL, 10);
+    uint32_t version = atoi(getValue(line, "version"));
     vector<OSMKeyValuePair> tags;
     if (!strstr(line, "/>")) //node contains tags (kv-pairs)
     {
@@ -126,7 +127,7 @@ void OsmXmlParser::parseNode()
             tags.push_back( OSMKeyValuePair(key, val));
         }
     }
-    OSMNode node(lat, lon, id, tags);
+    OSMNode node(lat, lon, id, version, tags);
     consumer->processNode(node);
 }
 
@@ -138,6 +139,8 @@ void OsmXmlParser::parseWay()
 //        consumer->beforeParsingWays();
 //    }
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
+    uint32_t version = strtoul(getValue(line, "version"), NULL, 10);
+
     vector<OSMKeyValuePair> tags;
     vector<uint64_t> node_refs;
     if (strstr(line, "/>")) //way without node references???
@@ -166,7 +169,7 @@ void OsmXmlParser::parseWay()
         return; //skip this way
     }
     
-    OSMWay way(id, node_refs, tags);
+    OSMWay way(id, version, node_refs, tags);
     consumer->processWay(way);
 }
 
@@ -178,7 +181,8 @@ void OsmXmlParser::parseRelation()
         consumer->beforeParsingRelations();
     }
     */
-    int64_t id = strtoul(getValue(line, "id"), NULL, 10);
+    int64_t id       = strtoul(getValue(line, "id"),      NULL, 10);
+    uint32_t version = strtoul(getValue(line, "version"), NULL, 10);
     vector<OSMKeyValuePair> tags;
     vector<OsmRelationMember> members;
     
@@ -213,7 +217,7 @@ void OsmXmlParser::parseRelation()
             tags.push_back( OSMKeyValuePair(key, val));
         } else assert(false && "Unknown tag in relation" );
     }
-    OsmRelation rel(id, members, tags);
+    OsmRelation rel(id, version, members, tags);
     consumer->processRelation(rel);
 }
 

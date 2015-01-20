@@ -65,6 +65,7 @@ public:
     uint16_t numTags;
     
     uint64_t id;
+    uint32_t version;
 };
 
 std::ostream& operator<<(std::ostream &out, const OsmLightweightWay &way);
