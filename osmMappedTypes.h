@@ -41,6 +41,10 @@ public:
     OsmLightweightWay &operator=(const OsmLightweightWay &other);
 
     void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
+    /* modify data without changing content, to make the underlying pages dirty
+     * and force a writeback. This is mostly used to force linear streaming.
+       writes of the backing mmap, instead of the much slower random access writes */
+    void touch();
     std::map<std::string, std::string> getTags() const;
     
     uint64_t size() const;

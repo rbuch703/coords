@@ -2,8 +2,10 @@
 #include <iostream>
 #include <stdio.h>
 #include <assert.h>
-#include <sys/mman.h>
 #include <unistd.h> //for sysconf()
+#include <sys/mman.h>
+#include <sys/stat.h> //for stat()
+
 
 #include "mem_map.h"
 #include "osmMappedTypes.h"
@@ -16,11 +18,6 @@ const uint64_t MAX_MMAP_SIZE = 8000ll * 1000 * 1000; //500 MB
 
 using namespace std;
 
-/** returns:
-     whether 'pos' is resolved to a lat/lng pair. This is true, if either the 
-     method has resolved the position itself, or if it was already resolved.
-*
-*/
 
 int main()
 {
@@ -61,7 +58,7 @@ int main()
 
     for (uint64_t i = 0; i < nRuns; i++)
     {
-        uint64_t lastSynced = 0;
+        //uint64_t lastSynced = 0;
         if (nRuns > 1)
             cout << "starting run " << i << endl;
         
@@ -79,11 +76,11 @@ int main()
             if (pos % 1000000 == 0)
             {
                 cout << (pos / 1000000) << "M ways processed" << endl;
-                cout << "syncing way range " << lastSynced << " -> " << (way.id-1);
+                /*cout << "syncing way range " << lastSynced << " -> " << (way.id-1);
                 cout.flush();
                 wayStore.syncRange(lastSynced, (way.id-1));
                 cout << " done." << endl;
-                lastSynced = way.id - 1;
+                lastSynced = way.id - 1;*/
             }
             for (OsmGeoPosition &node : way.getVertices() )
             //for (int j = 0; j < way.numVertices; j++)
@@ -102,6 +99,7 @@ int main()
                 //    reverseNodeIndex.addReferenceFromWay( pos.id, way.id);
                 }
             }
+            way.touch();
 
         }
         if ( 0 !=  madvise( vertexPos, vertexWindowSize, MADV_DONTNEED))

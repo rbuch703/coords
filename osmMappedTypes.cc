@@ -144,6 +144,30 @@ void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
         MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
 }
 
+void OsmLightweightWay::touch() {
+    if (!this->isDataMapped)
+        return;
+
+    uint8_t pattern = 0xA5;
+
+    uint8_t *vertexBytes = (uint8_t *) this->vertices;
+    int64_t numVertexBytes= this->numVertices * sizeof(OsmGeoPosition);
+
+    for (int i = 0; i < numVertexBytes; i++)
+        vertexBytes[i] ^= pattern;
+
+    for (uint64_t i = 0; i < this->numTagBytes; i++)
+        this->tagBytes[i] ^= pattern;
+
+    //undo XOR;
+    for (int i = 0; i < numVertexBytes; i++)
+        vertexBytes[i] ^= pattern;
+
+    for (uint64_t i = 0; i < this->numTagBytes; i++)
+        this->tagBytes[i] ^= pattern;
+        
+}
+
 
 std::map<std::string, std::string> OsmLightweightWay::getTags() const
 {
@@ -214,6 +238,7 @@ LightweightWayStore::LightweightWayStore(const char* indexFileName, const char* 
     mapWayIndex = init_mmap(indexFileName, true, false);
     mapWayData  = init_mmap(dataFileName, true, true);
 
+    //TODO: MAP_LOCK the way index to see if that solves the contention problem
     madvise( mapWayData.ptr, mapWayData.size, MADV_SEQUENTIAL);
 
 }
@@ -225,7 +250,6 @@ OsmLightweightWay LightweightWayStore::operator[](uint64_t wayId)
     assert(wayIndex[wayId] != 0 && "trying to access non-existent way");
     uint64_t wayPos = wayIndex[wayId];
     return OsmLightweightWay((uint8_t*)mapWayData.ptr + wayPos);
-
 }
 
 bool LightweightWayStore::exists(uint64_t wayId) const
