@@ -8,7 +8,7 @@
 using namespace std;
 
 const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
-const uint64_t MAX_NODE_SIZE      =   1ll * 1000 * 1000;
+const uint64_t MAX_NODE_SIZE      = 2ll * 1000 * 1000;
 
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
@@ -247,12 +247,12 @@ int main()
         pos += 1;
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
-       
+
         storage.add(way, getBounds(way) );
         numHighways += 1;
     }
     cout << "stats: data set contains " << (numHighways/1000) << "k roads." << endl;   
-    
+
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
          << (MAX_NODE_SIZE/1000000) << "MB." << endl;
 //    exit(0);

@@ -50,10 +50,10 @@ int main()
     uint64_t nPagesPerRun = (numVertexPages + (nRuns -1)) / nRuns;  //rounded up to cover all vertices!
     uint64_t nVerticesPerRun =  nPagesPerRun * nVerticesPerPage;
     assert( nRuns * nVerticesPerRun >= numVertices);
-    uint64_t vertexWindowSize = nVerticesPerRun * (2* sizeof(uint32_t));
+    uint64_t vertexWindowSize = nVerticesPerRun * (2* sizeof(int32_t));
 
-    cout << "will process vertices in " << nRuns << " runs à " << nVerticesPerRun 
-         << " vertices (" << (vertexWindowSize / 1000000) << "MB)" << endl;
+    cout << "will process vertices in " << nRuns << " runs à " << (nVerticesPerRun/1000000)
+         << "M vertices (" << (vertexWindowSize / 1000000) << "MB)" << endl;
 
 
     for (uint64_t i = 0; i < nRuns; i++)
@@ -62,16 +62,24 @@ int main()
         if (nRuns > 1)
             cout << "starting run " << i << endl;
         
-        cout << "[DEBUG] paging in vertex range ... ";
+        cout << "[DEBUG] paging-in vertex range ... ";
         cout.flush();
         int32_t *vertexPos = (int32_t*) 
-            mmap(NULL, vertexWindowSize, PROT_READ, MAP_SHARED | MAP_POPULATE,
+            mmap(NULL, vertexWindowSize, PROT_READ, MAP_SHARED | /*MAP_POPULATE |*/ MAP_LOCKED,
                  fileno(fVertices), i * vertexWindowSize);
-         cout << "done." << endl;
+
+		if (vertexPos == MAP_FAILED)
+			{perror("mmap"); exit(0);}
+
+		int32_t *upper = vertexPos + (i*2*nVerticesPerRun);
+		uint64_t firstVertexId = i*nVerticesPerRun;
+
+        cout << "done." << endl;
         
         uint64_t pos = 0;
         for (OsmLightweightWay way : wayStore)
         {
+	    //cout << way << endl;
             pos += 1;
             if (pos % 1000000 == 0)
             {
@@ -85,25 +93,37 @@ int main()
             for (OsmGeoPosition &node : way.getVertices() )
             //for (int j = 0; j < way.numVertices; j++)
             {
+		//not in the currently processed range
+                if (node.id < (i*nVerticesPerRun) || node.id >= (i+1)*nVerticesPerRun)
+                    continue;
+		//cout << "\t" << node.lat << ", " << node.lng << endl;
                 /* lat and lng are resolved at the same time, so either both values
                  * have to be valid, or none of them must be.*/ 
-                MUST( (node.lat == INVALID_LAT_LNG) == (node.lng == INVALID_LAT_LNG), "invalid lat/lng pair" );
-                if (node.lat != INVALID_LAT_LNG)
+                if ((node.lat == INVALID_LAT_LNG) != (node.lng == INVALID_LAT_LNG))
+                {
+                    cout << "invalid lat/lng pair " << (node.lat/10000000.0) << "/" << (node.lng/10000000.0) 
+                         << " at node " << node.id << " in way " << way.id << endl;
+                    exit(0); 
+                }
+                //MUST( (node.lat == INVALID_LAT_LNG) == (node.lng == INVALID_LAT_LNG), "invalid lat/lng pair" );
+                if (node.lat != INVALID_LAT_LNG && node.lng != INVALID_LAT_LNG)
                     continue;   //already resolved to lat/lng pair
                 
-                if (node.id >= (i*nVerticesPerRun) && node.id < (i+1)*nVerticesPerRun)
+	            int32_t *base = (vertexPos + (node.id - firstVertexId)*2);
+                /*if (base < vertexPos || base >= upper)
                 {
-                    int32_t *base = (vertexPos - (i*nVerticesPerRun));
-                    node.lat = base[2*node.id];
-                    node.lng = base[2*node.id+1];
+                    cout << " invalid vertex pointer; should be " << vertexPos << "->" << upper << ", is " << base << endl;
+                }*/
+    	        assert( base  >= vertexPos && base < upper);
+                node.lat = base[0];
+                node.lng = base[1];
                 //    reverseNodeIndex.addReferenceFromWay( pos.id, way.id);
-                }
             }
             way.touch();
 
         }
         if ( 0 !=  madvise( vertexPos, vertexWindowSize, MADV_DONTNEED))
-            perror("madvise");
+            perror("madvise error");
         munmap(vertexPos, vertexWindowSize);
     }
 

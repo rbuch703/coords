@@ -76,7 +76,6 @@ typedef struct
     int32_t lat, lng;
 } OsmGeoPosition;
 
-
 struct OSMWay
 {
 //    OSMWay( uint64_t way_id);

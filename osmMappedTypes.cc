@@ -124,6 +124,7 @@ OsmLightweightWay::~OsmLightweightWay()
 
 void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
 {
+//    cout << "id: " << this->id << ", numVertices " << this->numVertices <<", numTagBytes " << this->numTagBytes<< endl;
     assert (id > 0);
     //get offset at which the dumped way *starts*
     //uint64_t offset = index_map ? ftello(dest) : 0;
@@ -148,23 +149,27 @@ void OsmLightweightWay::touch() {
     if (!this->isDataMapped)
         return;
 
-    uint8_t pattern = 0xA5;
+    /*uint8_t pattern = 0xA5;
 
     uint8_t *vertexBytes = (uint8_t *) this->vertices;
-    int64_t numVertexBytes= this->numVertices * sizeof(OsmGeoPosition);
+    int64_t numVertexBytes= this->numVertices * sizeof(OsmGeoPosition);*/
 
-    for (int i = 0; i < numVertexBytes; i++)
-        vertexBytes[i] ^= pattern;
+#warning dirty-flagging hack that modifies geometric data
+    for (int i = 0; i < numVertices; i++)
+    {
+        vertices[i].lat ^= 0x00000001;	//swap LSB
+        vertices[i].lng ^= 0x00000001;
+    }
 
-    for (uint64_t i = 0; i < this->numTagBytes; i++)
-        this->tagBytes[i] ^= pattern;
+/*    for (uint64_t i = 0; i < this->numTagBytes; i++)
+        this->tagBytes[i] ^= pattern;*/
 
     //undo XOR;
-    for (int i = 0; i < numVertexBytes; i++)
-        vertexBytes[i] ^= pattern;
+/*    for (int i = 0; i < numVertexBytes; i++)
+        vertexBytes[i] ^= pattern;*/
 
-    for (uint64_t i = 0; i < this->numTagBytes; i++)
-        this->tagBytes[i] ^= pattern;
+/*    for (uint64_t i = 0; i < this->numTagBytes; i++)
+        this->tagBytes[i] ^= pattern;*/
         
 }
 
