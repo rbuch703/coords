@@ -6,7 +6,7 @@ Please note: These tools are prototypes and not yet ready for production use. Th
 
 Building Instructions (for Ubuntu 14.04)
 ========================================
-* install the required dependencies, e.g. `sudo apt-get install make build-essentials libprotobuf-dev protobuf-compiler g+`
+* install the required dependencies, e.g. `sudo apt-get install make build-essential libprotobuf-dev protobuf-compiler g+`
 * compile the tools using `make` (there is currently no `./configure` step)
 
 
@@ -41,14 +41,16 @@ The tools write various data storage files (the memory requirements here are giv
 
 Execution Time
 ==============
-The execution times for these tools will vary dramatically depending on
+The execution times for these tools varies dramatically depending on
 
+* how much data the input PBF file contains
+* whether you are using the ID remapper
 * how much RAM is available (see "RAM Requirements")
 * whether the files are stored on a hard disk, or an SSD
 
-The following execution times where measured on an 2x2.4GHz XEON virtual machine with 32GB of RAM and a hard drive-backed file system:
+The following execution times where measured on a 2x2.4GHz virtual machine with 32GB of RAM and a hard drive-backed file system, processing a recent Planet dump (28.5GB) without ID remapping:
 
-1. `build/conv_osm`: about 2h
-2. `build/wayInt`: about XXX
+1. `build/conv_osm`: about 1.5h
+2. `build/wayInt`: about 2h for two passes
 3. `build/tiles`: about XXX
  

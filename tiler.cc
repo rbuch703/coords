@@ -2,12 +2,13 @@
 #include <iostream>
 #include <stdio.h>
 //#include <unistd.h> // for unlink()
+#include <sys/stat.h> //for stat()
 #include "osmMappedTypes.h"
 
 using namespace std;
 
 const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
-const uint64_t MAX_NODE_SIZE      = 500ll * 1000 * 1000;
+const uint64_t MAX_NODE_SIZE      = 2ll * 1000 * 1000;
 
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
@@ -212,11 +213,30 @@ private:
 
 };
 
+void ensureDirectoryExists(string directory)
+{
+    struct stat dummy;
+    size_t start_pos = 0;
+    
+    do
+    {
+        size_t pos = directory.find('/', start_pos);
+        string basedir = directory.substr(0, pos);  //works even if no slash is present --> pos == string::npos
+        if (0!= stat(basedir.c_str(), &dummy)) //directory does not yet exist
+            if (0 != mkdir(basedir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) //755
+                { perror(("[ERR] mkdir '" + directory + "'").c_str());}
+        if (pos == string::npos) break;
+        start_pos = pos+1;
+    } while ( true);
+}
+
+
 int main()
 {
     LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
 
-    StorageNode storage("nodes/admin.bin", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+    ensureDirectoryExists("nodes");
+    StorageNode storage("nodes/node", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
     uint64_t numHighways = 0;
     uint64_t pos = 0;
 
@@ -236,12 +256,12 @@ int main()
             continue;
         */
        
-        
+        /*
         if (!way.hasKey("boundary"))
             continue;
 
         if (way.getValue("boundary") != "administrative")
-            continue;
+            continue;*/
 
         //cout << way << endl; 
         storage.add(way, getBounds(way) );
