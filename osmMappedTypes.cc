@@ -157,8 +157,11 @@ void OsmLightweightWay::touch() {
 #warning dirty-flagging hack that modifies geometric data
     for (int i = 0; i < numVertices; i++)
     {
-        vertices[i].lat ^= 0x00000001;	//swap LSB
-        vertices[i].lng ^= 0x00000001;
+        if (vertices[i].lat != INVALID_LAT_LNG && vertices[i].lng != INVALID_LAT_LNG)
+        {
+            vertices[i].lat ^= 0x00000001;	//swap LSB
+            vertices[i].lng ^= 0x00000001;
+        }
     }
 
 /*    for (uint64_t i = 0; i < this->numTagBytes; i++)

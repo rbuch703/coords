@@ -99,6 +99,10 @@ int main()
 		//cout << "\t" << node.lat << ", " << node.lng << endl;
                 /* lat and lng are resolved at the same time, so either both values
                  * have to be valid, or none of them must be.*/ 
+/*                if (node.lat == 0x7FFFFFFE)
+                    node.lat =  0x7FFFFFFF;
+                if (node.lng == 0x7FFFFFFE)
+                    node.lng =  0x7FFFFFFF;*/
                 if ((node.lat == INVALID_LAT_LNG) != (node.lng == INVALID_LAT_LNG))
                 {
                     cout << "invalid lat/lng pair " << (node.lat/10000000.0) << "/" << (node.lng/10000000.0) 
@@ -156,6 +160,11 @@ int main()
                 cout << "ERROR: missed vertexId " << pos.id << " in way " << way.id << endl;
                 MUST( false, "missed vertexId in way");
             }
+            if (pos.lat > 900000000 || pos.lat < -900000000)
+                cout << "invalid latitude " << pos.lat << " for node " << pos.id << " in way " << way.id << endl;
+            if (pos.lng > 1800000000 || pos.lng < -1800000000)
+                cout << "invalid longitude " << pos.lng << " for node " << pos.id << " in way " << way.id << endl;
+
         }
     }
     cout << "passed." << endl;
