@@ -6,7 +6,7 @@ Please note: These tools are prototypes and not yet ready for production use. Th
 
 Building Instructions (for Ubuntu 14.04)
 ========================================
-* install the required dependencies, e.g. `sudo apt-get install make build-essential libprotobuf-dev protobuf-compiler g+`
+* install the required dependencies, e.g. `sudo apt-get install make build-essential libprotobuf-dev protobuf-compiler libexpat1-dev`
 * compile the tools using `make` (there is currently no `./configure` step)
 
 
@@ -35,7 +35,7 @@ Disk Storage Requirements
 The tools write various data storage files (the memory requirements here are given for a typical 2015 Dlanet dump. They will be significatly lower for regional extracts):
 
 1. the complete node, way and relation indices (`nodes.idx, nodes.data, ways.idx, ways.data, relations.idx and relations.data` in the `intermediate` directory): about 150 GB
-2. the node ID-> lat/lng index (`vertices.data`): about 20GB
+2. the node ID-> lat/lng index (`vertices.data` in the current working directory): about 20GB
 3. The vector data tiles (numbered files in the `nodes` directory): ~70GB
 
 

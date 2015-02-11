@@ -237,7 +237,10 @@ int main()
 
     ensureDirectoryExists("nodes");
     StorageNode storage("nodes/node", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
-    uint64_t numHighways = 0;
+    StorageNode storageLod12("nodes/lod12", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+
+    uint64_t numWays = 0;
+    uint64_t numLod12Ways = 0;
     uint64_t pos = 0;
 
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
@@ -249,9 +252,35 @@ int main()
             cout << (pos / 1000000) << "M ways read" << endl;
 
         storage.add(way, getBounds(way) );
-        numHighways += 1;
+        numWays += 1;
+        
+        if (way.hasKey("building")) continue;
+        if (way.hasKey("highway"))
+        {
+            string highway = way.getValue("highway");
+            if (highway == "residential" || highway == "service" ||highway == "track" || highway == "unclassified" || highway == "footway" || highway == "path" || highway == "living_street" || highway == "crossing" || highway == "turning_circle")
+                continue;
+        }
+        
+        if (way.hasKey("natural"))
+        {
+            string natural = way.getValue("natural");
+            if (natural == "tree") continue;
+        }
+        
+        /*if (way.hasKey("boundary"))
+        {
+            if (way.getValue("boundary") != "administrative")
+                continue;
+            
+            if (!way.hasKey("admin_level")
+        }*/
+        
+        storageLod12.add(way, getBounds(way));
+        numLod12Ways += 1;
     }
-    cout << "stats: data set contains " << (numHighways/1000) << "k roads." << endl;   
+    cout << "stats: data set contains " << (numWays/1000) << "k ways." << endl;   
+    cout << "stats: data set contains " << (numLod12Ways/1000) << "k ways at LOD 12." << endl;   
 
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
          << (MAX_NODE_SIZE/1000000) << "MB." << endl;
@@ -264,6 +293,8 @@ int main()
     storage.closeFiles();
     storage.subdivide(MAX_NODE_SIZE);
  
+    storageLod12.closeFiles();
+    storageLod12.subdivide(MAX_NODE_SIZE);
     cout << "done." << endl;
     return EXIT_SUCCESS;
 }

@@ -11,7 +11,7 @@
 #include "osmMappedTypes.h"
 #include "reverseIndex.h"
 
-const uint64_t MAX_MMAP_SIZE = 8000ll * 1000 * 1000; //500 MB 
+const uint64_t MAX_MMAP_SIZE = 10000ll * 1000 * 1000; //500 MB 
 
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
@@ -71,7 +71,7 @@ int main()
 		if (vertexPos == MAP_FAILED)
 			{perror("mmap"); exit(0);}
 
-		int32_t *upper = vertexPos + (i*2*nVerticesPerRun);
+		int32_t *upper = vertexPos + (2*nVerticesPerRun); //two int32 per vertex
 		uint64_t firstVertexId = i*nVerticesPerRun;
 
         cout << "done." << endl;
