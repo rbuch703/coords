@@ -76,11 +76,19 @@ typedef struct
     int32_t lat, lng;
 } OsmGeoPosition;
 
+bool operator==(const OsmGeoPosition &a, const OsmGeoPosition &b);
+bool operator!=(const OsmGeoPosition &a, const OsmGeoPosition &b);
+OsmGeoPosition operator-(const OsmGeoPosition &a, const OsmGeoPosition &b);
+
 struct OSMWay
 {
 //    OSMWay( uint64_t way_id);
     OSMWay( uint64_t way_id, uint32_t version, 
             std::vector<uint64_t> refs = std::vector<uint64_t>(), 
+            std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+
+    OSMWay( uint64_t way_id, uint32_t version, 
+            std::vector<OsmGeoPosition> refs, 
             std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
             
     OSMWay( const uint8_t* data_ptr);

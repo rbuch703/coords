@@ -270,6 +270,13 @@ ostream& operator<<(ostream &out, const OSMNode &node)
     return out;
 }
 
+
+bool operator==(const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat == b.lat && a.lng == b.lng; }
+bool operator!=(const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat != b.lat || a.lng != b.lng; }
+
+
+
+
 OSMWay::OSMWay( uint64_t id, uint32_t version, 
             std::vector<uint64_t> way_refs, std::vector<OSMKeyValuePair> tags):
         id(id), version(version), tags(tags)  
@@ -277,6 +284,12 @@ OSMWay::OSMWay( uint64_t id, uint32_t version,
     for (uint64_t ref : way_refs)
         refs.push_back( (OsmGeoPosition){.id = ref, .lat=INVALID_LAT_LNG, .lng = INVALID_LAT_LNG} );
 }
+
+OSMWay::OSMWay( uint64_t id, uint32_t version, 
+                std::vector<OsmGeoPosition> refs, 
+                std::vector<OSMKeyValuePair> tags):
+                id(id), version(version), refs(refs), tags(tags) { }
+
 
 OSMWay::OSMWay( const uint8_t* data_ptr)
 {

@@ -67,6 +67,39 @@ OsmLightweightWay::OsmLightweightWay( const OsmLightweightWay &other): isDataMap
     *this = other;
 }
 
+OsmLightweightWay::OsmLightweightWay( const OSMWay &other)
+{
+    this->id = other.id;
+    this->version = other.version;
+    this->isDataMapped = false;
+    this->numVertices = other.refs.size();
+    this->vertices = new OsmGeoPosition[this->numVertices];
+    for (int i = 0; i < this->numVertices; i++)
+        this->vertices[i] = other.refs[i];
+        
+    this->numTags = other.tags.size();
+    this->numTagBytes = 0;
+    for (uint64_t i = 0; i < other.tags.size(); i++)
+    {
+        this->numTagBytes += other.tags[i].first.size() + 1;    //  key string length including termination
+        this->numTagBytes += other.tags[i].second.size() + 1;   //value string length including termination
+    }
+    
+    this->tagBytes = new uint8_t[this->numTagBytes];
+    char *pos = (char*)this->tagBytes;
+    for (uint64_t i = 0; i < other.tags.size(); i++)
+    {
+        strcpy(pos, other.tags[i].first.c_str());
+        pos += strlen( pos ) + 1;
+        
+        strcpy(pos, other.tags[i].second.c_str());
+        pos += strlen( pos ) + 1;
+    }
+    assert( (uint8_t*)pos == this->tagBytes + this->numTagBytes);
+    
+}
+
+
 
 OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
 {
@@ -104,6 +137,14 @@ OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
     return (*this);
 }
 
+OSMWay OsmLightweightWay::toOsmWay() const {
+    
+    map<string, string> tags = this->getTags();
+    return OSMWay( this->id, 
+                   this->version, 
+                   vector<OsmGeoPosition>( this->vertices, this->vertices + this->numVertices, allocator<map<string, string> >()),
+                   vector<OSMKeyValuePair>( tags.begin(), tags.end()));
+}
 
 uint64_t OsmLightweightWay::size() const {
     return   sizeof(id)

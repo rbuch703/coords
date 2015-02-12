@@ -47,12 +47,12 @@ OsmConsumerDumper::OsmConsumerDumper():
 
     //for situations where several annotation keys exist with the same meaning
     //this dictionary maps them to a common unique key
-    rename_key.insert( "postal_code", "addr:postcode");
+    /*rename_key.insert( "postal_code", "addr:postcode");
     rename_key.insert( "url", "website"); //according to OSM specs, "url" is obsolete
     rename_key.insert( "phone", "contact:phone");
     rename_key.insert( "fax", "contact:fax");
     rename_key.insert( "email", "contact:email");
-    rename_key.insert( "addr:housenumber", "addr:streetnumber");
+    rename_key.insert( "addr:housenumber", "addr:streetnumber");*/
     //TODO: replace natural=lake by natural=water
     for (uint32_t i = 0; i < num_ignore_keys; i++)
         ignore_key.insert(ignore_keys[i], 0);
@@ -190,8 +190,8 @@ void OsmConsumerDumper::onAllRelationsConsumed () {
  
 bool OsmConsumerDumper::processTag(OSMKeyValuePair &tag) const
 {
-    const string* renameValue = rename_key.at(tag.first.c_str());
-    if ( renameValue ) tag.first = *renameValue;
+    //const string* renameValue = rename_key.at(tag.first.c_str());
+    //if ( renameValue ) tag.first = *renameValue;
         
     if ( ignore_key.at(tag.first.c_str()) ) 
         return false;
@@ -226,9 +226,11 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
     int32_t* vertex_ptr = (int32_t*)vertex_data.ptr;
     vertex_ptr[2*node.id]   = node.lat;
     vertex_ptr[2*node.id+1] = node.lon;
-    
+
+/*    
     if (nNodes % 1000000 == 0)
     {
+
         cout << endl << "\e[1A";
         cout << "processed " << (nNodes / 1000000) << "M nodes; writing data to disk ...";
         cout << " (" << ((ftell(node_data) - node_data_synced_pos) / 1000000) << "MB node data)";
@@ -257,6 +259,7 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
         
         
     }
+*/
 }
 
 void OsmConsumerDumper::consumeWay ( OSMWay  &way)

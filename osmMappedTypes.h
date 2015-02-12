@@ -36,10 +36,12 @@ public:
     OsmLightweightWay( FILE* src);
     OsmLightweightWay( uint8_t* data_ptr);
     OsmLightweightWay( const OsmLightweightWay &other);
+    OsmLightweightWay( const OSMWay &other);
+
     ~OsmLightweightWay ();
 
     OsmLightweightWay &operator=(const OsmLightweightWay &other);
-
+    OSMWay toOsmWay() const;
     void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     /* modify data without changing content, to make the underlying pages dirty
      * and force a writeback. This is mostly used to force linear streaming.
