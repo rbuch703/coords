@@ -3,15 +3,17 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h> //for sysconf()
+#include <getopt.h>
 #include <sys/mman.h>
 #include <sys/stat.h> //for stat()
+#include <sys/resource.h>   //for getrlimit()
 
 
 #include "mem_map.h"
 #include "osmMappedTypes.h"
 #include "reverseIndex.h"
 
-const uint64_t MAX_MMAP_SIZE = 10000ll * 1000 * 1000; //500 MB 
+//const uint64_t MAX_MMAP_SIZE = 10000ll * 1000 * 1000; //500 MB 
 
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
 
@@ -19,62 +21,221 @@ const uint64_t MAX_MMAP_SIZE = 10000ll * 1000 * 1000; //500 MB
 using namespace std;
 
 
-int main()
+bool modeIsRandomAccess = true;
+bool dryRun = false;
+bool overrideRunLimit = false;
+uint64_t maxMmapSize = 0;
+
+int parseArguments(int argc, char** argv)
 {
-    //ReverseIndex reverseNodeIndex("nodeReverse.idx", "nodeReverse.aux");
-    //ReverseIndex reverseWayIndex(  "wayReverse.idx",  "wayReverse.aux");
-    //ReverseIndex reverseRelationIndex(  "relationReverse.idx",  "relationReverse.aux");
-    //mmap_t mapVertices = init_mmap("vertices.data", true, false);
-    FILE* fVertices = fopen("vertices.data", "rb");
-    fseek( fVertices, 0, SEEK_END);
-    uint64_t numVertices = ftell(fVertices) / (2* sizeof(int32_t));
-    //fclose(fVertices);
-    
+    static const struct option long_options[] =
+    {
+        {"mode", required_argument,  NULL, 'm'},
+        {"lock", required_argument,  NULL, 'l'},
+        {"yes",  no_argument,        NULL, 'y'},
+        {"dryrun",  no_argument,  NULL, 'd'},
+        {0,0,0,0}
+    };
+
+    int opt_idx = 0;
+    int opt;
+    while (-1 != (opt = getopt_long(argc, argv, "mlys", long_options, &opt_idx)))
+    {
+        switch(opt) {
+            case '?': exit(EXIT_FAILURE); break; //unknown option; getopt_long() already printed an error message
+            case 'm':
+                if (string(optarg) == "BLOCK") modeIsRandomAccess = false;
+                else if (string(optarg) == "RANDOM") {} //do nothing, is default anyway
+                else
+                {
+                    std::cerr << "error: invalid mode '" << optarg << "'" << endl;
+                    std::cerr << "usage: " << argv[0] << " --mode [RANDOM | BLOCK --lock <size in MB>] (--dryrun) (--yes)" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            case 'l':
+                char* endPtr;
+                maxMmapSize = strtoll(optarg, &endPtr, 10);
+                if ( (*endPtr != '\0') || (maxMmapSize == 0) )
+                {
+                    std::cerr << "error: invalid lock size '" << optarg << "'" << endl;
+                    exit(EXIT_FAILURE);
+                }
+                maxMmapSize *= 1000000; //was given in MB
+                break;
+            case 'y':
+                overrideRunLimit = true;
+                break;
+            case 'd':
+                dryRun = true;
+                break;
+            default: abort(); break;
+        }
+    }
+    return optind;
+}
+
+
+uint64_t getRunConfiguration(FILE* vertexIndexFile, uint64_t maxMmapSize, 
+                        uint64_t *vertexWindowSize, uint64_t *nVerticesPerRun)
+{
+    fseek( vertexIndexFile, 0, SEEK_END);
+    uint64_t numVertices = ftell(vertexIndexFile) / (2* sizeof(int32_t));
+
     uint64_t pageSize = sysconf(_SC_PAGE_SIZE);
-    uint64_t maxNumConcurrentPages = MAX_MMAP_SIZE / pageSize;
+    uint64_t maxNumConcurrentPages = maxMmapSize / pageSize;
     //the remaining code assumes that no vertex is spread across more than one page
     assert( pageSize % (2*sizeof(int32_t)) == 0); 
     uint64_t nVerticesPerPage = pageSize / (2*sizeof(int32_t));
 
-    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
     //RelationStore relationStore("intermediate/relations.idx", "intermediate/relations.data");
     
-    cout << "data set consists of " << (numVertices/1000000) << "M vertices" << endl;
     
     uint64_t numVertexBytes = numVertices * (2*sizeof(int32_t));
     uint64_t numVertexPages = (numVertexBytes+ (pageSize-1) ) / pageSize;  //rounded up
-    cout << "data set size is " << (numVertexBytes/1000000) << "MB (" << numVertexPages << " pages)"<< endl;
+    cout << "[INFO] Index contains " << (numVertices/1000000) << "M nodes (" 
+         << (numVertexBytes/1000000) << "MB)" << endl;
 
     uint64_t nRuns = ( numVertexPages + (maxNumConcurrentPages - 1) ) / (maxNumConcurrentPages); //rounding up!
-    assert( nRuns * MAX_MMAP_SIZE >= numVertexBytes);
+    assert( nRuns * maxMmapSize >= numVertexBytes);
     uint64_t nPagesPerRun = (numVertexPages + (nRuns -1)) / nRuns;  //rounded up to cover all vertices!
-    uint64_t nVerticesPerRun =  nPagesPerRun * nVerticesPerPage;
-    assert( nRuns * nVerticesPerRun >= numVertices);
-    uint64_t vertexWindowSize = nVerticesPerRun * (2* sizeof(int32_t));
+    *nVerticesPerRun =  nPagesPerRun * nVerticesPerPage;
+    assert( nRuns * (*nVerticesPerRun) >= numVertices);
 
-    cout << "will process vertices in " << nRuns << " runs à " << (nVerticesPerRun/1000000)
-         << "M vertices (" << (vertexWindowSize / 1000000) << "MB)" << endl;
+    
+    *vertexWindowSize = (*nVerticesPerRun) * (2* sizeof(int32_t));
+    return nRuns;
+}
 
+
+void ensureMlockSize(uint64_t maxMmapSize)
+{
+   assert(maxMmapSize % sysconf(_SC_PAGE_SIZE) == 0 && "invalid mmap size");
+   
+    struct rlimit limit;
+    getrlimit(RLIMIT_MEMLOCK, &limit);
+    
+    if (limit.rlim_max < maxMmapSize)
+        limit.rlim_max = maxMmapSize;
+        
+    if (limit.rlim_cur < maxMmapSize)
+        limit.rlim_cur = maxMmapSize;
+    
+    int res = setrlimit(RLIMIT_MEMLOCK, &limit);
+    if (res != 0)
+    {
+        if (errno == EPERM)
+        {
+            cout << "error: current user does not have permission to mlock() the selected amount of memory." << endl;
+            cout << "       Raise the corresponding ulimit or run as root." << endl;
+        }
+        else
+            perror("getrlimit error:");
+        exit(EXIT_FAILURE);
+    }
+
+}
+
+int main(int argc, char** argv)
+{
+
+
+    parseArguments(argc, argv);
+    //ReverseIndex reverseNodeIndex("nodeReverse.idx", "nodeReverse.aux");
+    //ReverseIndex reverseWayIndex(  "wayReverse.idx",  "wayReverse.aux");
+    //ReverseIndex reverseRelationIndex(  "relationReverse.idx",  "relationReverse.aux");
+    //mmap_t mapVertices = init_mmap("vertices.data", true, false);
+    FILE* fVertices = fopen("intermediate/vertices.data", "rb");
+
+    if (modeIsRandomAccess)
+    {
+        if (maxMmapSize != 0)
+        {
+            cerr << "error: Invalid parameter '--lock' for mode 'RANDOM'." << endl;
+            cerr << "       Cannot lock memory in random access mode. Use 'BLOCK' mode instead." << endl;
+            exit(EXIT_FAILURE);
+        }
+        /* big enough to always only require a single run (which is the point 
+         * of 'random' mode), small enough to not cause an uint64_t overflow */
+        maxMmapSize = 0xFFFFFFFFFFFFull; 
+    } else {
+        if (maxMmapSize == 0)
+        {
+            cerr << "error: missing parameter '--lock' for mode 'BLOCK'." << endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+    
+    uint64_t pageSize = sysconf(_SC_PAGE_SIZE);
+    //round *down* to nearest page size, as all memory limits are page-based
+    maxMmapSize = (maxMmapSize / pageSize) * pageSize; 
+
+
+    uint64_t vertexWindowSize = 0;
+    uint64_t nVerticesPerRun  = 0;
+    uint64_t nRuns =
+        getRunConfiguration(fVertices, maxMmapSize, &vertexWindowSize, &nVerticesPerRun);
+
+    
+    if (modeIsRandomAccess)
+        cout << "[INFO] Selected mode is 'RANDOM'" << endl;
+    else
+    {
+        cout << "[INFO] Selected mode is 'BLOCK'." << endl; 
+        cout << "       Will require " << nRuns << " iterations using " << (vertexWindowSize / 1000000) << "MB of RAM" << endl;
+    }
+
+    if (nRuns > 10 && !overrideRunLimit)
+    {
+        cerr << "error: current configuration would require more than 10 runs." << endl;
+        cerr << "       This would take a long time and is probably not intended." << endl;
+        cerr << "       Refusing to continue. Use parameter '--yes' to override." << endl;       
+        exit( EXIT_FAILURE);
+    }
+
+    if (dryRun)
+    {
+        cout << "Tasked to only display stats, will exit now." << endl;
+        exit( EXIT_SUCCESS);
+    }
+    
+
+    if (! modeIsRandomAccess)
+    {
+    /* mode is 'BLOCK' where blocks of vertex data are kept in memory (i.e. are mlock()'ed).
+       So we have to make sure that the current user is allow to mlock() as much memory
+       as he requested using "--lock" */
+       ensureMlockSize(maxMmapSize);
+    }
+
+
+    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
 
     for (uint64_t i = 0; i < nRuns; i++)
     {
         //uint64_t lastSynced = 0;
         if (nRuns > 1)
-            cout << "starting run " << i << endl;
+            cout << "[INFO] Starting run " << i << endl;
         
-        cout << "[DEBUG] paging-in vertex range ... ";
-        cout.flush();
+        if (!modeIsRandomAccess)
+        {
+            cout << "[INFO] Loading vertices for run " << i << " ...";
+            cout.flush();
+        }
+        
+        int mmapFlags = MAP_SHARED | (modeIsRandomAccess ? 0 : MAP_LOCKED);
         int32_t *vertexPos = (int32_t*) 
-            mmap(NULL, vertexWindowSize, PROT_READ, MAP_SHARED | /*MAP_POPULATE |*/ MAP_LOCKED,
+            mmap(NULL, vertexWindowSize, PROT_READ, mmapFlags,
                  fileno(fVertices), i * vertexWindowSize);
 
 		if (vertexPos == MAP_FAILED)
-			{perror("mmap"); exit(0);}
+			{perror("mmap error:"); exit(0);}
 
-		int32_t *upper = vertexPos + (2*nVerticesPerRun); //two int32 per vertex
+		int32_t *upper = vertexPos + (2 * nVerticesPerRun); //two int32 per vertex
 		uint64_t firstVertexId = i*nVerticesPerRun;
 
-        cout << "done." << endl;
+        if (! modeIsRandomAccess)
+            cout << "done." << endl;
         
         uint64_t pos = 0;
         for (OsmLightweightWay way : wayStore)
@@ -83,7 +244,7 @@ int main()
             pos += 1;
             if (pos % 1000000 == 0)
             {
-                cout << (pos / 1000000) << "M ways processed" << endl;
+                cout << "[INFO] " << (pos / 1000000) << "M ways processed" << endl;
                 /*cout << "syncing way range " << lastSynced << " -> " << (way.id-1);
                 cout.flush();
                 wayStore.syncRange(lastSynced, (way.id-1));
@@ -93,16 +254,10 @@ int main()
             for (OsmGeoPosition &node : way.getVertices() )
             //for (int j = 0; j < way.numVertices; j++)
             {
-		//not in the currently processed range
+		        //not in the currently processed range
                 if (node.id < (i*nVerticesPerRun) || node.id >= (i+1)*nVerticesPerRun)
                     continue;
-		//cout << "\t" << node.lat << ", " << node.lng << endl;
-                /* lat and lng are resolved at the same time, so either both values
-                 * have to be valid, or none of them must be.*/ 
-/*                if (node.lat == 0x7FFFFFFE)
-                    node.lat =  0x7FFFFFFF;
-                if (node.lng == 0x7FFFFFFE)
-                    node.lng =  0x7FFFFFFF;*/
+
                 if ((node.lat == INVALID_LAT_LNG) != (node.lng == INVALID_LAT_LNG))
                 {
                     cout << "invalid lat/lng pair " << (node.lat/10000000.0) << "/" << (node.lng/10000000.0) 
@@ -126,8 +281,10 @@ int main()
             way.touch();
 
         }
+        
+        /*
         if ( 0 !=  madvise( vertexPos, vertexWindowSize, MADV_DONTNEED))
-            perror("madvise error");
+            perror("madvise error");*/
         munmap(vertexPos, vertexWindowSize);
     }
 
@@ -148,7 +305,7 @@ int main()
     }*/
     
     
-    cout << "[INFO] running validation pass" << endl;
+    cout << "[INFO] Running validation pass." << endl;
 
     for (OsmLightweightWay way : wayStore)
     {
@@ -167,7 +324,7 @@ int main()
 
         }
     }
-    cout << "passed." << endl;
+    cout << "[INFO] Validation passed." << endl;
 //    for (int i = 0; i < 30; i++)
 //        cout << i << ": " << (reverseNodeIndex.isReferenced(i) ? "true" : "false") <<  endl;   
 }
