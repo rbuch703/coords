@@ -62,14 +62,15 @@ The tools themselves require little memory (< 100MB), but will benefit greatly f
 2. enough free RAM for read-ahead and write caches, about 1GB
 3. enough free RAM for read-ahead and write caches, as well as for complete memory mapping to the node ID->lat/lng index. The exact amount depends on the particular PBF file used as a data source. For a 2015 Planet dump, this is about 28GB of RAM. 
 
-Disk Storage Requirements
-=========================
-The tools write various data storage files (the memory requirements here are given for a typical 2015 Dlanet dump. They will be significatly lower for regional extracts):
+Disk Space Requirements
+=======================
+The tools write various data storage files (the memory requirements here are given for a typical 2015 Planet dump. They will be significatly lower for regional extracts):
 
 1. the complete node, way and relation indices (`nodes.idx, nodes.data, ways.idx, ways.data, relations.idx and relations.data` in the `intermediate` directory): about 150 GB
 2. the node ID-> lat/lng index (`vertices.data` in the `intermediate` directory): about 28GB
 3. The vector data tiles (numbered files in the `nodes` directory): ~70GB
 
+So the whole COORDS storage requires about 300GB of disk space for a planet dump.
 
 Execution Time
 ==============

@@ -137,8 +137,8 @@ public:
              * and close the file descriptor afterwards. */
             subdivide();    
         }
-        else //no subdivision necessary
-            cout << "\tno need to subdivide node " << fileName << endl;
+        //else //no subdivision necessary
+        //    cout << "\tno need to subdivide node " << fileName << endl;
 
         
         if (fData)
@@ -406,10 +406,10 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
     /* WARNING!!!: FIXME: these are very rough computations based on a lat/lng grid. More accurate computations
      *                    would need to take into account the coordinates after mercator projection */
     double solidAngleDeg = solidAngle / (10000000.0 * 10000000.0);
-    // at zoom level 12: a tile is on average 0.0879° wide and 0.415° high, and has 256x256 pixels
-    double solidAnglePixel = (0.0879/256) *(0.415/256);
+    // at zoom level 12: a tile is on average 0.0879° wide and 0.0415° high, and has 256x256 pixels
+    double solidAnglePixel = (0.0879/256) *(0.0415/256);
 
-    static const double degsPerPixel = 0.5 * (0.0879 + 0.415)/256.0;
+    static const double degsPerPixel = ((0.0879 + 0.0415)/2.0)/256.0;
     
     if (keep == 1 || keep == 2) //polygons
     {
@@ -425,17 +425,23 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
                     cout << "\t" << kv.first << " -> " << kv.second << endl;
             }
             // average of horizontal and vertical degrees per tile; 
-            if (!simplifyArea( way.refs, degsPerPixel * 2 * 10000000)) // 2 px allowed deviation; 
+            if (!simplifyArea( way.refs, degsPerPixel * 4 * 10000000)) // 4 px allowed deviation; 
                 keep = 0;
         }
     }
             
     if (keep == 3 || keep == 4 || keep == 5) //line geometry
     {
-        if (solidAngleDeg < solidAnglePixel*2)
+        double dLat = abs(bounds.latMax - bounds.latMin)/10000000.0;
+        double dLng = abs(bounds.lngMax - bounds.lngMin)/10000000.0;
+        //cout << dLat << ", " << dLng << endl;
+        if (dLat < (0.0415/256*4) && dLng < (0.0879/256*4))
+        {
+            //cout << "#" << endl;
             keep = 0;
+        }
         else
-            if (!simplifyStroke( way.refs, degsPerPixel * 2 * 10000000)) // 2 px allowed deviation; 
+            if (!simplifyStroke( way.refs, degsPerPixel * 4 * 10000000)) // 4 px allowed deviation; 
                 keep = 0;
 
     }
@@ -487,14 +493,6 @@ int main()
         storageLod12.add(way, getBounds(way));
         numLod12Ways += 1;
     }
-    cout << "stats: data set contains " << (numWays/1000) << "k ways." << endl;   
-    cout << "stats: data set contains " << (numLod12Ways/1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes/1000) << "kB tags at LOD 12." << endl;   
-    cout << "stats: skipped: " << frequencies[0] << 
-                 ", landuse: " << frequencies[1] << 
-                 ", natural: " << frequencies[2] << 
-                 ", highway: " << frequencies[3] << 
-                 ", boundary: " << frequencies[4] << endl;
-
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
          << (MAX_NODE_SIZE/1000000) << "MB." << endl;
 //    exit(0);
@@ -509,5 +507,14 @@ int main()
     storageLod12.closeFiles();
     storageLod12.subdivide(MAX_NODE_SIZE);
     cout << "done." << endl;
+
+    cout << "stats: data set contains " << (numWays/1000) << "k ways." << endl;   
+    cout << "stats: data set contains " << (numLod12Ways/1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes/1000) << "kB tags at LOD 12." << endl;   
+    cout << "stats: skipped: " << frequencies[0] << 
+                 ", landuse: " << frequencies[1] << 
+                 ", natural: " << frequencies[2] << 
+                 ", highway: " << frequencies[3] << 
+                 ", boundary: " << frequencies[4] << endl;
+
     return EXIT_SUCCESS;
 }
