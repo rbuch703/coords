@@ -24,15 +24,15 @@
 
 using namespace std;
 
-const char* nodes_data_filename = "intermediate/nodes.data";
-const char* nodes_index_filename= "intermediate/nodes.idx";
-const char* vertices_data_filename =    "vertices.data";    //put it onto the SSD for fast random access
-const char* ways_data_filename =  "intermediate/ways.data";
-const char* ways_index_filename=  "intermediate/ways.idx";
-//const char* ways_int_data_filename="intermediate/ways_int.data"; // does not need an index, can use the same as 'ways'
-const char* relations_data_filename="intermediate/relations.data";
-const char* relations_index_filename="intermediate/relations.idx";
-string       outputBasePath = "intermediate/";
+#define outputBasePath "intermediate/"
+
+const char* nodes_data_filename =       outputBasePath "nodes.data";
+const char* nodes_index_filename=       outputBasePath "nodes.idx";
+const char* vertices_data_filename =    outputBasePath "vertices.data";
+const char* ways_data_filename =        outputBasePath "ways.data";
+const char* ways_index_filename=        outputBasePath "ways.idx";
+const char* relations_data_filename=    outputBasePath "relations.data";
+const char* relations_index_filename=   outputBasePath "relations.idx";
 
 static void truncateFile(string filename) {
     FILE* f= fopen(filename.c_str() , "wb+"); 

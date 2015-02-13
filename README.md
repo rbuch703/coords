@@ -5,17 +5,26 @@ This repository consists of various tools that together create a OSM data storag
 Please note: These tools are prototypes and not yet ready for production use. The tools are incomplete, and many settings can only be made by modifying source code. The intended audience at this point are therefore software developers with at least a basic understanding of C++. 
 
 Building Instructions (for Ubuntu 14.04)
-========================================
+----------------------------------------
 * install the required dependencies, e.g. `sudo apt-get install make build-essential libprotobuf-dev protobuf-compiler libexpat1-dev`
 * compile the tools using `make` (there is currently no `./configure` step)
-
+The tools will be build in the `build` directory
 
 Execution Instructions
-======================
+----------------------
 
-Creating a data storage requires three steps that need to be executed in order:
+Creating a COORDS data storage requires three steps that need to be executed in order:
 
-1. `build/conv_osm <pbf file>`
+### 1. Create Entity Indices
+
+
+This step uses the `conv_osm` tool to transform all nodes, ways and relations into a form where they can efficiently be accessed by there respective ID. It also creates a lookup table to easily find the lat/lng geographic coordinates of a given node ID. This step is usually performed by executing
+
+`build/conv_osm <pbf file>`
+
+There is one optional parameter `--remap` to `conv_osm` that will change all way and node IDs to be more compact. With this option, `conv_osm` uses more RAM (up to an additional `1GB` for each `100M` nodes and ways), and the resulting index cannot easily be updated later. But for regional data extracts, this massively reduces hard disk space consumption, and also the RAM requirement for step 2. It is therefore suggested to use `build/conv_osm --remap <pbf file>` when handling extracts of countries and smaller regions, and to omit the `--remap` flag for full planet dumps.
+<!--- This step creates huge index tables (the `*.idx` files in the `intermediate` directory), which require 8 bytes of storage space for each **possible** entity ID up to the maximum ID present. For example, in a recent 2014 planet dump there are about 2.7 billion nodes, with a maximum node ID of about 3.4 billion. So the node index table will have `27.2 GB` (3.4 billion IDs times 8 bytes). Small regional extracts (like the UK extract from http://download.geofabrik.de), however, will contain much fewer entities (e.g. 68 million nodes for the UK), but still have the same maximum entity IDs. So the node index table for the UK will also have `27.2GB`, even though only about `500MB` of it are actually used! Even worse, the next processing step uses about as much RAM as this index table is big, so processing a UK regional extract would require about 27GB of free RAM.   -->
+
 2. `build/wayInt`
 3. `build/tiler`
 
