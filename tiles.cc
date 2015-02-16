@@ -1,6 +1,7 @@
 
 #include "tiles.h"
 #include <unistd.h> //for ftruncate()
+#include <sys/mman.h>
 using std::cout;
 using std::endl;
 
@@ -65,14 +66,19 @@ std::ostream& operator<<(std::ostream &os, const GeoAABB &aabb)
 // ============== MEMORY-BACKED STORAGE ==============
 
 MemoryBackedTile::MemoryBackedTile(const char*fileName, const GeoAABB &bounds, uint64_t maxNodeSize):
-    bounds(bounds), fileName(fileName), size(0), maxNodeSize(maxNodeSize),
-    topLeftChild(NULL), topRightChild(NULL), bottomLeftChild(NULL), bottomRightChild(NULL)
+    topLeftChild(NULL), topRightChild(NULL), bottomLeftChild(NULL), bottomRightChild(NULL),
+    bounds(bounds), fileName(fileName), size(0), maxNodeSize(maxNodeSize)
 {
 
 }
 
 MemoryBackedTile::~MemoryBackedTile() 
 {
+    if (topLeftChild) delete topLeftChild;
+    if (topRightChild) delete topRightChild;
+    if (bottomLeftChild) delete bottomLeftChild;
+    if (bottomRightChild) delete bottomRightChild;
+    
 }
 
 void MemoryBackedTile::add(const OsmLightweightWay &way, const GeoAABB &wayBounds)
@@ -102,22 +108,24 @@ void MemoryBackedTile::add(const OsmLightweightWay &way, const GeoAABB &wayBound
     }
 }
 
-void MemoryBackedTile::writeToDiskRecursive()
+void MemoryBackedTile::writeToDiskRecursive(bool includeSelf = true)
 {
-    /* Open and close the file in any case to create at least an empty node file.
-     * This empty file acts as a marker that there may be child nodes*/
-    
-    FILE* fData = fopen(fileName.c_str(), "wb");
+    if (topLeftChild)     topLeftChild->    writeToDiskRecursive(true);
+    if (topRightChild)    topRightChild->   writeToDiskRecursive(true);
+    if (bottomLeftChild)  bottomLeftChild-> writeToDiskRecursive(true);
+    if (bottomRightChild) bottomRightChild->writeToDiskRecursive(true);
 
-    for (const OsmLightweightWay &way : ways)
-        way.serialize(fData);
+    if (includeSelf)
+    {
+        /* Open and close the file in any case to create at least an empty node file.
+         * This empty file acts as a marker that there may be child nodes*/
+        FILE* fData = fopen(fileName.c_str(), "wb");
 
-    fclose(fData);
-    
-    if (topLeftChild)     topLeftChild->    writeToDiskRecursive();
-    if (topRightChild)    topRightChild->   writeToDiskRecursive();
-    if (bottomLeftChild)  bottomLeftChild-> writeToDiskRecursive();
-    if (bottomRightChild) bottomRightChild->writeToDiskRecursive();
+        for (const OsmLightweightWay &way : ways)
+            way.serialize(fData);
+
+        fclose(fData);
+    }    
 }
 /*
 virtual void subdivideAndRelease(uint64_t maxNodeSize) {
@@ -182,7 +190,15 @@ FileBackedTile::FileBackedTile(const char*fileName, const GeoAABB &bounds, uint6
         
 FileBackedTile::~FileBackedTile() 
 {
+    if (topLeftChild) delete topLeftChild;
+    if (topRightChild) delete topRightChild;
+    if (bottomLeftChild) delete bottomLeftChild;
+    if (bottomRightChild) delete bottomRightChild;
+    
+    topLeftChild = topRightChild = bottomLeftChild = bottomRightChild = NULL;
+
     if (fData) fclose(fData);
+    fData = NULL;
 }
 
 void FileBackedTile::add(OsmLightweightWay &way, const GeoAABB &wayBounds)
@@ -225,6 +241,7 @@ void FileBackedTile::releaseMemoryResources()
 
 void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBackedStorage) {
     //cout << "size of node " << this << " is " << size 
+    this->maxNodeSize = maxSubdivisionNodeSize;
     if (size <= maxSubdivisionNodeSize)
     {
         /* is either 
@@ -243,7 +260,7 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
         return;
     }
 
-    cout << "subdividing node '" << fileName << "' ... (size " << size << ")" << endl;
+    cout << "subdividing node '" << fileName << "' ... (size " << (size/1000000) << "MB)" << endl;
 
     assert(!topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
     assert( size > maxSubdivisionNodeSize);
@@ -256,38 +273,48 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
     uint64_t sizeFromFile = ftell(fData);
     assert(sizeFromFile == size && "storage file corrupted.");
     rewind(fData);
-    
     if (useMemoryBackedStorage)
     {
         MemoryBackedTile *shadowNode = new MemoryBackedTile(fileName.c_str(), bounds, maxSubdivisionNodeSize);
 
-        int ch;
+        uint8_t* data = (uint8_t*)mmap(NULL, size, PROT_READ, MAP_SHARED, fileno(fData), 0);
+        assert(data != MAP_FAILED);
+        uint64_t pos = 0;
+        while (pos < size)
+        {
+            OsmLightweightWay way(&data[pos]);
+            pos += way.size();
+            shadowNode->add(way, getBounds(way));
+        }
+        /*int ch;
         while ( (ch = fgetc(fData)) != EOF)
         {
             ungetc( ch, fData);
 
             OsmLightweightWay way(fData);
             shadowNode -> add(way, getBounds(way));
-        }
-        
+        }*/
+
+        assert(shadowNode->getSize() == 0);
+        shadowNode->writeToDiskRecursive(false);
+        delete shadowNode;
         /* All contents of this node have been distributed to its four subnodes.
          * So the node itself can now be deleted.
          * Here, we only delete its contents and keep the empty file to act as a marker that
          * subnodes may exist. */
-         deleteContentsAndClose(fData);
-         size = 0;
         
-        shadowNode->writeToDiskRecursive();
+
+        /* must be executed only after writeToDiskRecursive(), because the OsmLightweightWays
+         * of child nodes hold pointers to this memory mapping */
+        int res = munmap(data, size);
+        assert(res == 0);
+        deleteContentsAndClose(fData);
+        size = 0;
+
     } else
     {
-        subdivide(); //also deletes file contents and frees file pointer
-
-        assert(topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
-        topLeftChild->    subdivide(maxSubdivisionNodeSize, false);
-        topRightChild->   subdivide(maxSubdivisionNodeSize, false);
-        bottomLeftChild-> subdivide(maxSubdivisionNodeSize, false);
-        bottomRightChild->subdivide(maxSubdivisionNodeSize, false);
-    
+        this->subdivide(); //also deletes file contents and frees file pointer
+        this->releaseMemoryResources();
     }
      
 }

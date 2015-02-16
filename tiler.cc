@@ -300,14 +300,14 @@ int main()
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
     storage.releaseMemoryResources();
-    storage.subdivide(MAX_NODE_SIZE);
+    storage.subdivide(MAX_NODE_SIZE, false);
  
     //storageLod12.releaseMemoryResources();
     //storageLod12.subdivideMemoryBacked(MAX_NODE_SIZE);
     cout << "done." << endl;
 
-    cout << "stats: data set contains " << (numWays/1000) << "k ways." << endl;   
-    cout << "stats: data set contains " << (numLod12Ways/1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes/1000) << "kB tags at LOD 12." << endl;   
+    cout << "stats: data set contains " << (numWays     / 1000) << "k ways." << endl;   
+    cout << "stats: data set contains " << (numLod12Ways/ 1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes / 1000) << "kB tags at LOD 12." << endl;   
     cout << "stats: skipped: "  << frequencies[0] << 
                  ", landuse: "  << frequencies[1] << 
                  ", natural: "  << frequencies[2] << 

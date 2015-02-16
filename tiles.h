@@ -31,8 +31,13 @@ public:
     ~MemoryBackedTile();
     
     void add(const OsmLightweightWay &way, const GeoAABB &wayBounds);
-    void writeToDiskRecursive();
+    void writeToDiskRecursive(bool includeSelf);
     
+    uint64_t getSize() const { return size; }
+public:
+    MemoryBackedTile *topLeftChild, *topRightChild, *bottomLeftChild, *bottomRightChild;
+
+
 private:
     void subdivide();
 
@@ -42,7 +47,6 @@ private:
     std::string fileName;
     uint64_t size;
     uint64_t maxNodeSize;
-    MemoryBackedTile *topLeftChild, *topRightChild, *bottomLeftChild, *bottomRightChild;
 };
 
 class FileBackedTile {

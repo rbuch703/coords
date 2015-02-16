@@ -4,11 +4,6 @@ syntax: glob
 # ignore backup files
 *~
 
-# ----- ignore compiled executables
-conv_osmxml
-data_converter
-simplifier
-
 # ----- ignore compiled objects
 build
 
@@ -16,11 +11,6 @@ build
 proto/*.pb.h
 proto/*.pb.cc
 proto/*.pb.o
-
-# ----- ignore OSM data files
-*.osm
-*.osm.bz2
-*.osm.gz
 
 # ----- ignore gcc coverage data
 *.gcda
@@ -41,6 +31,7 @@ callgrind.out.*
 massif.out.*
 
 intermediate
+nodes
 
 *.data
 *.idx
