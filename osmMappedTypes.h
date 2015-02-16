@@ -4,6 +4,7 @@
 
 /* This file contains classes to work with OSM entities that are stored in memory-mapped files
 */
+#include <string.h>
 
 #include "osmTypes.h"
 
@@ -29,6 +30,52 @@ private:
     const T *beginPos, *endPos;
 };
 
+class Tags{
+public: 
+ Tags( const char* src, int numTags): src(src), numTags(numTags) {}
+ class ConstTagIterator;
+ 
+ 
+ ConstTagIterator begin() { return ConstTagIterator(src, numTags);}
+ ConstTagIterator end()   { return ConstTagIterator(src, 0); }
+ 
+    class ConstTagIterator {
+
+    public:
+        ConstTagIterator( const char* src, uint64_t numTagsLeft): src(src), numTagsLeft(numTagsLeft) 
+        { 
+            //std::cout<< "created tag iterator with " << numTagsLeft << "tags" << std::endl;
+        
+        }
+        ConstTagIterator& operator++() {
+            if (numTagsLeft == 0)
+                assert(false && "reached end of container");
+                
+            const char* key = src;
+            const char* value = key + strlen(src) + 1; //including zero-termination
+            src = value + strlen(value) + 1;
+            numTagsLeft -= 1;
+            return (*this);
+        }
+        
+        std::pair<std::string, std::string> operator *() {
+            const char* key = src;
+            const char* value = key + strlen(src) + 1; //including zero-termination
+            return std::make_pair(key, value);
+        }
+        
+        bool operator !=( ConstTagIterator &other) const {return this->numTagsLeft != other.numTagsLeft;}
+    
+    private:
+        const char* src;
+        uint64_t numTagsLeft;
+    };
+
+private:
+    const char* src;
+    uint64_t numTags;
+
+};
 
 class OsmLightweightWay {
 public:
@@ -42,13 +89,15 @@ public:
 
     OsmLightweightWay &operator=(const OsmLightweightWay &other);
     OSMWay toOsmWay() const;
-    void serialize( FILE* data_file/*, mmap_t *index_map*/) const;
+    void     serialize( FILE* data_file/*, mmap_t *index_map*/) const;
+    uint8_t* serialize( uint8_t* dest) const;
+
     /* modify data without changing content, to make the underlying pages dirty
      * and force a writeback. This is mostly used to force linear streaming.
        writes of the backing mmap, instead of the much slower random access writes */
     void touch();
-    std::map<std::string, std::string> getTags() const;
-    
+    std::map<std::string, std::string> getTagSet() const;
+    Tags getTags() const { return Tags( (char*)tagBytes, numTags);}
     uint64_t size() const;
     bool hasKey(const char* key) const;
     std::string getValue(const char* key) const;
@@ -79,7 +128,7 @@ std::ostream& operator<<(std::ostream &out, const OsmLightweightWay &way);
 class LightweightWayStore {
 
 public:
-    LightweightWayStore(const char* indexFileName, const char* dataFileName);
+    LightweightWayStore(const char* indexFileName, const char* dataFileName, bool optimizeForStreaming = false);
     OsmLightweightWay operator[](uint64_t wayId);
     bool exists(uint64_t wayId) const;
     void syncRange(uint64_t lowWayId, uint64_t highWayId) const ;

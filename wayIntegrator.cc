@@ -209,7 +209,7 @@ int main(int argc, char** argv)
     }
 
 
-    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
+    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data", true);
 
     for (uint64_t i = 0; i < nRuns; i++)
     {

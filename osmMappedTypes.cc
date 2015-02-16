@@ -139,7 +139,7 @@ OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
 
 OSMWay OsmLightweightWay::toOsmWay() const {
     
-    map<string, string> tags = this->getTags();
+    map<string, string> tags = this->getTagSet();
     return OSMWay( this->id, 
                    this->version, 
                    vector<OsmGeoPosition>( this->vertices, this->vertices + this->numVertices, allocator<map<string, string> >()),
@@ -186,14 +186,49 @@ void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
         MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
 }
 
+uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
+{
+    assert(false && "UNTESTED CODE!!!");
+    assert (id > 0);
+    
+    *((uint64_t*)dest) = id;
+    dest += sizeof(uint64_t);
+
+    *((uint32_t*)dest) = version;
+    dest += sizeof(uint32_t);
+    
+    MUST(this->numVertices <= 2000, "#refs in way beyond what's allowed by spec");
+    
+    *((uint16_t*)dest) = this->numVertices;
+    dest += sizeof(uint16_t);
+    
+    
+    if(this->numVertices > 0)
+    {
+        memcpy(dest, this->vertices, sizeof(OsmGeoPosition) * this->numVertices);
+        dest +=                      sizeof(OsmGeoPosition) * this->numVertices;
+    }
+
+    assert(this->numTagBytes <= 1<<17);
+    
+    *((uint16_t*)dest) = this->numTags;
+    dest += sizeof(uint16_t);
+    
+    *((uint32_t*)dest) = this->numTagBytes;
+    dest += sizeof( uint32_t);
+    
+    if (this->numTagBytes > 0)
+    {
+        memcpy( dest, this->tagBytes, sizeof(uint8_t) * this->numTagBytes);
+        dest                       += sizeof(uint8_t) * this->numTagBytes;
+    }
+    return dest;
+}
+
+
 void OsmLightweightWay::touch() {
     if (!this->isDataMapped)
         return;
-
-    /*uint8_t pattern = 0xA5;
-
-    uint8_t *vertexBytes = (uint8_t *) this->vertices;
-    int64_t numVertexBytes= this->numVertices * sizeof(OsmGeoPosition);*/
 
 #warning dirty-flagging hack that modifies geometric data
     for (int i = 0; i < numVertices; i++)
@@ -203,22 +238,11 @@ void OsmLightweightWay::touch() {
             vertices[i].lat ^= 0x00000001;	//swap LSB
             vertices[i].lng ^= 0x00000001;
         }
-    }
-
-/*    for (uint64_t i = 0; i < this->numTagBytes; i++)
-        this->tagBytes[i] ^= pattern;*/
-
-    //undo XOR;
-/*    for (int i = 0; i < numVertexBytes; i++)
-        vertexBytes[i] ^= pattern;*/
-
-/*    for (uint64_t i = 0; i < this->numTagBytes; i++)
-        this->tagBytes[i] ^= pattern;*/
-        
+    }        
 }
 
 
-std::map<std::string, std::string> OsmLightweightWay::getTags() const
+std::map<std::string, std::string> OsmLightweightWay::getTagSet() const
 {
     map<string, string> tags;
     const char *tagPos = (const char*)this->tagBytes;
@@ -283,12 +307,15 @@ ostream& operator<<(ostream &out, const OsmLightweightWay &way)
 
 //======================================================
 
-LightweightWayStore::LightweightWayStore(const char* indexFileName, const char* dataFileName) {
+LightweightWayStore::LightweightWayStore(const char* indexFileName, const char* dataFileName, bool optimizeForStreaming) {
     mapWayIndex = init_mmap(indexFileName, true, false);
     mapWayData  = init_mmap(dataFileName, true, true);
 
-    //TODO: MAP_LOCK the way index to see if that solves the contention problem
-    madvise( mapWayData.ptr, mapWayData.size, MADV_SEQUENTIAL);
+    if (optimizeForStreaming)
+    {
+        madvise( mapWayData.ptr, mapWayData.size, MADV_SEQUENTIAL);
+        madvise( mapWayIndex.ptr, mapWayIndex.size, MADV_SEQUENTIAL);
+    }
 
 }
 
