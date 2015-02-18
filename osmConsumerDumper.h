@@ -29,10 +29,7 @@ private:
 
 private:
     mmap_t node_index, vertex_data, way_index, relation_index;
-    FILE /**node_data,*/ *way_data, *relation_data;
-    ChunkedFile *nodeData;
-    //FILE *building_data, *highway_data, *landuse_data, *natural_data;
-    //map<OSMKeyValuePair, uint8_t> symbolic_tags;
+    ChunkedFile *nodeData, *wayData, *relationData;
     RadixTree<string> rename_key; 
     RadixTree<int> ignore_key, ignoreKeyPrefixes;    //ignore key-value pairs which are irrelevant for most applications
     uint64_t nNodes, nWays, nRelations;

@@ -258,7 +258,7 @@ int main()
 
     ensureDirectoryExists("nodes");
     FileBackedTile storage("nodes/node", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
-    //FileBackedTile storageLod12("nodes/lod12", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+    FileBackedTile storageLod12("nodes/lod12", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
     uint64_t numLod12Ways = 0;
@@ -288,7 +288,7 @@ int main()
             numTagBytes += 2 + kv.first.size() + kv.second.size();
         }
             
-        //storageLod12.add(way, getBounds(way));
+        storageLod12.add(way, getBounds(way));
         numLod12Ways += 1;
     }
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
@@ -302,8 +302,8 @@ int main()
     storage.releaseMemoryResources();
     storage.subdivide(MAX_NODE_SIZE, true);
  
-    //storageLod12.releaseMemoryResources();
-    //storageLod12.subdivideMemoryBacked(MAX_NODE_SIZE);
+    storageLod12.releaseMemoryResources();
+    storageLod12.subdivide(MAX_NODE_SIZE, true);
     cout << "done." << endl;
 
     cout << "stats: data set contains " << (numWays     / 1000) << "k ways." << endl;   

@@ -85,7 +85,7 @@ OsmConsumerDumper::OsmConsumerDumper(): nNodes(0), nWays(0), nRelations(0), node
 //protected:
 
 //pad the data file to a multiple of the page size, so that it can be opened using a memory map
-static void padFile(FILE* file)
+/*static void padFile(FILE* file)
 {
     uint64_t file_size = ftello(file);
     uint32_t page_size = sysconf(_SC_PAGESIZE);
@@ -99,7 +99,7 @@ static void padFile(FILE* file)
         fwrite(&dummy, sizeof(dummy), 1, file);
     }
     assert( ftello(file) % page_size == 0);
-}
+}*/
 
 
 void OsmConsumerDumper::onAllNodesConsumed () {
@@ -133,23 +133,7 @@ void OsmConsumerDumper::onAllNodesConsumed () {
 
     //setup output for ways
     way_index = init_mmap(ways_index_filename);
-    
-    way_data = fopen(ways_data_filename, "wb");
-    const char* way_magic = "OW10"; //OSM Ways v. 1.0
-    fwrite(way_magic, 4, 1, way_data);
-    
-    //way_int_index = init_mmap("ways_int.idx");
-
-/*    way_int_data = fopen(ways_int_data_filename, "wb");
-    const char* way_int_magic = "OI10"; //OSM Integrated ways v. 1.0
-    fwrite(way_int_magic, 4, 1, way_int_data);
-*/  
-    
-/*    building_data = fopen( (outputBasePath + "buildings.data").c_str(), "wb");
-    highway_data  = fopen( (outputBasePath + "highways.data").c_str(), "wb");
-    landuse_data  = fopen( (outputBasePath + "landuse.data").c_str(), "wb");
-    natural_data  = fopen( (outputBasePath + "natural.data").c_str(), "wb");
-*/
+    wayData = new ChunkedFile(ways_data_filename);
 };
 
 
@@ -158,8 +142,9 @@ void OsmConsumerDumper::onAllWaysConsumed () {
     free_mmap(&way_index);
     //free_mmap(&way_int_index);
     
-    padFile(way_data);
-    fclose(way_data);
+    //padFile(way_data);
+    //fclose(way_data);
+    delete wayData;
     
 //    padFile(way_int_data);
 //    fclose(way_int_data);
@@ -169,18 +154,18 @@ void OsmConsumerDumper::onAllWaysConsumed () {
     //setup output for relations
     relation_index = init_mmap(relations_index_filename);
     
-    relation_data = fopen(relations_data_filename, "wb+");
+    relationData = new ChunkedFile(relations_data_filename);
+    /*relation_data = fopen(relations_data_filename, "wb+");
     const char* relation_magic = "OR10"; //OSM Relation v. 1.0
-    fwrite(relation_magic, 4, 1, relation_data);
+    fwrite(relation_magic, 4, 1, relation_data);*/
 
 };   
 
 
 void OsmConsumerDumper::onAllRelationsConsumed () {
     free_mmap(&relation_index);
-    padFile(relation_data);
-    fclose( relation_data);
-    
+    delete relationData;
+        
     //cout << "==================== done =======================" << endl;
     cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
     
@@ -268,50 +253,14 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
 {
     nWays++;
     filterTags(way.tags);
-
-    // write the way itself to file
-    way.serialize(way_data, &way_index);
-    
-    //convert the way to an integrated way, by replacing the node indices with the actual node lat/lon
-    /*list<OSMVertex> vertices;
-    uint32_t* vertices_ptr = (uint32_t*) vertex_data.ptr;
-    for (list<uint64_t>::const_iterator ref = way.refs.begin(); ref != way.refs.end(); ref++)
-    {
-        if (*ref == 0) //there is no node with id = 0, this is likely a dummy
-            //create a dummy node so that the sizes of the way and the integrated way match
-            vertices.push_back( OSMVertex( 0, 0) );
-        else
-            vertices.push_back( OSMVertex( vertices_ptr[*ref * 2], vertices_ptr[*ref * 2+1]) );
-    }
-    
-    OSMIntegratedWay int_way(way.id, vertices, way.tags);
-    // the "way_index" here is deliberate.
-    // an integrated way always has the same size as the corresponding normal OSM way
-    // (in an integrated way, the uint64_t node refs are replaced by 2xint32_t lat/lon coordinates)
-    // thus, a single index is sufficient for both data files
-    int_way.serialize(way_int_data, &way_index, &symbolic_tags);
-    */
-/*    if (way.hasKey("natural"))
-        way.serialize( natural_data);
-
-    if (way.hasKey("landuse"))
-        way.serialize( landuse_data);
-
-    if (way.hasKey("building"))
-        way.serialize( building_data);
-
-    if (way.hasKey("highway"))
-        way.serialize( highway_data);
-*/
-
-    
+    way.serialize(*wayData, &way_index);
 }
 
 void OsmConsumerDumper::consumeRelation( OsmRelation &relation) 
 {
     nRelations++;
     filterTags(relation.tags);
-    relation.serializeWithIndexUpdate( relation_data, &relation_index);
+    relation.serializeWithIndexUpdate( *relationData, &relation_index);
     
 }
 

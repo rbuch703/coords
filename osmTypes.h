@@ -13,7 +13,7 @@
 #include "chunkedFile.h"
 
 
-typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
+enum ELEMENT : uint8_t { NODE, WAY, RELATION, CHANGESET, OTHER };
 typedef std::pair<std::string, std::string> OSMKeyValuePair;
 
 /*
@@ -96,7 +96,9 @@ struct OSMWay
             
     OSMWay( const uint8_t* data_ptr);
 
+    uint64_t getSerializedSize() const;
     void serialize( FILE* data_file, mmap_t *index_map) const;
+    void serialize( ChunkedFile& dataFile, mmap_t *index_map) const;
     bool hasKey(std::string key) const;
     const std::string &getValue(std::string key) const;
     const std::string &operator[](std::string key) const {return getValue(key);}
@@ -133,7 +135,10 @@ struct OsmRelation
 /*    OsmRelation( FILE* src, uint64_t rel_id = -1);
     OsmRelation( FILE* idx, FILE* data, uint64_t relation_id);*/
 
-    void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
+    uint64_t getSerializedSize() const;
+
+    void serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const;
+    void serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map) const;
     bool hasKey(std::string key) const;
     const std::string& getValue(std::string key) const;
     const std::string& operator[](std::string key) const {return getValue(key);}

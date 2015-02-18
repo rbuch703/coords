@@ -30,8 +30,10 @@ uint64_t getSerializedSize(const std::vector<OSMKeyValuePair> &tags)
     uint64_t size = sizeof(uint16_t) + //uint16_t numTags
                     sizeof(uint32_t) + //uint32_t numTagBytes
                     2 * tags.size();   //zero-termination for each key and value
+
     for (const OSMKeyValuePair & kv : tags)
         size += (kv.first.length() + kv.second.length());
+
     return size;
 }
 
@@ -64,7 +66,8 @@ void serializeTags( const vector<OSMKeyValuePair> &tags, Chunk &chunk)
     assert(tags.size() < (1<<16));
     chunk.put<uint16_t>(tags.size());              //numTags
     //storing this total size is redundant, but makes reading the tags back from file much faster 
-    chunk.put<uint32_t>(getSerializedSize(tags)); //numTagBytes
+    //numTagBytes = serialized size minus 'numTags' and 'numTagBytes' themselves
+    chunk.put<uint32_t>(getSerializedSize(tags) - sizeof(uint32_t) - sizeof(uint16_t)); 
 
     for (const OSMKeyValuePair &tag : tags)
     {
@@ -356,7 +359,14 @@ OSMWay::OSMWay( const uint8_t* data_ptr)
     tags = deserializeTags(data_ptr);
 }
 
-//OSMWay::OSMWay(uint64_t way_id): id(way_id) {}
+uint64_t OSMWay::getSerializedSize() const
+{
+    return sizeof(uint64_t) + //id
+           sizeof(uint32_t) + //version
+           sizeof(uint16_t) + // numRefs
+           sizeof(OsmGeoPosition) * refs.size() + //node refs
+           ::getSerializedSize(tags);
+}
 
         
 
@@ -387,6 +397,26 @@ void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
         uint64_t* ptr = (uint64_t*)index_map->ptr;
         ptr[id] = offset;
     }
+}
+
+void OSMWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
+{
+    Chunk chunk = dataFile.createChunk(this->getSerializedSize());
+    chunk.put<uint64_t>(this->id);
+    chunk.put<uint32_t>(this->version);
+    MUST(refs.size() <= 2000, "#refs in way is beyond what's allowed by OSM spec");
+    chunk.put<uint16_t>(this->refs.size());
+    for (const OsmGeoPosition &pos: this->refs)
+        chunk.put(&pos, sizeof(OsmGeoPosition));
+
+    serializeTags(this->tags, chunk);
+    if (index_map)
+    {
+        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
+        uint64_t* ptr = (uint64_t*)index_map->ptr;
+        ptr[id] = chunk.getPositionInFile();
+    }
+    
 }
 
 
@@ -452,6 +482,21 @@ OsmRelation::OsmRelation( const uint8_t* data_ptr)
     tags = deserializeTags(data_ptr);
 }
 
+uint64_t OsmRelation::getSerializedSize() const
+{
+    uint64_t size = sizeof(uint64_t) + //id
+                    sizeof(uint32_t) + //version
+                    sizeof(uint32_t) + //numMembers
+                    // type, ref and role null-termination for each member
+                    (sizeof(ELEMENT)+sizeof(uint64_t) + 1) * members.size() +
+                    ::getSerializedSize(this->tags);
+                    
+    for (const OsmRelationMember& mbr : members)
+        size += mbr.role.length();
+        
+    return size;
+}
+
 
 void OsmRelation::initFromFile(FILE* src)
 {
@@ -511,24 +556,54 @@ void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
     fwrite( &id, sizeof(id), 1, data_file);
     fwrite( &version, sizeof(version), 1, data_file);
     
-    assert(members.size() < (1<<16));
     uint32_t num_members = members.size();
     fwrite(&num_members, sizeof(num_members), 1, data_file);
     
     for (const OsmRelationMember &mbr : members)
     {
         fwrite(&mbr.type, sizeof(mbr.type), 1, data_file);
-        fwrite(&mbr.ref, sizeof(mbr.ref), 1, data_file);        
+        fwrite(&mbr.ref,  sizeof(mbr.ref),  1, data_file);        
         const char* str = mbr.role.c_str();
         fwrite(str, strlen(str)+1, 1, data_file);
     }
-        
+
     serializeTags(tags, data_file);
-    ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-    uint64_t* ptr = (uint64_t*)index_map->ptr;
-    ptr[id] = offset;
+
+    if (index_map)
+    {        
+        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
+        uint64_t* ptr = (uint64_t*)index_map->ptr;
+        ptr[id] = offset;
+    }
     
 }
+
+void OsmRelation::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map) const
+{
+    MUST(this->id > 0, "Invalid non-positive relation ID found. This is unsupported.");
+    Chunk chunk = dataFile.createChunk(this->getSerializedSize());
+    chunk.put<uint64_t>(this->id);
+    chunk.put<uint32_t>(this->version);
+    chunk.put<uint32_t>(this->members.size());
+    
+    for (const OsmRelationMember &mbr : members)
+    {
+        chunk.put(mbr.type);
+        chunk.put(mbr.ref);
+        const char* str = mbr.role.c_str();
+        chunk.put(str, strlen(str));
+    }    
+    
+    serializeTags(tags, chunk);
+
+    if (index_map)
+    {        
+        ensure_mmap_size( index_map, (id + 1)*sizeof(uint64_t));
+        ((uint64_t*)index_map->ptr)[id] = chunk.getPositionInFile();
+    }
+    
+}
+
 
 bool OsmRelation::hasKey(string key) const
 {
