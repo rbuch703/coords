@@ -20,7 +20,9 @@
 #include "osm_tags.h"
 //#include "symbolic_tags.h"
 
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
+#ifndef MUST
+    #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
+#endif
 
 using namespace std;
 
@@ -41,8 +43,7 @@ static void truncateFile(string filename) {
 }
 
 
-OsmConsumerDumper::OsmConsumerDumper(): 
-    nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
+OsmConsumerDumper::OsmConsumerDumper(): nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
 {    
 
     //for situations where several annotation keys exist with the same meaning
@@ -71,9 +72,10 @@ OsmConsumerDumper::OsmConsumerDumper():
 
     node_index = init_mmap( nodes_index_filename );
     
-    node_data = fopen(nodes_data_filename, "wb+");
+    nodeData = new ChunkedFile(nodes_data_filename);
+    /*node_data = fopen(nodes_data_filename, "wb+");
     const char* node_magic = "ON10"; //OSM Nodes v. 1.0
-    fwrite(node_magic, 4, 1, node_data);
+    fwrite(node_magic, 4, 1, node_data);*/
 
     vertex_data = init_mmap(vertices_data_filename); //holds just raw vertex coordinates indexed by node_id; no tags
 
@@ -101,10 +103,9 @@ static void padFile(FILE* file)
 
 
 void OsmConsumerDumper::onAllNodesConsumed () {
-    cout << "===============================================" << endl;
-
-    cout << "writing mmaped contents to disk" << endl;
-    padFile(node_data);
+    //cout << "===============================================" << endl;
+    //cout << "writing mmaped contents to disk" << endl;
+    //padFile(node_data);
     
     /* to clear the caches, we have to:
      * - force Linux to flush out the dirty areas of the data files using sync_file_range
@@ -112,9 +113,10 @@ void OsmConsumerDumper::onAllNodesConsumed () {
      *   (that would not have worked on dirty pages).
     */
     
-    sync_file_range( fileno(node_data), 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
+    /*sync_file_range( fileno(node_data), 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
     posix_fadvise( fileno(node_data), 0, 0, POSIX_FADV_DONTNEED);
-    fclose( node_data ); //don't need node data any more
+    fclose( node_data ); //don't need node data any more*/
+    delete nodeData;    //close chunked file
     
     sync_file_range( node_index.fd, 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
     madvise(node_index.ptr, node_index.size, MADV_DONTNEED);
@@ -127,7 +129,7 @@ void OsmConsumerDumper::onAllNodesConsumed () {
     //where ways are read and written sequentially, but vertices are read randomly
     vertex_data = init_mmap(vertices_data_filename, true, false); 
     
-    cout << "== Done parsing Nodes ==" << endl;
+    //cout << "== Done parsing Nodes ==" << endl;
 
     //setup output for ways
     way_index = init_mmap(ways_index_filename);
@@ -162,7 +164,7 @@ void OsmConsumerDumper::onAllWaysConsumed () {
 //    padFile(way_int_data);
 //    fclose(way_int_data);
     
-    cout << "== Done parsing Ways ==" << endl;
+    //cout << "== Done parsing Ways ==" << endl;
 
     //setup output for relations
     relation_index = init_mmap(relations_index_filename);
@@ -179,7 +181,7 @@ void OsmConsumerDumper::onAllRelationsConsumed () {
     padFile(relation_data);
     fclose( relation_data);
     
-    cout << "==================== done =======================" << endl;
+    //cout << "==================== done =======================" << endl;
     cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
     
 }; 
@@ -193,7 +195,7 @@ bool OsmConsumerDumper::processTag(OSMKeyValuePair &tag) const
     //const string* renameValue = rename_key.at(tag.first.c_str());
     //if ( renameValue ) tag.first = *renameValue;
         
-    if ( ignore_key.at(tag.first.c_str()) ) 
+    if ( ignore_key.at(tag.first.c_str()) )
         return false;
         
     if ( ignoreKeyPrefixes.containsPrefixOf( tag.first.c_str()))
@@ -220,7 +222,7 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
 {
     nNodes++;
     filterTags(node.tags);
-    node.serializeWithIndexUpdate(node_data, &node_index);
+    node.serializeWithIndexUpdate(*nodeData, &node_index);
     
     ensure_mmap_size( &vertex_data, (node.id+1) * 2 * sizeof(int32_t));
     int32_t* vertex_ptr = (int32_t*)vertex_data.ptr;

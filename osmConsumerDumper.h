@@ -7,6 +7,7 @@
 #include "mem_map.h"
 #include "osmConsumer.h"
 #include "radixTree.h"
+#include "chunkedFile.h"
 
 class OsmConsumerDumper: public OsmBaseConsumer
 {
@@ -28,11 +29,12 @@ private:
 
 private:
     mmap_t node_index, vertex_data, way_index, relation_index;
-    FILE *node_data, *way_data, *relation_data;
+    FILE /**node_data,*/ *way_data, *relation_data;
+    ChunkedFile *nodeData;
     //FILE *building_data, *highway_data, *landuse_data, *natural_data;
     //map<OSMKeyValuePair, uint8_t> symbolic_tags;
     RadixTree<string> rename_key; 
-    RadixTree<int> ignore_key, ignoreKeyPrefixes;    //ignore key-value pairs which are irrelevant for a viewer application
+    RadixTree<int> ignore_key, ignoreKeyPrefixes;    //ignore key-value pairs which are irrelevant for most applications
     uint64_t nNodes, nWays, nRelations;
     
     uint64_t node_data_synced_pos, node_index_synced_pos;

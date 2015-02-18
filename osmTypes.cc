@@ -17,8 +17,6 @@
 
 
 using namespace std;
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
-
 
 /*
 std::ostream& operator <<(std::ostream& os, const OSMVertex v)
@@ -27,14 +25,17 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v)
     return os;
 }*/
 
+uint64_t getSerializedSize(const std::vector<OSMKeyValuePair> &tags)
+{
+    uint64_t size = sizeof(uint16_t) + //uint16_t numTags
+                    sizeof(uint32_t) + //uint32_t numTagBytes
+                    2 * tags.size();   //zero-termination for each key and value
+    for (const OSMKeyValuePair & kv : tags)
+        size += (kv.first.length() + kv.second.length());
+    return size;
+}
 
-/** on-file layout for tags :
-    uint16_t num_verbose_tags;
-    uint32_t verbose_tag_data_len; (total data size of all verbose tags, in bytes); optional, present only if   num_verbose_tags > 0
-    <2*num_verbose_tags> zero-terminated strings containing interleaved keys and values 
-    (key_0, value_0, key_1, value_1, ...)
 
-*/
 void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
 {
     assert(tags.size() < (1<<16));
@@ -57,6 +58,22 @@ void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
     }
 
 }
+
+void serializeTags( const vector<OSMKeyValuePair> &tags, Chunk &chunk)
+{
+    assert(tags.size() < (1<<16));
+    chunk.put<uint16_t>(tags.size());              //numTags
+    //storing this total size is redundant, but makes reading the tags back from file much faster 
+    chunk.put<uint32_t>(getSerializedSize(tags)); //numTagBytes
+
+    for (const OSMKeyValuePair &tag : tags)
+    {
+        //"+1" : both including their null-termination
+        chunk.put( tag.first.c_str(),  strlen(tag.first.c_str())  + 1);
+        chunk.put( tag.second.c_str(), strlen(tag.second.c_str()) + 1);
+    }
+}
+
 
 void fread( void* dest, uint64_t size, FILE* file)
 {
@@ -171,6 +188,7 @@ OSMNode::OSMNode( FILE* data_file, uint64_t offset, uint64_t node_id)
     id = node_id;
 }*/
 
+
 OSMNode::OSMNode( const uint8_t* data_ptr)
 {
     id = *(uint64_t*)data_ptr;
@@ -188,6 +206,10 @@ OSMNode::OSMNode( const uint8_t* data_ptr)
     tags = deserializeTags(data_ptr);
 }
 
+uint64_t OSMNode::getSerializedSize() const
+{
+    return sizeof(id) + sizeof(version) + sizeof(lat) + sizeof(lon) + ::getSerializedSize(tags);
+}
 #if 0
 OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
 {
@@ -240,6 +262,28 @@ void OSMNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
     uint64_t* ptr = (uint64_t*)index_map->ptr;
     ptr[id] = offset;
 }
+
+void OSMNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map) const
+{
+    /** temporary nodes in OSM editors are allowed to have negative node IDs, 
+      * but those in the official maps are guaranteed to be positive.
+      * Also, negative ids would mess up the memory map (would lead to negative indices*/
+    MUST (id > 0, "Invalid non-positive node id in input file.");
+    
+    Chunk chunk = dataFile.createChunk( this->getSerializedSize());
+    chunk.put(id);
+    chunk.put(version);
+    chunk.put(lat);
+    chunk.put(lon);
+
+    serializeTags( tags, chunk );
+
+    //std::cout << id << endl;    
+    ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
+    uint64_t* ptr = (uint64_t*)index_map->ptr;
+    ptr[id] = chunk.getPositionInFile();
+}
+
 
 bool OSMNode::hasKey(string key) const
 {

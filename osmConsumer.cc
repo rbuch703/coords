@@ -3,9 +3,6 @@
 
 #include <iostream>
 
-//a macro that is similar to assert(), but is not deactivated by NDEBUG
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
-
 
 OsmBaseConsumer::OsmBaseConsumer(): 
         finalized(false), hasConsumedNodes(false), 

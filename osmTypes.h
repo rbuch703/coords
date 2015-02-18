@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "mem_map.h"
+#include "chunkedFile.h"
 
 
 typedef enum ELEMENT { NODE, WAY, RELATION, CHANGESET, OTHER } ELEMENT;
@@ -52,6 +53,8 @@ struct OSMNode
     OSMNode( const uint8_t* data_ptr);
         
     void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
+    void serializeWithIndexUpdate( ChunkedFile &dataFile, mmap_t *index_map) const;
+
     const std::string &getValue(std::string key) const;
     bool hasKey(std::string key) const;
     const std::string &operator[](std::string key) const {return getValue(key);}
@@ -59,7 +62,7 @@ struct OSMNode
     bool operator==(const OSMNode &other) const;
     bool operator!=(const OSMNode &other) const;
     bool operator< (const OSMNode &other) const;
-    
+    uint64_t getSerializedSize() const;    
 //    OSMVertex toVertex() const {return OSMVertex(lat, lon);}
     uint64_t id;
     uint32_t version;

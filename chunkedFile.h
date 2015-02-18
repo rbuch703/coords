@@ -1,0 +1,111 @@
+
+#ifndef CHUNKED_FILE_H
+#define CHUNKED_FILE_H
+
+#include <stdint.h>
+
+#include <vector>
+#include <map>
+#include <string>
+
+#include "mem_map.h"
+
+#include <assert.h>
+#include <string.h> //for memcpy
+
+#ifndef MUST
+    //a macro that is similar to assert(), but is not deactivated by NDEBUG
+    #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
+#endif
+
+/* The class "ChunkedFile" represents a file containing data chunks of variable sizes that can be
+   created, read, updated and deleted. It is intended for uses where chunk deletions
+   and recreations are quite common. In this case, allowing arbitrary chunk sizes 
+   would lead to wasted space whenever a chunk is deleted, as its space cannot easily
+   be re-used for chunks of a different size. 
+   Instead, this class only allows certain chunk sizes that follow a power series (
+   starting at 20 bytes, and each successive size being 1.5 times as big as its 
+   predecessor, rounded down). When creation of a new chunk (of arbitrary size) is 
+   requested, the request is fulfilled by serving a new chunk of the closest size
+   from the power series that is at least as big as requested. When a chunk is deleted,
+   its actual chunk size (which may have been bigger than requested) is reclaimed,
+   and added to a 'free list'. Since the power series has only 46 distinct entries (up
+   to a maximum chunk size of about 1,6GB), the free list simply consists of a list of 
+   free chunks for each of the 46 different possible sizes. So free space management is
+   simplified. 
+*/
+class Chunk;
+
+class ChunkedFile 
+{
+public:
+    ChunkedFile(std::string filename);
+    ~ChunkedFile();
+    //uint64_t createChunk(uint64_t size);
+    Chunk createChunk(uint64_t size);
+    void freeChunk(Chunk &chunk);
+    
+    //uint8_t* getChunkDataPtr(uint64_t filePos);
+//private:
+public: //'public' for debugging
+    void increaseSize(uint64_t newSize);
+    uint64_t getFreeSpaceAtEnd() const;
+    void setFreeSpaceAtEnd(uint64_t freeSpace);
+    uint64_t getStartPosOfFreeSpace() const;
+    bool isValidChunk(uint64_t pos) const;
+
+    static const uint64_t chunkSizes[];
+    static const uint64_t numChunkSizes;
+
+private:
+    void loadFreeLists();
+    enum CHUNK_BITS {INVALID_CHUNK = 0x40, UNUSED_CHUNK = 0x80, CHUNK_SIZE_MASK= 0x3F};
+
+    std::string filename;
+    std::vector<uint64_t> *freeLists;
+    mmap_t fileMap;
+};
+
+class Chunk
+{
+public:
+    Chunk(uint8_t *dataPtr, uint64_t filePos, uint64_t size): 
+        dataPtr(dataPtr), filePos(filePos), currentIndex(0), size(size) {}
+        
+    uint64_t getSize() const { return size;}
+    uint64_t getPositionInFile() const { return filePos;}
+
+    template<typename T>
+    T get() {
+        MUST( currentIndex + sizeof(T) <= size, "invalid read in chunk"); 
+        T *pos = (T*)(dataPtr + currentIndex);
+        currentIndex += sizeof(T);
+        return *pos;
+    };
+
+    template<typename T>
+    void put(const T &value) {
+        MUST( currentIndex + sizeof(T) <= size, "invalid write to chunk");
+        *((T*)(dataPtr + currentIndex)) = value;
+        currentIndex += sizeof(T);
+    };
+    
+    void put(const void* src, uint64_t srcSize)
+    {
+        MUST( currentIndex + srcSize <= this->size, "invalid write to chunk")
+        memcpy(dataPtr+currentIndex, src, srcSize);
+        currentIndex += srcSize;
+    }
+    
+    
+    void resetPosition() {currentIndex = 0;}
+private:
+    uint8_t* dataPtr;
+    uint64_t filePos;
+    uint64_t currentIndex;
+    uint64_t size;
+    friend class ChunkedFile;
+};
+
+#endif
+

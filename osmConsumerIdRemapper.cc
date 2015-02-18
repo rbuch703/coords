@@ -3,9 +3,6 @@
 #include <iostream>
 #include <assert.h>
 
-//a macro that is similar to assert(), but is not deactivated by NDEBUG
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
-
 using namespace std;
 
 typedef pair<uint64_t, int64_t> RemapEntry;

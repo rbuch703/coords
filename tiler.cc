@@ -300,7 +300,7 @@ int main()
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
     storage.releaseMemoryResources();
-    storage.subdivide(MAX_NODE_SIZE, false);
+    storage.subdivide(MAX_NODE_SIZE, true);
  
     //storageLod12.releaseMemoryResources();
     //storageLod12.subdivideMemoryBacked(MAX_NODE_SIZE);

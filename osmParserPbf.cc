@@ -12,8 +12,6 @@
 #include "osmTypes.h"
 #include "osmConsumerCounter.h"
 //#include "osmConsumerOrderEnsurer.h"
-//a macro that is similar to assert(), but is not deactivated by NDEBUG
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); exit(EXIT_FAILURE);}}
 
 using namespace std;
 
@@ -35,9 +33,14 @@ const string& StringTable::operator[](uint32_t idx) const
 }
 
 
-OsmParserPbf::OsmParserPbf(FILE * file, OsmBaseConsumer *consumer): f(file), consumer(consumer)
+OsmParserPbf::OsmParserPbf(FILE * file, OsmBaseConsumer *consumer): 
+    f(file), fileSize(0), consumer(consumer)
 {
     unpackBuffer = new uint8_t[OSMPBF::max_uncompressed_blob_size];  
+    
+    fseek(f, 0, SEEK_END);
+    fileSize = ftell(f);
+    rewind(f);
 }
 
 OsmParserPbf::~OsmParserPbf() {
@@ -86,7 +89,7 @@ void OsmParserPbf::unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unp
 
 }
 
-string OsmParserPbf::prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataSizeOut)
+string OsmParserPbf::prepareBlob(uint8_t *unpackBuffer, uint32_t &dataSizeOut)
 {
     OSMPBF::BlobHeader header;    
     OSMPBF::Blob blob;
@@ -107,14 +110,14 @@ string OsmParserPbf::prepareBlob(FILE* f, uint8_t *unpackBuffer, uint32_t &dataS
     MUST(fread(unpackBuffer, size, 1, f) == 1, "fread failed");
 
     cout << "\e[u" << endl; //move cursor to saved position
-    cout << "blob at file position "<< (ftello(f) / 1000000) << "M" ;
+    cout << "Processing blob at file position "<< (ftello(f) / 1000000) << "M (" << (ftello(f)*100/fileSize) << "%)" ;
 
     MUST( blob.ParseFromArray(unpackBuffer, size), "could not parse blob");
 
-    if (blob.has_raw())
+    /*if (blob.has_raw())
         cout << " contains raw data";
     if (blob.has_raw_size())
-        cout << " contains compressed data, " << blob.zlib_data().size() << "-> "<<  blob.raw_size() << " bytes";
+        cout << " contains compressed data, " << blob.zlib_data().size() << "-> "<<  blob.raw_size() << " bytes";*/
         
     cout << "\e[K" << endl;
 
@@ -277,20 +280,20 @@ void OsmParserPbf::parse()
         ungetc(ch, f);
 
         uint32_t size;
-        string blobType = prepareBlob(f, unpackBuffer, size);
+        string blobType = prepareBlob(unpackBuffer, size);
         
         if ( blobType == "OSMHeader")
         {    
-            cout << "parsing headerBlock" << endl;
+            //cout << "parsing headerBlock" << endl;
             OSMPBF::HeaderBlock headerBlock;
             MUST( headerBlock.ParseFromArray(unpackBuffer, size), "failed to parse HeaderBlock");
             for (string s: headerBlock.required_features())
-                cout << "\tcontains required feature " << s << endl;
+                cout << "\trequires feature '" << s << "'" << endl;
 
             for (string s: headerBlock.optional_features())
-                cout << "\tcontains optional feature " << s << endl;
+                cout << "\thas optional feature " << s << "'" << endl;
                 
-            cout << "\twritten by " << headerBlock.writingprogram() << endl;
+            cout << "\twritten by '" << headerBlock.writingprogram() << "'" << endl;
             cout << endl << endl << "\e[2A";
             cout << "\e[s"; //mark cursor position for future status updates
         } else if (blobType == "OSMData")

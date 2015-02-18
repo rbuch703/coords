@@ -13,10 +13,6 @@
 #include "osmMappedTypes.h"
 #include "reverseIndex.h"
 
-//const uint64_t MAX_MMAP_SIZE = 10000ll * 1000 * 1000; //500 MB 
-
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
-
 
 using namespace std;
 
