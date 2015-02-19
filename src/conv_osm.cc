@@ -5,7 +5,7 @@
 
 #include "consumers/osmConsumerCounter.h"
 #include "consumers/osmConsumerDumper.h"
-//#include "osmConsumerIdRemapper.h"
+#include "consumers/osmConsumerIdRemapper.h"
 #include "osm/osmParserPbf.h"
 //#include "osm/osmParserXml.h"
 
@@ -51,16 +51,15 @@ int main(int argc, char** argv)
         std::cerr << "error: cannot open file '" << argv[nextArgumentIndex] << "'" << endl;
         exit(EXIT_FAILURE);
     }
-    #warning disabled ID remapper
     OsmBaseConsumer *dumper = new OsmConsumerDumper();
-    //OsmBaseConsumer* firstConsumer = remapIds ? new OsmConsumerIdRemapper(dumper) : dumper;
-    OsmParserPbf parser(f, /*firstConsumer*/dumper);
+    OsmBaseConsumer* firstConsumer = remapIds ? new OsmConsumerIdRemapper(dumper) : dumper;
+    OsmParserPbf parser(f, firstConsumer);
     parser.parse();
     
     fclose(f);
     
     delete dumper;
-    /*if (firstConsumer != dumper)
-        delete firstConsumer;*/
+    if (firstConsumer != dumper)
+        delete firstConsumer;
 
 }

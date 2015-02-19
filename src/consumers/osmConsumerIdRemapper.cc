@@ -7,6 +7,7 @@ using namespace std;
 
 typedef pair<uint64_t, int64_t> RemapEntry;
 
+/*
 class Remap {
 
 public:
@@ -103,63 +104,87 @@ private:
     uint64_t nextFreeId;
     uint64_t nextExpectedId;
 
-};
+};*/
 
 OsmConsumerIdRemapper::OsmConsumerIdRemapper(OsmBaseConsumer *innerConsumer): 
-    innerConsumer(innerConsumer)
-{
-    nodeRemap = new Remap();
-    wayRemap = new Remap();
-    relationRemap = new Remap();
+    innerConsumer(innerConsumer), nodeMap("intermediate/mapNodes.idx"),
+    wayMap("intermediate/mapWays.idx"), relationMap("intermediate/mapRelations.idx")
     
+{
+    nodeIdsRemapped = nodeMap.getHighestValue();
+    wayIdsRemapped = wayMap.getHighestValue();
+    relationIdsRemapped = relationMap.getHighestValue();
+           
 }
 
-OsmConsumerIdRemapper::~OsmConsumerIdRemapper()
+OsmConsumerIdRemapper::~OsmConsumerIdRemapper ()
 {
-    delete nodeRemap;
-    delete wayRemap;
-    delete relationRemap;
+    cout << "relocation tables have " 
+         << nodeIdsRemapped     << "/" 
+         << wayIdsRemapped      << "/"
+         << relationIdsRemapped << "/" << " entries." << endl;
 }
 
 
 
 void OsmConsumerIdRemapper::consumeNode( OSMNode &node)
 {
-    node.id = nodeRemap->remapId(node.id);
+    if (!nodeMap.count(node.id))
+        nodeMap.insert( std::make_pair( node.id, ++nodeIdsRemapped));
+
+    node.id = nodeMap[node.id];
+
     innerConsumer->consumeNode(node);
 }
 
 void OsmConsumerIdRemapper::consumeWay     ( OSMWay  &way) 
 { 
-    way.id = wayRemap->remapId(way.id);
+    if (!wayMap.count(way.id))
+        wayMap.insert( std::make_pair( way.id, ++wayIdsRemapped));
+        
+    way.id = wayMap[way.id];
     
     for (OsmGeoPosition &pos : way.refs)
-        pos.id = this->nodeRemap->getRemappedId(pos.id);
+    {
+        if (!nodeMap.count(pos.id))
+            nodeMap.insert( std::make_pair(pos.id, ++nodeIdsRemapped));
+        pos.id = nodeMap[pos.id];
+    }
 
     //cout << way << endl;
     innerConsumer->consumeWay(way);
-
 }
 
 void OsmConsumerIdRemapper::consumeRelation( OsmRelation &relation) 
 { 
-    /* WARNING: we cannot reliably remap relation IDs in a single pass:
-     *          The current remapping process requires all relation IDs to be remapped
-     *          to be presented in increasing order. This is true for the IDs
-     *          of the relations to be consumed themselves; but it is not necessarily
-     *          true for the IDs of their members of type 'relation'.
-     *          So we do not remap relation IDs for now. Fortunately, even the full set
-     *          of relation IDs is so small (usually ~1/1000th) compared to the set of nodes or ways that
-     *          even the index for all non-remapped relation IDs usually does not dominate
-     *          the storage requirements.
-     */
+
+    if (!relationMap.count(relation.id))
+        relationMap.insert( std::make_pair( relation.id, ++relationIdsRemapped));
+    
+    relation.id = relationMap[relation.id];
+
 
     for (OsmRelationMember &mbr : relation.members)
         switch (mbr.type)
         {
-            case NODE: mbr.ref = this->nodeRemap->getRemappedId(mbr.ref); break;
-            case WAY: mbr.ref = this->wayRemap->getRemappedId(mbr.ref); break;
-            case RELATION: break; //NOOP, since we donot remap relation IDs
+            case NODE: 
+                if (! nodeMap.count(mbr.ref))
+                    nodeMap.insert( std::make_pair(mbr.ref, ++nodeIdsRemapped));
+                    
+                mbr.ref = nodeMap[mbr.ref];
+                break;
+            case WAY: 
+                if (!wayMap.count(mbr.ref))
+                    wayMap.insert( std::make_pair( mbr.ref, ++wayIdsRemapped));
+                
+                mbr.ref = wayMap[mbr.ref];
+                break;
+            case RELATION: 
+                if (!relationMap.count(mbr.ref))
+                    relationMap.insert( std::make_pair( mbr.ref, ++relationIdsRemapped));
+                
+                mbr.ref = relationMap[mbr.ref];
+                break;
             default: assert(false && "invalid member type"); break;
         }
 
@@ -168,14 +193,4 @@ void OsmConsumerIdRemapper::consumeRelation( OsmRelation &relation)
 
 };
 
-void OsmConsumerIdRemapper::onAllNodesConsumed () { innerConsumer->onAllNodesConsumed();}
-void OsmConsumerIdRemapper::onAllWaysConsumed ()  { innerConsumer->onAllWaysConsumed(); }
-
-
-void OsmConsumerIdRemapper::onAllRelationsConsumed ()
-{
-    innerConsumer->onAllRelationsConsumed();
-    cout << "relocation tables have " << this->nodeRemap->getNumEntries() 
-         << "/" << this->wayRemap->getNumEntries() << " entries." << endl;
-}
 

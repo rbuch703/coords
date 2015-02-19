@@ -13,7 +13,7 @@
 
 //#include <iostream>
 
-mmap_t init_mmap ( const char* file_name, bool readable, bool writeable)
+mmap_t init_mmap ( const char* file_name, bool readable, bool writeable, bool clearContents)
 {
     assert(readable || writeable);  //no use otherwise
     
@@ -22,6 +22,10 @@ mmap_t init_mmap ( const char* file_name, bool readable, bool writeable)
         the OS needs to be able to *read* the whole data page which is changed by *writing* */
     res.fd = open(file_name, O_CREAT|(writeable? O_RDWR : O_RDONLY), S_IRUSR | S_IWUSR);  
     assert(res.fd != -1);
+    
+    if (clearContents)
+        ftruncate(res.fd, 0);
+    
     struct stat stats;
     if (0 != fstat(res.fd, &stats)) { perror ("fstat"); exit(0); }
 
