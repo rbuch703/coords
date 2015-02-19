@@ -128,7 +128,7 @@ void OsmXmlParser::parseNode()
         }
     }
     OSMNode node(lat, lon, id, version, tags);
-    consumer->processNode(node);
+    consumer->consumeNode(node);
 }
 
 void OsmXmlParser::parseWay()
@@ -170,7 +170,7 @@ void OsmXmlParser::parseWay()
     }
     
     OSMWay way(id, version, node_refs, tags);
-    consumer->processWay(way);
+    consumer->consumeWay(way);
 }
 
 void OsmXmlParser::parseRelation()
@@ -218,7 +218,7 @@ void OsmXmlParser::parseRelation()
         } else assert(false && "Unknown tag in relation" );
     }
     OsmRelation rel(id, version, members, tags);
-    consumer->processRelation(rel);
+    consumer->consumeRelation(rel);
 }
 
 void OsmXmlParser::parseChangeset()

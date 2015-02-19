@@ -192,7 +192,7 @@ void OsmParserPbf::parseDenseNodes( const OSMPBF::DenseNodes &nodes, const Strin
             }
             keyValPos ++;   //already observed the "end-of-key-value-list" marker, now step beyond it   
         }        
-        consumer->processNode(node);
+        consumer->consumeNode(node);
         //cout << "\t\t\t" << node << endl; 
         
         prevId = id, prevLat = latRaw, prevLon = lonRaw/*, prevTimeStamp = timeStamp, 
@@ -227,7 +227,7 @@ void OsmParserPbf::parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Wa
                                                     .lng= INVALID_LAT_LNG} );
         } 
 
-        consumer->processWay(osmWay);
+        consumer->consumeWay(osmWay);
 
         //cout << osmWay << endl;
     }
@@ -265,7 +265,7 @@ void OsmParserPbf::parseRelations(const google::protobuf::RepeatedPtrField<OSMPB
             osmRel.members.push_back( OsmRelationMember(type, ref, role));
         }
         
-        consumer->processRelation(osmRel);
+        consumer->consumeRelation(osmRel);
     }
 }
 

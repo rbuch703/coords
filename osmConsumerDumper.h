@@ -13,12 +13,9 @@ class OsmConsumerDumper: public OsmBaseConsumer
 {
 public:
     OsmConsumerDumper();
+    virtual ~OsmConsumerDumper();
 protected:
     static const string base_path;
-
-    virtual void onAllWaysConsumed ();
-    virtual void onAllNodesConsumed ();
-    virtual void onAllRelationsConsumed ();
 
     virtual void consumeNode( OSMNode &node);
     virtual void consumeWay ( OSMWay  &way);

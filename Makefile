@@ -1,6 +1,7 @@
 
 CONV_OSM_SRC = conv_osm.cc mem_map.cc osmTypes.cc osmMappedTypes.cc osm_tags.cc osmParserXml.cc\
-               osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc osmConsumerIdRemapper.cc chunkedFile.cc
+               osmParserPbf.cc osmConsumer.cc osmConsumerCounter.cc osmConsumerDumper.cc \
+               chunkedFile.cc
 WAYINT_SRC = wayIntegrator.cc reverseIndex.cc mem_map.cc osmTypes.cc osmMappedTypes.cc chunkedFile.cc
 TILER_SRC = tiler.cc tiles.cc osmTypes.cc osmMappedTypes.cc mem_map.cc chunkedFile.cc
 

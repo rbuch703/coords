@@ -7,11 +7,12 @@
 class OsmConsumerCounter : public OsmBaseConsumer {
 public:
     OsmConsumerCounter();
+    virtual ~OsmConsumerCounter();
 
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
     virtual void consumeRelation( OsmRelation &);
-    virtual void onAllRelationsConsumed ();
+    
 private:
     uint64_t nNodes, nWays, nRelations;
 };

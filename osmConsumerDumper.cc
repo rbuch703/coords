@@ -70,16 +70,35 @@ OsmConsumerDumper::OsmConsumerDumper(): nNodes(0), nWays(0), nRelations(0), node
     truncateFile(relations_index_filename);
     truncateFile(relations_data_filename);
 
-    node_index = init_mmap( nodes_index_filename );
-    
-    nodeData = new ChunkedFile(nodes_data_filename);
-    /*node_data = fopen(nodes_data_filename, "wb+");
-    const char* node_magic = "ON10"; //OSM Nodes v. 1.0
-    fwrite(node_magic, 4, 1, node_data);*/
-
     vertex_data = init_mmap(vertices_data_filename); //holds just raw vertex coordinates indexed by node_id; no tags
 
+    node_index = init_mmap( nodes_index_filename );
+    nodeData = new ChunkedFile(nodes_data_filename);
+
+    way_index = init_mmap(ways_index_filename);
+    wayData = new ChunkedFile(ways_data_filename);
+
+    relation_index = init_mmap(relations_index_filename);
+    relationData = new ChunkedFile(relations_data_filename);
+
 };
+
+OsmConsumerDumper::~OsmConsumerDumper()
+{
+    delete nodeData;    //close chunked file
+    free_mmap(&node_index);   
+   
+    free_mmap(&vertex_data);
+    free_mmap(&way_index);
+    delete wayData;
+
+    free_mmap(&relation_index);
+    delete relationData;
+
+    cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
+
+}
+
 
 //virtual ~OsmConsumerDumper() {};
 //protected:
@@ -101,75 +120,6 @@ OsmConsumerDumper::OsmConsumerDumper(): nNodes(0), nWays(0), nRelations(0), node
     assert( ftello(file) % page_size == 0);
 }*/
 
-
-void OsmConsumerDumper::onAllNodesConsumed () {
-    //cout << "===============================================" << endl;
-    //cout << "writing mmaped contents to disk" << endl;
-    //padFile(node_data);
-    
-    /* to clear the caches, we have to:
-     * - force Linux to flush out the dirty areas of the data files using sync_file_range
-     * - advise Linux that all flushed file areas can be evicted from the page cache 
-     *   (that would not have worked on dirty pages).
-    */
-    
-    /*sync_file_range( fileno(node_data), 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
-    posix_fadvise( fileno(node_data), 0, 0, POSIX_FADV_DONTNEED);
-    fclose( node_data ); //don't need node data any more*/
-    delete nodeData;    //close chunked file
-    
-    sync_file_range( node_index.fd, 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
-    madvise(node_index.ptr, node_index.size, MADV_DONTNEED);
-    free_mmap(&node_index);
-    
-    //sync_file_range( vertex_data.fd, 0, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
-    //madvise(vertex_data.ptr, vertex_data.size, MADV_DONTNEED);
-    free_mmap(&vertex_data);
-    //re-open the vertex mmap read-only. This should improve Linux' mapping behavior for the next phase,
-    //where ways are read and written sequentially, but vertices are read randomly
-    vertex_data = init_mmap(vertices_data_filename, true, false); 
-    
-    //cout << "== Done parsing Nodes ==" << endl;
-
-    //setup output for ways
-    way_index = init_mmap(ways_index_filename);
-    wayData = new ChunkedFile(ways_data_filename);
-};
-
-
-void OsmConsumerDumper::onAllWaysConsumed () {
-    free_mmap(&vertex_data);
-    free_mmap(&way_index);
-    //free_mmap(&way_int_index);
-    
-    //padFile(way_data);
-    //fclose(way_data);
-    delete wayData;
-    
-//    padFile(way_int_data);
-//    fclose(way_int_data);
-    
-    //cout << "== Done parsing Ways ==" << endl;
-
-    //setup output for relations
-    relation_index = init_mmap(relations_index_filename);
-    
-    relationData = new ChunkedFile(relations_data_filename);
-    /*relation_data = fopen(relations_data_filename, "wb+");
-    const char* relation_magic = "OR10"; //OSM Relation v. 1.0
-    fwrite(relation_magic, 4, 1, relation_data);*/
-
-};   
-
-
-void OsmConsumerDumper::onAllRelationsConsumed () {
-    free_mmap(&relation_index);
-    delete relationData;
-        
-    //cout << "==================== done =======================" << endl;
-    cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
-    
-}; 
 
 
 /* modifies the 'tag' to reflect the rename rules. 

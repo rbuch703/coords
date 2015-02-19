@@ -1,16 +1,3 @@
-/*****************************************************************
- * outline.c
- *
- * Copyright 1999, Clark Cooper
- * All rights reserved.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the same terms as Perl.
- *
- * Read an XML document from standard input and print an element
- * outline on standard output.
- */
-
 
 #include <stdio.h>
 #include <expat.h>
