@@ -28,7 +28,7 @@ mmap_t init_mmap ( const char* file_name, bool readable, bool writeable, bool cl
     assert(res.fd != -1);
     
     if (clearContents)
-        MUST(ftruncate(res.fd, 0), "cannot truncate file");
+        MUST(0 == ftruncate(res.fd, 0), "cannot truncate file");
         
     struct stat stats;
     if (0 != fstat(res.fd, &stats)) { perror ("fstat"); exit(0); }
