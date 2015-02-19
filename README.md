@@ -12,8 +12,6 @@ Building Instructions (for Ubuntu 14.04)
 * `cmake .`
 * `make` # compile the tools
 
-The tools will be build in the `build` directory
-
 Execution Instructions
 ----------------------
 
@@ -88,6 +86,6 @@ The execution times for these tools varies dramatically depending on:
 The following execution times where measured on a 2x2.4GHz virtual machine with 32GB of RAM and a hard drive-backed file system, processing a recent Planet dump (28.5GB) without ID remapping:
 
 1. `coordsCreateDatabase`: about 1.5h
-2. `coordsResolveLocations`: about 2h for two passes (i.e. using the parameter `--mode=BLOCK --lock=16000`)
+2. `coordsResolveLocations --mode=BLOCK --lock=16000`: about 2h for two passes 
 3. `coordsCreateTiles`: about 2h
  

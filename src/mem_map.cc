@@ -13,6 +13,10 @@
 
 //#include <iostream>
 
+#ifndef MUST
+#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
+#endif
+
 mmap_t init_mmap ( const char* file_name, bool readable, bool writeable, bool clearContents)
 {
     assert(readable || writeable);  //no use otherwise
@@ -24,8 +28,8 @@ mmap_t init_mmap ( const char* file_name, bool readable, bool writeable, bool cl
     assert(res.fd != -1);
     
     if (clearContents)
-        ftruncate(res.fd, 0);
-    
+        MUST(ftruncate(res.fd, 0), "cannot truncate file");
+        
     struct stat stats;
     if (0 != fstat(res.fd, &stats)) { perror ("fstat"); exit(0); }
 

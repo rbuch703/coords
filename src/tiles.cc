@@ -5,12 +5,16 @@
 using std::cout;
 using std::endl;
 
+#ifndef MUST
+#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
+#endif
+
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
 
 static void deleteContentsAndClose(FILE* &file)
 {
-    ftruncate(fileno(file), 0);
+    MUST(0 == ftruncate(fileno(file), 0), "cannot truncate file");
     fclose(file);
     file = NULL;
 }
@@ -206,7 +210,9 @@ void FileBackedTile::add(OsmLightweightWay &way, const GeoAABB &wayBounds)
     if (fData)
     {
         assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
+#ifndef NDEBUG
         uint64_t posBefore = ftell(fData);
+#endif
         way.serialize(fData);
         assert( ftell(fData) - posBefore == way.size());
         size += way.size();
@@ -271,7 +277,7 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
 
     fseek(fData, 0, SEEK_END);  //should be a noop for opening with mode "a"
     uint64_t sizeFromFile = ftell(fData);
-    assert(sizeFromFile == size && "storage file corrupted.");
+    MUST(sizeFromFile == size, "storage file corrupted.");
     rewind(fData);
     if (useMemoryBackedStorage)
     {
@@ -307,7 +313,7 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
         /* must be executed only after writeToDiskRecursive(), because the OsmLightweightWays
          * of child nodes hold pointers to this memory mapping */
         int res = munmap(data, size);
-        assert(res == 0);
+        MUST(res == 0, "cannot unmap file");
         deleteContentsAndClose(fData);
         size = 0;
 

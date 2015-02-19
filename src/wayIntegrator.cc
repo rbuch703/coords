@@ -269,7 +269,7 @@ int main(int argc, char** argv)
                 {
                     cout << " invalid vertex pointer; should be " << vertexPos << "->" << upper << ", is " << base << endl;
                 }*/
-    	        assert( base  >= vertexPos && base < upper);
+    	        MUST( base  >= vertexPos && base < upper, "index out of bounds");
                 node.lat = base[0];
                 node.lng = base[1];
                 //    reverseNodeIndex.addReferenceFromWay( pos.id, way.id);
