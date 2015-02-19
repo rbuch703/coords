@@ -14,10 +14,10 @@
 #include <list>
 
 #include "mem_map.h"
-#include "osmParserXml.h"
-#include "osmConsumerDumper.h"
-#include "osmTypes.h"
-#include "osm_tags.h"
+#include "osm/osmParserXml.h"
+#include "consumers/osmConsumerDumper.h"
+#include "osm/osmTypes.h"
+#include "osm/osm_tags.h"
 //#include "symbolic_tags.h"
 
 #ifndef MUST

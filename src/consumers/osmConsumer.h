@@ -2,7 +2,7 @@
 #ifndef OSM_PARSER_CONSUMER_H
 #define OSM_PARSER_CONSUMER_H
 
-#include "osmTypes.h"
+#include "osm/osmTypes.h"
 
 
 class OsmBaseConsumer

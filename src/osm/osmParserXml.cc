@@ -1,11 +1,12 @@
 
-#include "osmParserXml.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
 
 #include <iostream>
+
+#include "osm/osmParserXml.h"
 
 using namespace std;
 

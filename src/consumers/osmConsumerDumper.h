@@ -5,9 +5,9 @@
 #include <stdio.h>
 
 #include "mem_map.h"
-#include "osmConsumer.h"
-#include "radixTree.h"
-#include "chunkedFile.h"
+#include "consumers/osmConsumer.h"
+#include "containers/radixTree.h"
+#include "containers/chunkedFile.h"
 
 class OsmConsumerDumper: public OsmBaseConsumer
 {

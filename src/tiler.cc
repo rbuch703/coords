@@ -7,7 +7,7 @@
 #include <vector>
 #include <list>
 
-#include "osmMappedTypes.h"
+#include "osm/osmMappedTypes.h"
 #include "tiles.h"
 
 using namespace std;

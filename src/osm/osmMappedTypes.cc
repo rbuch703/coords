@@ -1,11 +1,12 @@
 
-#include "osmMappedTypes.h"
 #include <string.h> //for strlen
 #include <fcntl.h>  //for sync_file_range()
 #include <sys/mman.h>   //for madvise()
 #include <unistd.h> //for sysconf()
 #include <string.h> //for memcpy
 #include <iostream>
+
+#include "osm/osmMappedTypes.h"
 
 using namespace std;
 

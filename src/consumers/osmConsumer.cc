@@ -1,5 +1,5 @@
 
-#include "osmConsumer.h"
+#include "consumers/osmConsumer.h"
 
 #include <iostream>
 

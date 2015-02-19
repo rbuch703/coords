@@ -10,8 +10,8 @@
 
 
 #include "mem_map.h"
-#include "osmMappedTypes.h"
-#include "reverseIndex.h"
+#include "osm/osmMappedTypes.h"
+#include "containers/reverseIndex.h"
 
 
 using namespace std;

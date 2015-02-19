@@ -3,11 +3,11 @@
 #include <getopt.h> //for getopt_long()
 #include <iostream>
 
-#include "osmConsumerCounter.h"
-#include "osmConsumerDumper.h"
+#include "consumers/osmConsumerCounter.h"
+#include "consumers/osmConsumerDumper.h"
 //#include "osmConsumerIdRemapper.h"
-#include "osmParserPbf.h"
-#include "osmParserXml.h"
+#include "osm/osmParserPbf.h"
+//#include "osm/osmParserXml.h"
 
 bool remapIds = 0;
 

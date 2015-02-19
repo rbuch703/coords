@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#include "osmConsumer.h"
+#include "consumers/osmConsumer.h"
 
 #include "proto/fileformat.pb.h"
 #include "proto/osmformat.pb.h"

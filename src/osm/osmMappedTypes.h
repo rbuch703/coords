@@ -6,7 +6,7 @@
 */
 #include <string.h>
 
-#include "osmTypes.h"
+#include "osm/osmTypes.h"
 
 template <typename T>
 class ArrayIterator {

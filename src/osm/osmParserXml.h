@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 
-#include "osmConsumer.h"
+#include "consumers/osmConsumer.h"
 
 class OsmXmlParser
 {

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <list>
 #include <string>
-#include "osmMappedTypes.h"
+#include "osm/osmMappedTypes.h"
 
 class GeoAABB{
 public:

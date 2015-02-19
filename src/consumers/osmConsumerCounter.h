@@ -2,7 +2,7 @@
 #ifndef OSM_CONSUMER_COUNTER_H
 #define OSM_CONSUMER_COUNTER_H
 
-#include "osmConsumer.h"
+#include "consumers/osmConsumer.h"
 
 class OsmConsumerCounter : public OsmBaseConsumer {
 public:

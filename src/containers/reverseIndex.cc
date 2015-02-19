@@ -1,5 +1,5 @@
 
-#include "reverseIndex.h"
+#include "containers/reverseIndex.h"
 
 #include <string.h> //for memcpy
 #include <assert.h>

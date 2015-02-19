@@ -1,5 +1,4 @@
 
-#include "osmParserPbf.h"
 
 #include <arpa/inet.h>  //for ntohl
 
@@ -9,8 +8,9 @@
 #include <zlib.h>
 #include <assert.h>
 
-#include "osmTypes.h"
-#include "osmConsumerCounter.h"
+#include "osm/osmTypes.h"
+#include "osm/osmParserPbf.h"
+#include "consumers/osmConsumerCounter.h"
 //#include "osmConsumerOrderEnsurer.h"
 
 using namespace std;

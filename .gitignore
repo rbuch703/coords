@@ -4,13 +4,9 @@ syntax: glob
 # ignore backup files
 *~
 
-# ----- ignore compiled objects
-build
-
 # ----- auto-generated protocol buffer source
 proto/*.pb.h
 proto/*.pb.cc
-proto/*.pb.o
 
 # ----- ignore gcc coverage data
 *.gcda
@@ -25,13 +21,23 @@ coverage.info
 oprofile_data
 
 # ----- ignore output files
-make.dep
-
 callgrind.out.*
 massif.out.*
 
+# -- cmake intermediate files
+Makefile
+CMakeFiles
+cmake_install.cmake
+
+# -- directories
 intermediate
 nodes
+
+coordsCreateDatabase
+coordsCreateTiles
+coordsResolveLocations
+
+
 
 *.data
 *.idx

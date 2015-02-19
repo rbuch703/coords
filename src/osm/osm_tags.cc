@@ -1,5 +1,5 @@
 
-#include "osm_tags.h"
+#include "osm/osm_tags.h"
 
 const char * ignore_key_prefixes[]={
     "note:",    // localized notes
