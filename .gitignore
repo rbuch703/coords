@@ -5,8 +5,8 @@ syntax: glob
 *~
 
 # ----- auto-generated protocol buffer source
-proto/*.pb.h
-proto/*.pb.cc
+*.pb.h
+*.pb.cc
 
 # ----- ignore gcc coverage data
 *.gcda

@@ -3,13 +3,15 @@ CMAKE_MINIMUM_REQUIRED (VERSION 2.6)
 
 PROJECT (coords)
 
-include_directories (.)    
+include(FindProtobuf)
+find_package(Protobuf REQUIRED)
+
+include_directories (.)
 include_directories (src)
 
-#find_package(Protobuf REQUIRED)
-#PROTOBUF_GENERATE_CPP(fileformat.pb.cc fileformat.pb.h proto/fileformat.pb)
-
 set(CMAKE_BUILD_TYPE Release)
+
+PROTOBUF_GENERATE_CPP(ProtoSources ProtoHeaders proto/osmformat.proto proto/fileformat.proto)
 
 ADD_EXECUTABLE(coordsCreateDatabase 
     src/conv_osm.cc 
@@ -24,21 +26,10 @@ ADD_EXECUTABLE(coordsCreateDatabase
     src/consumers/osmConsumerDumper.cc 
     src/consumers/osmConsumerIdRemapper.cc
     src/containers/chunkedFile.cc
-    proto/fileformat.pb.cc 
-    proto/osmformat.pb.cc)
+    ${ProtoSources} ${ProtoHeaders})
 
 
-TARGET_LINK_LIBRARIES( coordsCreateDatabase -lprotobuf -lz)
-
-
-ADD_CUSTOM_COMMAND( OUTPUT proto/fileformat.pb.cc proto/fileformat.pb.h 
-                    COMMAND protoc --cpp_out=. proto/fileformat.proto
-                    DEPENDS proto/fileformat.proto)
-
-ADD_CUSTOM_COMMAND( OUTPUT proto/osmformat.pb.cc proto/osmformat.pb.h 
-                    COMMAND protoc --cpp_out=. proto/osmformat.proto
-                    DEPENDS proto/osmformat.proto)
-
+TARGET_LINK_LIBRARIES( coordsCreateDatabase -lprotobuf -lz )
 
 SET( CXX_FLAGS "-std=c++11 -Wall -Wextra -s")
 SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
@@ -60,19 +51,9 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc 
                src/containers/chunkedFile.cc)
-               
-               
-
-#EXECUTE_PROCESS(COMMAND mapnik-config --input-plugins 
-#               OUTPUT_VARIABLE MAPNIK_PLUGIN_DIR 
-#               OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-
-#TARGET_LINK_LIBRARIES( coords.input -lmapnik -licui18n -licuuc)
 
 
 INSTALL (TARGETS coordsCreateDatabase DESTINATION /usr/bin )
 INSTALL (TARGETS coordsResolveLocations DESTINATION /usr/bin )
 INSTALL (TARGETS coordsCreateTiles DESTINATION /usr/bin )
 
-#SET(CMAKE_BUILD_TYPE Release)

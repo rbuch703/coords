@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 9), cmake, libprotobuf-dev, protobuf-compiler, libe
 
 Package: coords-tools
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libc6, libexpat1, libprotobuf8
+Depends: ${shlibs:Depends}, ${misc:Depends}, libexpat1, libprotobuf8
 Description: Tools to create and maintain COORDS data storages
  COORDS is a new storage backend for OpenStreetMap render servers. The 
  wide-spread canonical storage backend for OSM is based on Postgres/PostGIS,
