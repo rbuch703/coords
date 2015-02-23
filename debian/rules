@@ -1,0 +1,5 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+#	dpkg-shlibdeps debian/mapnik-input-plugin-coords/usr/lib/mapnik/input/coords.input

@@ -1,0 +1,12 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: coords
+Upstream-Contact: Robert Buchholz <rbuch703@gmail.com>
+Source: https://github.com/rbuch703/coords
+
+Files: *
+Copyright: 2014-2015 Robert Buchholz
+License: AGPL-3
+Comment: see /usr/share/common-licenses/AGPL-3
+
+License: AGPL-3
+ see https://gnu.org/licenses/agpl.html

@@ -1,0 +1,20 @@
+Source: coords-tools
+Maintainer: Robert Buchholz <rbuch703@gmail.com>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.5
+Build-Depends: debhelper (>= 9), cmake, libprotobuf-dev, protobuf-compiler, libexpat1-dev
+
+Package: coords-tools
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libc6, libexpat1, libprotobuf8
+Description: Tools to create and maintain COORDS data storages
+ COORDS is a new storage backend for OpenStreetMap render servers. The 
+ wide-spread canonical storage backend for OSM is based on Postgres/PostGIS,
+ is relatively slow and has huge hardware requirements. In contrast the COORDS
+ storage backend is written from scratch and uses a file-based storage 
+ developed specifically to efficiently handle those data queries that are 
+ typical when rendering maps from OSM data.
+ This package contains the tools to create and update COORDS data storages. The
+ Mapnik plugin to render maps from these data sources can be found in the
+ package mapnik-input-plugin-coords.
