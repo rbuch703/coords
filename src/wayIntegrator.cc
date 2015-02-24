@@ -21,21 +21,23 @@ bool modeIsRandomAccess = true;
 bool dryRun = false;
 bool overrideRunLimit = false;
 uint64_t maxMmapSize = 0;
+std::string storageDirectory;
+std::string usageLine;
 
 int parseArguments(int argc, char** argv)
 {
     static const struct option long_options[] =
     {
-        {"mode",  required_argument,  NULL, 'm'},
-        {"lock",  required_argument,  NULL, 'l'},
-        {"yes",   no_argument,        NULL, 'y'},
-        {"dryrun",no_argument,        NULL, 'd'},
+        {"mode",    required_argument,  NULL, 'm'},
+        {"lock",    required_argument,  NULL, 'l'},
+        {"yes",     no_argument,        NULL, 'y'},
+        {"dryrun",  no_argument,        NULL, 'd'},
         {0,0,0,0}
     };
 
     int opt_idx = 0;
     int opt;
-    while (-1 != (opt = getopt_long(argc, argv, "mlys", long_options, &opt_idx)))
+    while (-1 != (opt = getopt_long(argc, argv, "m:l:yd", long_options, &opt_idx)))
     {
         switch(opt) {
             case '?': exit(EXIT_FAILURE); break; //unknown option; getopt_long() already printed an error message
@@ -45,7 +47,7 @@ int parseArguments(int argc, char** argv)
                 else
                 {
                     std::cerr << "error: invalid mode '" << optarg << "'" << endl;
-                    std::cerr << "usage: " << argv[0] << " --mode [RANDOM | BLOCK --lock <size in MB>] (--dryrun) (--yes)" << std::endl;
+                    std::cerr << usageLine << std::endl;
                     exit(EXIT_FAILURE);
                 }
                 break;
@@ -68,6 +70,17 @@ int parseArguments(int argc, char** argv)
             default: abort(); break;
         }
     }
+    
+    if (optind == argc)
+    {
+        std::cerr << "error: missing input file argument" << std::endl;
+        std::cerr << usageLine << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    MUST(optind < argc, "argv index out of bounds");
+    
+    storageDirectory = argv[optind++];
+    
     return optind;
 }
 
@@ -76,7 +89,8 @@ uint64_t getRunConfiguration(FILE* vertexIndexFile, uint64_t maxMmapSize,
                         uint64_t *vertexWindowSize, uint64_t *nVerticesPerRun)
 {
     fseek( vertexIndexFile, 0, SEEK_END);
-    uint64_t numVertices = ftell(vertexIndexFile) / (2* sizeof(int32_t));
+    uint64_t numVertices = ftell(vertexIndexFile) / (2 * sizeof(int32_t));
+    MUST(numVertices > 0, "empty vertex map");
 
     uint64_t pageSize = sysconf(_SC_PAGE_SIZE);
     uint64_t maxNumConcurrentPages = maxMmapSize / pageSize;
@@ -84,9 +98,6 @@ uint64_t getRunConfiguration(FILE* vertexIndexFile, uint64_t maxMmapSize,
     assert( pageSize % (2*sizeof(int32_t)) == 0); 
     uint64_t nVerticesPerPage = pageSize / (2*sizeof(int32_t));
 
-    //RelationStore relationStore("intermediate/relations.idx", "intermediate/relations.data");
-    
-    
     uint64_t numVertexBytes = numVertices * (2*sizeof(int32_t));
     uint64_t numVertexPages = (numVertexBytes+ (pageSize-1) ) / pageSize;  //rounded up
     cout << "[INFO] Index contains " << (numVertices/1000000) << "M nodes (" 
@@ -98,8 +109,7 @@ uint64_t getRunConfiguration(FILE* vertexIndexFile, uint64_t maxMmapSize,
     *nVerticesPerRun =  nPagesPerRun * nVerticesPerPage;
     assert( nRuns * (*nVerticesPerRun) >= numVertices);
 
-    
-    *vertexWindowSize = (*nVerticesPerRun) * (2* sizeof(int32_t));
+    *vertexWindowSize = (*nVerticesPerRun) * (2 * sizeof(int32_t));
     return nRuns;
 }
 
@@ -135,13 +145,40 @@ void ensureMlockSize(uint64_t maxMmapSize)
 int main(int argc, char** argv)
 {
 
-
+    usageLine = std::string() + "usage: " + argv[0] + " --mode [RANDOM | BLOCK --lock <size in MB>] (--dryrun) (--yes) <storage directory>";
     parseArguments(argc, argv);
-    //ReverseIndex reverseNodeIndex("nodeReverse.idx", "nodeReverse.aux");
-    //ReverseIndex reverseWayIndex(  "wayReverse.idx",  "wayReverse.aux");
-    //ReverseIndex reverseRelationIndex(  "relationReverse.idx",  "relationReverse.aux");
+
+    MUST(storageDirectory != "", "Command line parameter parse error");
+    
+    struct stat st;
+    // note: stat follows symlinks, so it will never stat() the symlink itself.
+    int res = stat( storageDirectory.c_str(), &st);
+    if (res != 0)
+    {
+        switch (errno)
+        {
+            case EACCES: std::cerr << "error: insufficient permissions to access storage directory '" + storageDirectory << "'." << endl; break;
+            case ENOENT: std::cerr << "error: destination directory '" << storageDirectory << "' does not exist." << endl; break;
+            default:     std::cerr << "error: cannot access destination directory'" << storageDirectory << "'." << endl; break;
+        }
+        exit(EXIT_FAILURE);
+    }
+    
+    if (! S_ISDIR(st.st_mode) && ! S_ISLNK(st.st_mode))
+    {
+        std::cerr << "error: destination '" << storageDirectory << "' is not a (symlink to a) directory." << std::endl;
+        exit(0);
+    }
+    
+    MUST(storageDirectory.length() > 0, "empty destination given");
+    if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
+        storageDirectory += "/";
+    
+
+    //ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse.idx", storageDirectory +"nodeReverse.aux");
+    //ReverseIndex reverseWayIndex(  storageDirectory + "wayReverse.idx",  storageDirectory +"wayReverse.aux");
+    //ReverseIndex reverseRelationIndex(  storageDirectory +"relationReverse.idx",  storageDirectory +"relationReverse.aux");
     //mmap_t mapVertices = init_mmap("vertices.data", true, false);
-    FILE* fVertices = fopen("intermediate/vertices.data", "rb");
 
     if (modeIsRandomAccess)
     {
@@ -161,11 +198,17 @@ int main(int argc, char** argv)
             exit(EXIT_FAILURE);
         }
     }
+
+    FILE* fVertices = fopen( (storageDirectory + "vertices.data").c_str(), "rb");
+    if (!fVertices)
+    {
+        std::cerr << "error: cannot open file '" + storageDirectory + "vertices.data'." << std::endl;
+        exit(EXIT_FAILURE);
+    }
     
     uint64_t pageSize = sysconf(_SC_PAGE_SIZE);
     //round *down* to nearest page size, as all memory limits are page-based
     maxMmapSize = (maxMmapSize / pageSize) * pageSize; 
-
 
     uint64_t vertexWindowSize = 0;
     uint64_t nVerticesPerRun  = 0;
@@ -205,7 +248,8 @@ int main(int argc, char** argv)
     }
 
 
-    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data", true);
+    LightweightWayStore wayStore( (storageDirectory + "ways.idx").c_str(), 
+                                  (storageDirectory + "ways.data").c_str(), true);
 
     for (uint64_t i = 0; i < nRuns; i++)
     {

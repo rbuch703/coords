@@ -80,7 +80,7 @@ int main(int argc, char** argv)
     if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
         destinationDirectory += "/";
     
-    if (!remapIds)
+    if (!remapIds) //remove leftover remap files from earlier runs
     {
         unlink((destinationDirectory + "mapNodes.idx"    ).c_str());
         unlink((destinationDirectory + "mapRelations.idx").c_str());
