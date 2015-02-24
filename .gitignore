@@ -33,7 +33,7 @@ cmake_install.cmake
 intermediate
 nodes
 
-coordsCreateDatabase
+coordsCreateStorage
 coordsCreateTiles
 coordsResolveLocations
 

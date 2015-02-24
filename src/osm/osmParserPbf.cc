@@ -108,10 +108,6 @@ string OsmParserPbf::prepareBlob(uint8_t *unpackBuffer, uint32_t &dataSizeOut)
     //cout<< "blob header for block type '" << header.type() << "' with raw size " << size << endl;
     
     MUST(fread(unpackBuffer, size, 1, f) == 1, "fread failed");
-
-    cout << "\e[u" << endl; //move cursor to saved position
-    cout << "Processing blob at file position "<< (ftello(f) / 1000000) << "M (" << (ftello(f)*100/fileSize) << "%)" ;
-
     MUST( blob.ParseFromArray(unpackBuffer, size), "could not parse blob");
 
     /*if (blob.has_raw())
@@ -275,11 +271,13 @@ void OsmParserPbf::parse()
     int ch;
     cout << endl << endl << "\e[2A"; //reserve 2 lines of space for message
     cout << "\e[s"; //mark cursor position for future status updates
+    
     while ( (ch = fgetc(f)) != EOF)
     {
         ungetc(ch, f);
 
         uint32_t size;
+        uint64_t filePos = ftello(f);
         string blobType = prepareBlob(unpackBuffer, size);
         
         if ( blobType == "OSMHeader")
@@ -287,7 +285,7 @@ void OsmParserPbf::parse()
             //cout << "parsing headerBlock" << endl;
             OSMPBF::HeaderBlock headerBlock;
             MUST( headerBlock.ParseFromArray(unpackBuffer, size), "failed to parse HeaderBlock");
-            for (string s: headerBlock.required_features())
+            /*for (string s: headerBlock.required_features())
                 cout << "\trequires feature '" << s << "'" << endl;
 
             for (string s: headerBlock.optional_features())
@@ -295,9 +293,13 @@ void OsmParserPbf::parse()
                 
             cout << "\twritten by '" << headerBlock.writingprogram() << "'" << endl;
             cout << endl << endl << "\e[2A";
-            cout << "\e[s"; //mark cursor position for future status updates
+            cout << "\e[s"; //mark cursor position for future status updates*/
         } else if (blobType == "OSMData")
         {
+            cout << "\e[u"; //move cursor to saved position
+            cout << "Processing data at file position "<< (filePos / 1000000) << "M (" << (filePos*100/fileSize) << "%)" << endl;
+            
+
             OSMPBF::PrimitiveBlock primBlock;
             MUST( primBlock.ParseFromArray(unpackBuffer, size), "failed to parse PrimBlock");
                 
@@ -348,7 +350,6 @@ void OsmParserPbf::parse()
         
         } else MUST(false, "invalid header type");
     }
-    consumer->finalize();    
     //delete [] unpackBuffer;
     //if (!) { cerr << "Failed to parse blob header" << endl; exit(1); }
 }

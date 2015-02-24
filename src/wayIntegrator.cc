@@ -26,10 +26,10 @@ int parseArguments(int argc, char** argv)
 {
     static const struct option long_options[] =
     {
-        {"mode", required_argument,  NULL, 'm'},
-        {"lock", required_argument,  NULL, 'l'},
-        {"yes",  no_argument,        NULL, 'y'},
-        {"dryrun",  no_argument,  NULL, 'd'},
+        {"mode",  required_argument,  NULL, 'm'},
+        {"lock",  required_argument,  NULL, 'l'},
+        {"yes",   no_argument,        NULL, 'y'},
+        {"dryrun",no_argument,        NULL, 'd'},
         {0,0,0,0}
     };
 

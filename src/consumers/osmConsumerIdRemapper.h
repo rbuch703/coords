@@ -10,7 +10,7 @@ class OsmConsumerIdRemapper : public OsmBaseConsumer
 {
 
 public:
-    OsmConsumerIdRemapper(OsmBaseConsumer *innerConsumer);
+    OsmConsumerIdRemapper(std::string destinationDirectory, OsmBaseConsumer *innerConsumer);
     virtual ~OsmConsumerIdRemapper();    
 protected:
     virtual void consumeNode    ( OSMNode &);
@@ -18,7 +18,7 @@ protected:
     virtual void consumeRelation( OsmRelation &);
 private:
     OsmBaseConsumer *innerConsumer;
-    SerializableMap<uint64_t, uint64_t, 10000000> nodeMap, wayMap, relationMap;
+    SerializableMap<uint64_t, uint64_t, 10000000> *nodeMap, *wayMap, *relationMap;
     uint64_t nodeIdsRemapped, wayIdsRemapped, relationIdsRemapped;
 //    Remap *nodeRemap, *wayRemap, *relationRemap; 
 };

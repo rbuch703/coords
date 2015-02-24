@@ -12,7 +12,7 @@
 class OsmConsumerDumper: public OsmBaseConsumer
 {
 public:
-    OsmConsumerDumper();
+    OsmConsumerDumper(std::string destinationDirectory);
     virtual ~OsmConsumerDumper();
 protected:
     static const string base_path;
@@ -32,7 +32,10 @@ private:
     uint64_t nNodes, nWays, nRelations;
     
     uint64_t node_data_synced_pos, node_index_synced_pos;
-    
+    std::string     nodesDataFilename,     nodesIndexFilename, verticesDataFilename;
+    std::string      waysDataFilename,      waysIndexFilename;
+    std::string relationsDataFilename, relationsIndexFilename;
+
 };
 
 #endif

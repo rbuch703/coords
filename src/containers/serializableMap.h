@@ -56,7 +56,7 @@ public:
         /* replace old file by new file (file descriptors to the previous file 
            name stay valid, so 'dest' is unaffected by the renaming of its 
            underlying file */
-        rename( (std::string(filename)+".tmp").c_str(), filename);
+        rename( (filename+".tmp").c_str(), filename.c_str());
         delete onDiskMap;
         onDiskMap = dest;
         inMemoryMap.clear();
@@ -112,7 +112,7 @@ private:
     }    
 
 private:
-    const char* filename;
+    std::string filename;
     std::map<KEY_T, VALUE_T> inMemoryMap;
     PersistentVector< std::pair<KEY_T, VALUE_T> > *onDiskMap;
 //    mmap_t                   onDiskMap;

@@ -9,11 +9,12 @@ find_package(Protobuf REQUIRED)
 include_directories (.)
 include_directories (src)
 
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE RELWITHDEBINFO) #Debug)
+
 
 PROTOBUF_GENERATE_CPP(ProtoSources ProtoHeaders proto/osmformat.proto proto/fileformat.proto)
 
-ADD_EXECUTABLE(coordsCreateDatabase 
+ADD_EXECUTABLE(coordsCreateStorage 
     src/conv_osm.cc 
     src/mem_map.cc 
     src/osm/osmTypes.cc 
@@ -29,9 +30,9 @@ ADD_EXECUTABLE(coordsCreateDatabase
     ${ProtoSources} ${ProtoHeaders})
 
 
-TARGET_LINK_LIBRARIES( coordsCreateDatabase -lprotobuf -lz )
+TARGET_LINK_LIBRARIES( coordsCreateStorage -lprotobuf -lz )
 
-SET( CXX_FLAGS "-std=c++11 -Wall -Wextra -s")
+SET( CXX_FLAGS "-std=c++11 -Wall -Wextra")
 SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
 
 
@@ -53,7 +54,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/containers/chunkedFile.cc)
 
 
-INSTALL (TARGETS coordsCreateDatabase DESTINATION /usr/bin )
+INSTALL (TARGETS coordsCreateStorage DESTINATION /usr/bin )
 INSTALL (TARGETS coordsResolveLocations DESTINATION /usr/bin )
 INSTALL (TARGETS coordsCreateTiles DESTINATION /usr/bin )
 

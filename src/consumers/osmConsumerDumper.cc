@@ -28,23 +28,31 @@ using namespace std;
 
 #define outputBasePath "intermediate/"
 
-const char* nodes_data_filename =       outputBasePath "nodes.data";
-const char* nodes_index_filename=       outputBasePath "nodes.idx";
-const char* vertices_data_filename =    outputBasePath "vertices.data";
-const char* ways_data_filename =        outputBasePath "ways.data";
-const char* ways_index_filename=        outputBasePath "ways.idx";
-const char* relations_data_filename=    outputBasePath "relations.data";
-const char* relations_index_filename=   outputBasePath "relations.idx";
-
 static void truncateFile(string filename) {
     FILE* f= fopen(filename.c_str() , "wb+"); 
-    if (f == NULL) {perror("[ERR] fopen:"); assert(false);} 
+    if (f == NULL) 
+    {
+        std::cerr << "error: cannot create/modify file '" << filename << "': ";
+        perror("");
+        exit(EXIT_FAILURE);
+    } 
     fclose(f);
 }
 
 
-OsmConsumerDumper::OsmConsumerDumper(): nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
+OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
 {    
+    MUST(destinationDirectory.length() > 0, "empty destination given");
+    if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
+        destinationDirectory += "/";
+
+    nodesDataFilename      = destinationDirectory + "nodes.data";
+    nodesIndexFilename     = destinationDirectory + "nodes.idx";
+    verticesDataFilename   = destinationDirectory + "vertices.data";
+    waysDataFilename       = destinationDirectory + "ways.data";
+    waysIndexFilename      = destinationDirectory + "ways.idx";
+    relationsDataFilename  = destinationDirectory + "relations.data";
+    relationsIndexFilename = destinationDirectory + "relations.idx";
 
     //for situations where several annotation keys exist with the same meaning
     //this dictionary maps them to a common unique key
@@ -61,25 +69,24 @@ OsmConsumerDumper::OsmConsumerDumper(): nNodes(0), nWays(0), nRelations(0), node
     for (uint32_t i = 0; i < num_ignore_key_prefixes; i++)
         ignoreKeyPrefixes.insert(ignore_key_prefixes[i], 0);
         
-    truncateFile(nodes_index_filename);
-    truncateFile(nodes_data_filename);
-    truncateFile(vertices_data_filename);
-    truncateFile(ways_index_filename);
-    truncateFile(ways_data_filename);
-//    truncateFile(ways_int_data_filename);
-    truncateFile(relations_index_filename);
-    truncateFile(relations_data_filename);
+    truncateFile(nodesIndexFilename);
+    truncateFile(nodesDataFilename);
+    truncateFile(verticesDataFilename);
+    truncateFile(waysIndexFilename);
+    truncateFile(waysDataFilename);
+    truncateFile(relationsIndexFilename);
+    truncateFile(relationsDataFilename);
 
-    vertex_data = init_mmap(vertices_data_filename); //holds just raw vertex coordinates indexed by node_id; no tags
+    vertex_data = init_mmap(verticesDataFilename.c_str()); //holds just raw vertex coordinates indexed by node_id; no tags
 
-    node_index = init_mmap( nodes_index_filename );
-    nodeData = new ChunkedFile(nodes_data_filename);
+    node_index = init_mmap( nodesIndexFilename.c_str() );
+    nodeData = new ChunkedFile(nodesDataFilename.c_str());
 
-    way_index = init_mmap(ways_index_filename);
-    wayData = new ChunkedFile(ways_data_filename);
+    way_index = init_mmap(waysIndexFilename.c_str());
+    wayData = new ChunkedFile(waysDataFilename.c_str());
 
-    relation_index = init_mmap(relations_index_filename);
-    relationData = new ChunkedFile(relations_data_filename);
+    relation_index = init_mmap(relationsIndexFilename.c_str());
+    relationData = new ChunkedFile(relationsDataFilename.c_str());
 
 };
 

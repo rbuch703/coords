@@ -10,15 +10,9 @@ class OsmBaseConsumer
 public:
     OsmBaseConsumer();
     virtual ~OsmBaseConsumer();
-    virtual void finalize();
     virtual void consumeNode    ( OSMNode &);
     virtual void consumeWay     ( OSMWay  &);
     virtual void consumeRelation( OsmRelation &);
-
-private:
-    bool finalized;
-    bool hasConsumedNodes, hasConsumedWays, hasConsumedRelations;
-    uint64_t prevNodeId, prevWayId, prevRelationId;
 };
 
 
