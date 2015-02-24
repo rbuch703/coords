@@ -1,19 +1,24 @@
 
-#include <iostream>
 #include <stdio.h>
+#include <getopt.h> //for getopt_long()
 //#include <unistd.h> // for unlink()
 #include <sys/stat.h> //for stat()
 
 #include <vector>
 #include <list>
+#include <iostream>
 
-#include "osm/osmMappedTypes.h"
 #include "tiles.h"
+#include "osm/osmMappedTypes.h"
 
 using namespace std;
 
 const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
 const uint64_t MAX_NODE_SIZE      = 10ll * 1000 * 1000;
+
+std::string storageDirectory;
+std::string destinationDirectory;
+std::string usageLine;
 
 void ensureDirectoryExists(string directory)
 {
@@ -252,13 +257,64 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
     return way;
 }
 
-int main()
+int parseArguments(int argc, char** argv)
 {
-    LightweightWayStore wayStore("intermediate/ways.idx", "intermediate/ways.data");
+    static const struct option long_options[] =
+    {
+        {"dest",  required_argument, NULL, 'd'},
+        {0,0,0,0}
+    };
 
-    ensureDirectoryExists("nodes");
-    FileBackedTile storage("nodes/node", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
-    FileBackedTile storageLod12("nodes/lod12", GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+    int opt_idx = 0;
+    int opt;
+    while (-1 != (opt = getopt_long(argc, argv, "d:", long_options, &opt_idx)))
+    {
+        switch(opt) {
+            case '?': exit(EXIT_FAILURE); break; //unknown option; getopt_long() already printed an error message
+            case 'd': destinationDirectory = optarg; break;
+            default: abort(); break;
+        }
+    }
+    
+    if (optind == argc)
+    {
+        std::cerr << "error: missing storage directory argument" << std::endl;
+        std::cerr << usageLine << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    MUST(optind < argc, "argv index out of bounds");
+    
+    storageDirectory = argv[optind++];
+    
+    return optind;
+}
+
+
+int main(int argc, char** argv)
+{
+    usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
+
+    parseArguments(argc, argv);
+    
+    MUST(storageDirectory.length() > 0, "empty storage location given")
+    if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
+        storageDirectory += "/";
+    
+    if (destinationDirectory.length() == 0)
+    {
+        std::cerr << "error: missing required parameter '--dest'" << std::endl;
+        std::cerr << usageLine << endl;
+        exit(EXIT_FAILURE);
+    }
+    if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
+        destinationDirectory += "/";
+
+    LightweightWayStore wayStore( (storageDirectory + "ways.idx").c_str(),
+                                  (storageDirectory + "ways.data").c_str());
+
+    ensureDirectoryExists(destinationDirectory);
+    FileBackedTile storage( (destinationDirectory + "node").c_str(), GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+    FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
     uint64_t numLod12Ways = 0;

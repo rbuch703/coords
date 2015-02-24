@@ -73,7 +73,7 @@ int parseArguments(int argc, char** argv)
     
     if (optind == argc)
     {
-        std::cerr << "error: missing input file argument" << std::endl;
+        std::cerr << "error: missing storage directory argument" << std::endl;
         std::cerr << usageLine << std::endl;
         exit(EXIT_FAILURE);
     }

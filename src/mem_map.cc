@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-//#include <iostream>
+#include <iostream>
 
 #ifndef MUST
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
@@ -25,7 +25,11 @@ mmap_t init_mmap ( const char* file_name, bool readable, bool writeable, bool cl
     /** the underlying file always needs to be readable. Even if the map itself is only writeable,
         the OS needs to be able to *read* the whole data page which is changed by *writing* */
     res.fd = open(file_name, O_CREAT|(writeable? O_RDWR : O_RDONLY), S_IRUSR | S_IWUSR);  
-    assert(res.fd != -1);
+    if (res.fd == -1)
+    {
+        std::cerr << "error: cannot open file '" << file_name << "'." << std::endl;
+        exit(EXIT_FAILURE);
+    }
     
     if (clearContents)
         MUST(0 == ftruncate(res.fd, 0), "cannot truncate file");

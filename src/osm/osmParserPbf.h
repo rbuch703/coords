@@ -6,8 +6,8 @@
 
 #include "consumers/osmConsumer.h"
 
-#include "proto/fileformat.pb.h"
-#include "proto/osmformat.pb.h"
+#include "fileformat.pb.h"
+#include "osmformat.pb.h"
 
 template<typename T>
 using GoogleList = google::protobuf::RepeatedPtrField<T>;
