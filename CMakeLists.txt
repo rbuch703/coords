@@ -8,6 +8,7 @@ find_package(Protobuf REQUIRED)
 
 include_directories (.)
 include_directories (src)
+include_directories( ${CMAKE_BINARY_DIR} )
 
 set(CMAKE_BUILD_TYPE RELWITHDEBINFO) #Debug)
 

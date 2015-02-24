@@ -1,0 +1,26 @@
+coordsCreateStorage(1) -- creates a COORDS data storage from an OSM PBF file
+============================================================================
+
+## SYNOPSIS
+
+`coordsCreateStorage` --dest <DESTINATION> [--remap] <INPUTFILE>
+
+## DESCRIPTION
+
+Creates a COORDS data storage in directory DESTINATION from the data stored in INPUTFILE (a OSM PBF file). Optionally reassignes entity IDs to fill gaps in the ID space.
+
+  * `-d`, `--dest` <DESTINATION>:
+    The destination directory to create the COORDS data storage in. It must exist, be a directory, and must be writable by the current user. Existing files will be overwritten (and must be writable). Existing remapping indices will be deleted if run without the `--remap` parameter.
+
+  * `-r`, `--remap` :
+    Reassign node, way and relation IDs. Instead of its actual OSM ID, the `n`th node/way/relation to be referred to in the input file will be assigned the ID `n`. As subsequent tools consume disk spac and RAM proportional to the maximum ID assigned (and not the number of IDs), this will dramatically reduce the memory consumption in cases where only few IDs are used (e.g. for small regional extracts). However, reassigning IDs slows down this tool considerably and requires about 2GB of RAM for each 100 million reassigned IDs. It is therefore suggested to use `--remap` for INPUTFILEs of country size and below, and to omit it for bigger extracts and full planet dumps.
+
+  * INPUTFILE:
+    The input file to create the COORDS data storage from. This file must be in the OpenStreetMap PBF format. It can be a Planet Dump, or any 
+
+## AUTHOR
+Written by Robert Buchholz
+    
+## COPYRIGHT
+Copyright 2014-2015, licensed under the GNU AFFERO GENERAL PUBLIC LICENSE (AGPL) version 3. <https://gnu.org/licenses/agpl.html>
+

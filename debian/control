@@ -3,7 +3,7 @@ Maintainer: Robert Buchholz <rbuch703@gmail.com>
 Section: misc
 Priority: optional
 Standards-Version: 3.9.5
-Build-Depends: debhelper (>= 9), cmake, libprotobuf-dev, protobuf-compiler, libexpat1-dev
+Build-Depends: debhelper (>= 9), cmake, libprotobuf-dev, protobuf-compiler, libexpat1-dev, ruby-ronn
 
 Package: coords-tools
 Architecture: any

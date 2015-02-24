@@ -38,7 +38,7 @@ coordsCreateTiles
 coordsResolveLocations
 
 
-
+*.1
 *.data
 *.idx
 *.aux

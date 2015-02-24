@@ -1,0 +1,39 @@
+coordsResolveLocations(1) -- adds lat/lng information to all way references in a COORDS data storage.
+============================================================================
+
+## SYNOPSIS
+
+`coordsResolveLocations` --mode (RANDOM|BLOCK) (--lock <sizeInMB>) [--dryrun] [--yes] <storagePath>
+
+## DESCRIPTION
+
+OpenStreetMap ways have no geographic locations by themselves. They only consist of a list of node references, and the nodes in turn hold the geographic information (a latitude/longitude pair). Having to look up all referenced nodes whenever a way is processed would be extremely slow and inefficient. The tool `coordsResolveLocations` therefore looks up all nodes referenced by all ways in a COORDS data storage at once, and adds the nodes' geographic locations directly to the stored ways.
+
+  * `-m`, `--mode` (RANDOM|BLOCK):
+    The strategy through which node geographic information is looked up. RANDOM sequentially processes all ways and looks up the geographic information of any node reference it encounters. This will usually result in a random access lookup of nodes.
+    BLOCK keeps a block of node information of fixed size (selected by the parameter `--lock`) in memory, processes all ways, and adds the geographic information only of nodes in the current block to the way. When the node data is subdivided into `n` blocks, this process is repeated `n` times, until all node references have been resolved.  
+    The default mode is RANDOM.
+  * `-l`, `--lock` <sizeInMB>:
+    In BLOCK mode, this parameter determines the size of the node data blocks (in MB) that are kept in memory. This bigger this block size, the fewer does the list of ways have to be processes until and node references are resolved. The block size should be as big as possible, but needs to be smaller than the amount of physical RAM present - a good rule of thumb is about 1-2 GB less than that.  
+    Note that the memory for this data block needs to be locked in physical RAM. There is an operating system-defined limit on how much memory each user can lock - usually only about 64kB. Thus, to use BLOCK mode with a reasonable block size requires either root privileges, the special permissions `CAP_SYS_RESOURCE`, or increasing the ulimit for locked memory.  
+    This parameter is mandatory for BLOCK mode, and must not be used in RANDOM mode.
+
+
+  * `-d`, `--dryrun` :
+    Do not actually resolve node references, but only print statistics on how many runs would be necessary to do so. Useful to determine a suitable block size in BLOCK mode.
+
+  * `-y`, `--yes` :
+    This tool refuses to use block sizes that would lead to excessively long processing times. Use this switch to override than behavior. Use at your own risk/boredom. You have been warned.
+    
+  * storagePath:
+    The location of a COORDS data storage created by coordsCreateStorage(1). This data storage will be modified in the process.
+
+## NOTES
+It is safe to re-run this tool for a COORDS data source where node references have already been resolved. But only not yet resolved node references will be processed, so this is not useful for repairing corrupted geographic information.
+
+## AUTHOR
+Written by Robert Buchholz
+    
+## COPYRIGHT
+Copyright 2014-2015, licensed under the GNU AFFERO GENERAL PUBLIC LICENSE (AGPL) version 3. <https://gnu.org/licenses/agpl.html>
+
