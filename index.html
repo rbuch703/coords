@@ -2,9 +2,8 @@
 <html>
   <head>
     <meta charset='utf-8'>
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
     <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen">
     <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
@@ -13,133 +12,180 @@
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
 
-    <title>Coords by rbuch703</title>
+    <title>COORDS by rbuch703</title>
   </head>
 
   <body>
     <header>
       <div class="inner">
-        <h1>Coords</h1>
-        <h2>COORDS - Chunk-Organized OSM Render-Data Storage</h2>
-        <a href="https://github.com/rbuch703/coords" class="button"><small>View project on</small> GitHub</a>
+        <h1>COORDS</h1>
+        <h2>Chunk-Organized OSM Render-Data Storage</h2>
+        <a href="https://github.com/rbuch703/coords" class="button" target="_blank" ><small>View project on</small> GitHub</a>
       </div>
+
     </header>
 
     <div id="content-wrapper">
       <div class="inner clearfix">
         <section id="main-content">
-          <p>This software is licensed under the GNU Affero General Public License version 3 (GNU AGPL-v3).</p>
 
-<p>This repository consists of tools that together create a COORDS ("chunk-oriented OSM render-data storage") data storage from an OSM PBF file (e.g. a planet dump, or a regional extract). This data storage can then be used to render OSM data using Mapnik alone, or to create an OSM tile server using Mapnik with renderd and mod_tile. </p>
+<h2>Introduction</h2>
+COORDS is a data storage backend that holds and manages geographical data from the OpenStreetMap project so that this data can be used by Mapnik (and renderd/mod_tile/tirex/...) to create maps of the world.
 
-<p>Please note: These tools are prototypes and not yet ready for production use. Use at your own risk!</p>
+It was created as an alternative to the Postgres databases created by osm2pgsql, to be much faster and require significantly less RAM and I/O ressources. It is based on the idea that all data queries used for rendering are very similar and predictable, and thus the data storage should be organized to quickly answer exactly that type of query.
 
-<h2>
-<a id="building-instructions-for-ubuntu-1404" class="anchor" href="#building-instructions-for-ubuntu-1404" aria-hidden="true"><span class="octicon octicon-link"></span></a>Building Instructions (for Ubuntu 14.04)</h2>
-
+<h2>Project State</h2>
+COORDS is currently in prototype stage. It is already possible to create COORDS data storages, and to use those to render maps (including tiled web maps) using Mapnik. However, several important features are still missing. Those include:
 <ul>
-<li>
-<code>sudo apt-get install make build-essential libprotobuf-dev protobuf-compiler libexpat1-dev cmake</code> # install the required dependencies</li>
-<li>
-<code>git clone https://github.com/rbuch703/coords.git</code> # clone the repository</li>
-<li><code>cd coords</code></li>
-<li><code>cmake .</code></li>
-<li>
-<code>make</code> # compile the tools</li>
+    <li>Storage updates through replication diffs</li>
+    <li>Multipolygons and point features (only lines and simple polygons are supported)</li>
+    <li>A query languange to select/order features (currently features are selected using Mapnik filters based on OSM tags</li>
 </ul>
 
-<h2>
-<a id="execution-instructions" class="anchor" href="#execution-instructions" aria-hidden="true"><span class="octicon octicon-link"></span></a>Execution Instructions</h2>
-
-<p>Creating a COORDS data storage requires three steps that need to be executed in order. In short, these are:</p>
-
-<ol>
-<li>
-<code>./coordsCreateStorage &lt;pbf file&gt;</code> (for full planet dumps and continent-sized extracts), or <code>coordsCreateStorage --remap &lt;pbf file&gt;</code> (for regional extracts that are country-sized or smaller)</li>
-<li>
-<code>./coordsResolveLocations</code> </li>
-<li><code>./coordsCreateTiles</code></li>
-</ol>
-
-<p>However, run without additional parameters, this may take much longer than necessary, at least for planet dump <code>pbf</code>s. The next three sections explain what these tools do in some detail, and give performance tuning tips.</p>
-
-<h3>
-<a id="1-create-entity-indices-coordscreatestorage" class="anchor" href="#1-create-entity-indices-coordscreatestorage" aria-hidden="true"><span class="octicon octicon-link"></span></a>1. Create Entity Indices (coordsCreateStorage)</h3>
-
-<p>This step uses the <code>coordsCreateStorage</code> tool to transform all nodes, ways and relations into a form where they can efficiently be accessed by their respective ID. It also creates a lookup table to easily find the lat/lng geographic coordinates of a given node ID. This step is performed by executing</p>
-
-<p><code>./coordsCreateStorage &lt;pbf file&gt;</code></p>
-
-<p>, where <code>&lt;pbf file&gt;</code> is the path to the OSM PBF file whose contents you wish to convert to a COORDS data storage.</p>
-
-<h3>
-<a id="2-added-geographic-locations-to-stored-ways-coordsresolvelocations" class="anchor" href="#2-added-geographic-locations-to-stored-ways-coordsresolvelocations" aria-hidden="true"><span class="octicon octicon-link"></span></a>2. Added Geographic Locations to Stored Ways (coordsResolveLocations)</h3>
-
-<p>OpenStreetMap ways have no geographic locations by themselves. Instead, they consist of a list of node references, and the nodes in turn hold the geographic information (a latitude/longitude pair). Having to look up all referenced nodes whenever one deals with a given way would be extremely slow and inefficient. The second tool, <code>coordsResolveLocations</code>, instead looks up all nodes referenced by all ways at once, and adds the nodes' geographic locations directly to the stored ways. The basic way to do this is to execute</p>
-
-<p><code>./coordsResolveLocations</code></p>
-
-<h3>
-<a id="3-creating-the-vector-tiles-coordscreatetiles" class="anchor" href="#3-creating-the-vector-tiles-coordscreatetiles" aria-hidden="true"><span class="octicon octicon-link"></span></a>3. Creating the Vector Tiles (coordsCreateTiles)</h3>
-
-<ol>
-<li><code>coordsCreateTiles</code></li>
-</ol>
-
-<p>The third step subdivides the data in the updated way index into a hierarchy of tiles of equal data size (not necessarily equal geographic coverage). This hierarchy can then be used by Mapnik plugins to efficiently retrieve the data required to render a given region (the required plugin can be found in the github repository <code>rbuch703/coords-mapnik-plugin</code>). It has no parameters, and can simply be executed as</p>
-
+In addition, several advanced features that will further improve rendering performance are planned, but have not yet been implemented:
 <ul>
-<li><code>./coordsCreateTiles</code></li>
+    <li>Automatic data subsets for coarse zoom levels (e.g. storing data tiles for coarse zoom levels that omit buildings and small streets, which will not be rendered at that zoom level anyway.</li>
+    <li>Automatic level-of-detail for coarse zoom levels (e.g. simplifying geometry by removing details than won't have an effect on the current zoom level).
 </ul>
 
-<h1>
-<a id="ram-requirements" class="anchor" href="#ram-requirements" aria-hidden="true"><span class="octicon octicon-link"></span></a>RAM Requirements</h1>
+Warning: COORDS is not yet reading for production use. Use it at your own risk! If you still want to test COORDS yourself, read on.
 
-<p>The tools themselves require little memory (&lt; 100MB), but will benefit greatly from big caches. The performance of the tools will increase dramatically when the following requirements are met:</p>
-
+<h2>Setup up a COORDS-based Render Infrastructure</h2>
+Setting up a COORDS-based map renderer requires for major steps:
 <ol>
-<li>enough free RAM hold the complete program in memory, about 100 MB</li>
-<li>enough free RAM for read-ahead and write caches, about 1GB</li>
-<li>enough free RAM for read-ahead and write caches, as well as for complete memory mapping to the node ID-&gt;lat/lng index. The exact amount depends on the particular PBF file used as a data source. For a 2015 Planet dump, this is about 28GB of RAM. </li>
+    <li>Install the COORDS tools and the COORDS mapnik plugin and their dependencies (1a), or build them from source (1b).</li>
+    <li>Download an OpenStreetMap PBF file, and create a COORDS data storage from it.</li>
+    <li>Test the data storage and create a basic Mapnik stylesheet based on it.</li>
+    <li>(Optional) set up an OSM render server that dynamically creates maps based on that stylesheet</li>
 </ol>
 
-<h1>
-<a id="disk-space-requirements" class="anchor" href="#disk-space-requirements" aria-hidden="true"><span class="octicon octicon-link"></span></a>Disk Space Requirements</h1>
+These are explained detail in the next paragraphs.
 
-<p>The tools write various data storage files (the memory requirements here are given for a typical 2015 Planet dump. They will be significatly lower for regional extracts):</p>
-
-<ol>
-<li>the complete node, way and relation indices (<code>nodes.idx, nodes.data, ways.idx, ways.data, relations.idx and relations.data</code> in the <code>intermediate</code> directory): about 150 GB</li>
-<li>the node ID-&gt; lat/lng index (<code>vertices.data</code> in the <code>intermediate</code> directory): about 28GB</li>
-<li>The vector data tiles (numbered files in the <code>nodes</code> directory): ~70GB</li>
-</ol>
-
-<p>So the whole COORDS storage requires about 300GB of disk space for a planet dump.</p>
-
-<h1>
-<a id="execution-time" class="anchor" href="#execution-time" aria-hidden="true"><span class="octicon octicon-link"></span></a>Execution Time</h1>
-
-<p>The execution times for these tools varies dramatically depending on:</p>
-
+<h3>1a. Installing COORDS from Packages</h3>
+If you are running Ubuntu 14.04 LTS (Trusty), there are precompiled packages that can be installed from the PPA at <a href="https://launchpad.net/~rbuch703/+archive/ubuntu/openstreetmap">https://launchpad.net/~rbuch703/+archive/ubuntu/openstreetmap</a>. To do so, open a terminal and execute:
 <ul>
-<li>how much data the input PBF file contains</li>
-<li>whether you are using the ID remapper</li>
-<li>how much RAM is available (see "RAM Requirements")</li>
-<li>whether the files are stored on a hard disk, or an SSD</li>
+    <li><code>sudo add-apt-repository ppa:rbuch703/openstreetmap</code></li>
+    <li><code>sudo apt-get update</code></li>
+    <li><code>sudo apt-get install coords-tools mapnik-input-plugin-coords python-mapnik libmapnik</code></li>
+</ul>
+Alternatively (e.g. if you are not running Ubuntu 14.04), you can built COORDS from source.
+
+<h3>1b. Building COORDS from Source</h3>
+To build COORDS from source, open a terminal, in the terminal enter a location where you want the tools to be built, and then:
+<ul>
+    <li>Install the required dependencies. These are make, cmake, git, a C++ compiler, Python 2, the Google Protocol Buffer compiler, and the development files and libraries for libmapnik, libicu, libexpat, libprotobuf. On Debian and Ubuntu this means executing <code>sudo apt-get install cmake git build-essential libprotobuf-dev protobuf-compiler libexpat1-dev libicu-dev libmapnik libmapnik-dev python2 python-mapnik</code>. If the libraries <code>libmapnik</code> and <code>libmapnik-dev</code> do not exist, replace them in the above line with <code>libmapnik2</code> and <code>libmapnik2-dev</code>, respectively. For other operating systems and distributions, consult your vendor's documentation on how to install these dependencies.</li>
+    <li>Download the source code for the COORDS tools and the COORDS Mapnik plugin from Github:
+        <ul>
+        <li><code>git clone https://github.com/rbuch703/coords.git</code></li>
+        <li><code>git clone https://github.com/rbuch703/coords-mapnik-plugin.git</code></li>
+        </ul>
+    </li>
+    <li>Build and install the tools and the plugin:
+        <ul>
+            <li><code>cd coords</code></li>
+            <li><code>cmake .</code></li>
+            <li><code>make</code></li>
+            <li><code>sudo make install</code></li>
+            <li><code>cd ..</code></li>
+            <li><code>cd coords-mapnik-plugin</code></li>
+            <li><code>cmake .</code></li>
+            <li><code>make</code></li>
+            <li><code>sudo make install</code></li>
+            <li><code>cd ..</code></li>
+        </ul>
+    </li>
 </ul>
 
-<p>The following execution times where measured on a 2x2.4GHz virtual machine with 32GB of RAM and a hard drive-backed file system, processing a recent Planet dump (28.5GB) without ID remapping:</p>
 
-<ol>
-<li>
-<code>coordsCreateStorage</code>: about 1.5h</li>
-<li>
-<code>coordsResolveLocations --mode=BLOCK --lock=16000</code>: about 2h for two passes </li>
-<li>
-<code>coordsCreateTiles</code>: about 2h</li>
-</ol>
-        </section>
+<h3>2.Downloading an OpenStreetMap PBF File and Creating a COORDS Data Storage.</h3>
+Download an OpenStreetMap PBF file for the world region for which you want to create the COORDS data storage. PBF files covering the whole planet can be obtained from <a target="_blank" href="http://wiki.openstreetmap.org/wiki/Planet.osm#Downloading">various mirrors</a>, regional extracts for various world regions, countries and states can be obtained from <a target="_blank" href="http://download.geofabrik.de/">GeoFabrik</a>. In the remaining guide, we will assume that the location of the downloaded PBF file is <code>~/Download/region.osm.pbf</code>. If your PBF file has a different name or location, adjust the following instructions accordingly.
 
+To create a COORDS data storage, you need to select two locations: one that will hold the data storage maintenance information, and one to hold the final geometry tiles. Both have to be existing directories that are writable by the current user. Both can refer to the same directory. In this guide, we will assume those locations to be <code>~/coords</code> and <code>~/tiles</code>. If you choose different locations, adjust the following instructions accordingly.
+
+Creating the COORDS data storage is done in three steps. These have to be performed in exactly that order:
+<ul>
+    <li><code>coordsCreateStorage --dest ~/coords ~/Download/region.osm.pbf</code>.<br> If your PBF file is a country extract or smaller, add the parameter <code>--remap</code> to the above line to dramatically speed up processing and reduce disk space usage.</li>
+    <li><code>coordsResolveLocations ~/coords</code>.<br> This works well for regional extracts of country size and smaller. If you are working with bigger PBF files (e.g. full Planet Dumps), you may want to choose a different <code>--mode</code> and adjust the memory consumption to dramatically speed up computations. Refer to the man page (<code>man coordsResolveLocations</code>) for details.
+    <li><code>coordsCreateTiles --dest ~/tiles ~/coords</code></li>
+</ul>
+The first step should create several file with the extensions <code>.idx</code> and <code>.data</code> in the maintenace directory. The second step does not create any new files, but updates the file <code>ways.data</code>. The third step should create a lot of files starting with <code>node</code> and <code>lod12</code> in the tile directory. These are the final data tiles.
+
+Congratulations, your succesfully created a COORDS data storage!
+
+
+<h3>3. Testing the COORDS Data Storage and Creating a Mapnik Stylesheet</h3>
+<strong>NOTE</strong>: If you want to create an OSM tile server using your COORDS data storage, you have to perform this testing step, as it creates the Mapnik stylesheet required for the render server!<br><br>
+
+Now that you have a working COORDS data storage, you can use it to render maps with Mapnik. This requires the following steps: 
+
+<ul>
+    <li>Select a directory to hold the auxiliary render files. We will use <code>~/render</code> for this auxiliary location in this guide. You can use any other location, but have to adjust the given locations accordingly.
+    <li>Download and unpack the auxiliary shapefile: <br>There is currently no reliable way of directly creating solid continents from OSM data. We will therefore use data from the <a target="_blank" href="http://www.naturalearthdata.com/">Natural Earth</a> project to render the continents themselves, and will use the COORDS data storage for all other details (mostly roads and buildings). So download the <a href="http://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_admin_0_countries_lakes.zip">Natural Earth Countries</a> file and save it in <code>~/render</code> directory (or your alternative location). Then unpack the file in your <code>~/render</code> using your favorite UI tool, or use a terminal instead:<br> <code>cd ~/render</code>, <code>unzip ne_10m_admin_0_countries_lakes.zip</code>
+    <li>Take a copy of the test scripts: <code>cp /usr/share/coords/*.py ~/render</code>. These will be used to test the COORDS data storage, but need to be adjusted to your specific data storage first.</li>
+    <li>Open the two copied Python files <code>testMapnik.py</code> and <code>renderMapMergedStyle.py</code> from the auxiliary directory in your favorite text editor and adjust the paths:
+    <ul>
+    <li> In the file <code>testMapnik.py</code>, find the line starting with <code>ds = mapnik.Shapefile</code> and change the path that follows to point to the <code>ne_10m_admin_0_countries_lakes.shp</code> you extracted two steps ago. This should be an absolute path (relative ones would work for now, but would fail in later steps), e.g. <code>/home/&lt;username&gt;/render/ne_10m_admin_0_countries_lakes.shp</code></li>
+    <li>In the file <code>renderMapMergedStyle.py</code>, the third and fourth line contain paths to the COORDS geometry tiles, and to the same auxiliary shapefile as in <code>testMapnik.py</code>. Adjust these paths to match your setup, e.g. <code>coordsTilePath = '/home/&lt;username&gt;/tiles/'</code> and <code>shapefilePath  = '/home/&lt;username&gt;/render/ne_10m_admin_0_countries_lakes.shp'</code>
+    </ul>
+    </li>
+    <li>Run the first script: <code>python2 testMapnik.py</code>. This should create an image file <code>world.png</code> that shows a world map with empty continents. If a file with that content exist, you just succesfully verified that Mapnik and its Python bindings are working.</li>
+    <li>Run the second test script: <code>python2 renderMapMergedStyle.py</code>.This may take a while (depending on how big a part of the world your COORDS storage covers), and should create an image file <code>world_roads.png</code>. This image should contain a world map including major roads and railways for the world region covered by your COORDS data storage. If that file exists and has that content, you just successfully verified that your COORDS storage is set up correctly and that Mapnik can access it. When completed successfully, this step should also have create a file <code>coordsTestStyle.xml</code>. This is a Mapnik stylesheet that can be used to set up a tile server that works with your COORDS data storage.
+</ul>
+
+<h3>4. (Optional) Set up an OSM Render Server</h3>
+<strong>Warning </strong>: This guide assumes that your operating system is Ubuntu 14.04 (Trusty). Packages may be named differently in other distributions and versions.<br>
+<strong>Warning 2</strong>: These instructions will disable any site configuration you have made to your local Apache web server. <br><br>
+
+
+You can now set up an OSM render server than renders map tiles on demand based on your COORDS data storage. The complete tile server setup is quite complex. A complete guide that explains the individual compents as available at <a href="https://switch2osm.org/serving-tiles/building-a-tile-server-from-packages/" target="_blank">Switch2OSM</a> (which, however uses a Postgres database instead of a COORDS data storage). Here, we only give the minimum necessary instructions:
+
+<ul>
+    <li>Install the required packages <code>renderd</code> and <code>libapache2-mod-tile</code> (this will also install the Apache 2 web server). On a Debian/Ubuntu terminal, this can be done with the line <code>sudo apt-get install renderd libapache2-mod-tile</code>. Step (1a) added a PPA repository than contains these packages. If you instead decided to build COORDS from source, you may have to manually add a corresponding PPA.</li>
+    <li><strong>As root</strong>, open the file <code>/etc/renderd.conf</code> in your favorite text editor (e.g. <code>sudo gedit /etc/renderd.conf</code>). This file should contain a section <code>[default]</code> and under this section two lines starting with <code>URI=</code> and <code>XML=</code>. Make note of the path following <code>URI=</code>, and adjust the path following <code>XML=</code>to point to the Mapnik stylesheet that was created in step 3 (e.g. <code>XML=/home/&lt;username&gt;/render/coordsTestStyle.xml</code>.</li>
+    <li>Restart the web server and the render daemon:<code>sudo service apache2 restart</code>, <code>sudo service renderd restart</code> for your changes to take effect.</li>
+    <li>Open a web browser and enter the URL <a href="http://localhost/osm_tiles/0/0/0.png" target="_blank">http://localhost/osm_tiles/0/0/0.png</a>, where <code>osm_tiles/</code> is the path from the <code>/etc/renderd.conf</code> file that followed the entry <code>URI=</code>. This should show a small image of the world's continents.</li>
+</ul>
+You have now successfully set up an OSM render server using your COORDS data storage. Instead of the <code>0/0/0</code> in the above URL, you may use any number triples that conform to the <a href="http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames">Slippy Map Tilename</a> specification (e.g. <code>4/8/5.png</code> for a tile showing Germany and its neighboring countries), and your tile server will dynamically render the corresponding map (rendering may take longer than your browser is willing to wait, though, so you may have to refresh your browser page a few times until the image appears). You can also set up a slippy map web page (e.g. using <a href="http://leafletjs.com/" target="_blank">Leaftlet</a> or <a href="http://openlayers.org/" target="_blank">OpenLayers</a>) that shows your dynamically-rendered tiles and allows your users to pan and zoom the map at will.
+
+<h2>COORDS RAM Requirements</h2>
+
+The COORDS toole require relatively little RAM, but will benefit from having big caches. A server with about 4GB of RAM should be sufficient to handle almost all COORDS operations. Only <code>coordsResolveLocations</code> on a full planet dump in <code>RANDOM</code> mode may take a long time (up to several days when run on a hard disk). This can be sped up considerably by switching to <code>BLOCK</code> mode with a block size of about 3GB (to about 10h; less, if more memory is available).
+
+For small regional extracts, passing the <code>--remap</code> parameter to <code>coorsCreateStorage</code> will ensure that all operations can complete quickly even in <code>RANDOM</code> mode with only 4GB of RAM.
+
+Once the COORDS data source has been created (i.e. <code>coordsCreateTiles</code> finished), access to it requires next to no memory, as the only operations are sequentially reading the data files and passing their contents to Mapnik.
+
+Process monitoring tools such as "top" may show very high memory sizes for the COORDS tools. For example, top may show a virtual memory (<code>VIRT</code>) size of more than 70GB for <code>coordsresolveLocations</code>. This is correct, but nothing to worry: most input/output of COORDS is done using memory-mapped files, which reserve these amounts of address space, but do not actually use that much RAM concurrently. 
+
+<h2>Disk Space Requirements</h2>
+A COORDS data source stores not only the data tiles, but also maintenance information used to create the tiles, and - in the future - to efficiently update tiles without having to recreate them from scratch. These data structures are quite big. A good rules of thumb is that the whole COORDS storage is about six to twelve times the size if the PBF files that was used to create the data storage. Here are some example sizes:
+<ul>
+    <li>about 8GB for a Great Britain extract</li>
+    <li>about 20GB for a Germany extract</li>
+    <li>about 250GB for the whole world</li>
+</ul>
+
+<h2>Processing Times</h2>
+The time needed to create a COORDS data storage varies considerably depending on:
+
+<ul>
+    <li>how much data the input PBF file contains</li>
+    <li>whether you are using the <code>--remap</code> option</li>
+    <li>how much RAM is available, especially in <code>BLOCK</code> mode</li>
+    <li>whether the files are stored on a hard disk, or an SSD</li>
+</ul>
+
+The following execution times where measured on a 2x2.4GHz virtual machine with 32GB of RAM and a hard drive-backed file system, processing a recent Planet dump (28.5GB) without <code>--remap</code>:
+
+<ul>
+<li><code>coordsCreateStorage</code>: about 1.5h</li>
+<li><code>coordsResolveLocations --mode=BLOCK --lock=16000</code>: about 2h for two passes </li>
+<li><code>coordsCreateTiles</code>: about 2h</li>
+</ul>
+
+</section>
+
+   
         <aside id="sidebar">
           <a href="https://github.com/rbuch703/coords/zipball/master" class="button">
             <small>Download</small>
@@ -150,7 +196,7 @@
             .tar.gz file
           </a>
 
-          <p class="repo-owner"><a href="https://github.com/rbuch703/coords"></a> is maintained by <a href="https://github.com/rbuch703">rbuch703</a>.</p>
+          <p class="repo-owner"><a href="https://github.com/rbuch703/coords">COORDS</a> is maintained by <a href="https://github.com/rbuch703">Robert Buchholz</a>.</p>
 
           <p>This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
         </aside>
