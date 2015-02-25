@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <title>Coords by rbuch703</title>
+  </head>
+
+  <body>
+    <header>
+      <div class="inner">
+        <h1>Coords</h1>
+        <h2>COORDS - Chunk-Organized OSM Render-Data Storage</h2>
+        <a href="https://github.com/rbuch703/coords" class="button"><small>View project on</small> GitHub</a>
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <section id="main-content">
+          <p>This software is licensed under the GNU Affero General Public License version 3 (GNU AGPL-v3).</p>
+
+<p>This repository consists of tools that together create a COORDS ("chunk-oriented OSM render-data storage") data storage from an OSM PBF file (e.g. a planet dump, or a regional extract). This data storage can then be used to render OSM data using Mapnik alone, or to create an OSM tile server using Mapnik with renderd and mod_tile. </p>
+
+<p>Please note: These tools are prototypes and not yet ready for production use. Use at your own risk!</p>
+
+<h2>
+<a id="building-instructions-for-ubuntu-1404" class="anchor" href="#building-instructions-for-ubuntu-1404" aria-hidden="true"><span class="octicon octicon-link"></span></a>Building Instructions (for Ubuntu 14.04)</h2>
+
+<ul>
+<li>
+<code>sudo apt-get install make build-essential libprotobuf-dev protobuf-compiler libexpat1-dev cmake</code> # install the required dependencies</li>
+<li>
+<code>git clone https://github.com/rbuch703/coords.git</code> # clone the repository</li>
+<li><code>cd coords</code></li>
+<li><code>cmake .</code></li>
+<li>
+<code>make</code> # compile the tools</li>
+</ul>
+
+<h2>
+<a id="execution-instructions" class="anchor" href="#execution-instructions" aria-hidden="true"><span class="octicon octicon-link"></span></a>Execution Instructions</h2>
+
+<p>Creating a COORDS data storage requires three steps that need to be executed in order. In short, these are:</p>
+
+<ol>
+<li>
+<code>./coordsCreateStorage &lt;pbf file&gt;</code> (for full planet dumps and continent-sized extracts), or <code>coordsCreateStorage --remap &lt;pbf file&gt;</code> (for regional extracts that are country-sized or smaller)</li>
+<li>
+<code>./coordsResolveLocations</code> </li>
+<li><code>./coordsCreateTiles</code></li>
+</ol>
+
+<p>However, run without additional parameters, this may take much longer than necessary, at least for planet dump <code>pbf</code>s. The next three sections explain what these tools do in some detail, and give performance tuning tips.</p>
+
+<h3>
+<a id="1-create-entity-indices-coordscreatestorage" class="anchor" href="#1-create-entity-indices-coordscreatestorage" aria-hidden="true"><span class="octicon octicon-link"></span></a>1. Create Entity Indices (coordsCreateStorage)</h3>
+
+<p>This step uses the <code>coordsCreateStorage</code> tool to transform all nodes, ways and relations into a form where they can efficiently be accessed by their respective ID. It also creates a lookup table to easily find the lat/lng geographic coordinates of a given node ID. This step is performed by executing</p>
+
+<p><code>./coordsCreateStorage &lt;pbf file&gt;</code></p>
+
+<p>, where <code>&lt;pbf file&gt;</code> is the path to the OSM PBF file whose contents you wish to convert to a COORDS data storage.</p>
+
+<h3>
+<a id="2-added-geographic-locations-to-stored-ways-coordsresolvelocations" class="anchor" href="#2-added-geographic-locations-to-stored-ways-coordsresolvelocations" aria-hidden="true"><span class="octicon octicon-link"></span></a>2. Added Geographic Locations to Stored Ways (coordsResolveLocations)</h3>
+
+<p>OpenStreetMap ways have no geographic locations by themselves. Instead, they consist of a list of node references, and the nodes in turn hold the geographic information (a latitude/longitude pair). Having to look up all referenced nodes whenever one deals with a given way would be extremely slow and inefficient. The second tool, <code>coordsResolveLocations</code>, instead looks up all nodes referenced by all ways at once, and adds the nodes' geographic locations directly to the stored ways. The basic way to do this is to execute</p>
+
+<p><code>./coordsResolveLocations</code></p>
+
+<h3>
+<a id="3-creating-the-vector-tiles-coordscreatetiles" class="anchor" href="#3-creating-the-vector-tiles-coordscreatetiles" aria-hidden="true"><span class="octicon octicon-link"></span></a>3. Creating the Vector Tiles (coordsCreateTiles)</h3>
+
+<ol>
+<li><code>coordsCreateTiles</code></li>
+</ol>
+
+<p>The third step subdivides the data in the updated way index into a hierarchy of tiles of equal data size (not necessarily equal geographic coverage). This hierarchy can then be used by Mapnik plugins to efficiently retrieve the data required to render a given region (the required plugin can be found in the github repository <code>rbuch703/coords-mapnik-plugin</code>). It has no parameters, and can simply be executed as</p>
+
+<ul>
+<li><code>./coordsCreateTiles</code></li>
+</ul>
+
+<h1>
+<a id="ram-requirements" class="anchor" href="#ram-requirements" aria-hidden="true"><span class="octicon octicon-link"></span></a>RAM Requirements</h1>
+
+<p>The tools themselves require little memory (&lt; 100MB), but will benefit greatly from big caches. The performance of the tools will increase dramatically when the following requirements are met:</p>
+
+<ol>
+<li>enough free RAM hold the complete program in memory, about 100 MB</li>
+<li>enough free RAM for read-ahead and write caches, about 1GB</li>
+<li>enough free RAM for read-ahead and write caches, as well as for complete memory mapping to the node ID-&gt;lat/lng index. The exact amount depends on the particular PBF file used as a data source. For a 2015 Planet dump, this is about 28GB of RAM. </li>
+</ol>
+
+<h1>
+<a id="disk-space-requirements" class="anchor" href="#disk-space-requirements" aria-hidden="true"><span class="octicon octicon-link"></span></a>Disk Space Requirements</h1>
+
+<p>The tools write various data storage files (the memory requirements here are given for a typical 2015 Planet dump. They will be significatly lower for regional extracts):</p>
+
+<ol>
+<li>the complete node, way and relation indices (<code>nodes.idx, nodes.data, ways.idx, ways.data, relations.idx and relations.data</code> in the <code>intermediate</code> directory): about 150 GB</li>
+<li>the node ID-&gt; lat/lng index (<code>vertices.data</code> in the <code>intermediate</code> directory): about 28GB</li>
+<li>The vector data tiles (numbered files in the <code>nodes</code> directory): ~70GB</li>
+</ol>
+
+<p>So the whole COORDS storage requires about 300GB of disk space for a planet dump.</p>
+
+<h1>
+<a id="execution-time" class="anchor" href="#execution-time" aria-hidden="true"><span class="octicon octicon-link"></span></a>Execution Time</h1>
+
+<p>The execution times for these tools varies dramatically depending on:</p>
+
+<ul>
+<li>how much data the input PBF file contains</li>
+<li>whether you are using the ID remapper</li>
+<li>how much RAM is available (see "RAM Requirements")</li>
+<li>whether the files are stored on a hard disk, or an SSD</li>
+</ul>
+
+<p>The following execution times where measured on a 2x2.4GHz virtual machine with 32GB of RAM and a hard drive-backed file system, processing a recent Planet dump (28.5GB) without ID remapping:</p>
+
+<ol>
+<li>
+<code>coordsCreateStorage</code>: about 1.5h</li>
+<li>
+<code>coordsResolveLocations --mode=BLOCK --lock=16000</code>: about 2h for two passes </li>
+<li>
+<code>coordsCreateTiles</code>: about 2h</li>
+</ol>
+        </section>
+
+        <aside id="sidebar">
+          <a href="https://github.com/rbuch703/coords/zipball/master" class="button">
+            <small>Download</small>
+            .zip file
+          </a>
+          <a href="https://github.com/rbuch703/coords/tarball/master" class="button">
+            <small>Download</small>
+            .tar.gz file
+          </a>
+
+          <p class="repo-owner"><a href="https://github.com/rbuch703/coords"></a> is maintained by <a href="https://github.com/rbuch703">rbuch703</a>.</p>
+
+          <p>This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
+        </aside>
+      </div>
+    </div>
+
+  
+  </body>
+</html>
