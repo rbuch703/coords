@@ -145,15 +145,27 @@ You can now set up an OSM render server than renders map tiles on demand based o
     <li>Restart the web server and the render daemon:<code>sudo service apache2 restart</code>, <code>sudo service renderd restart</code> for your changes to take effect.</li>
     <li>Open a web browser and enter the URL <a href="http://localhost/osm_tiles/0/0/0.png" target="_blank">http://localhost/osm_tiles/0/0/0.png</a>, where <code>osm_tiles/</code> is the path from the <code>/etc/renderd.conf</code> file that followed the entry <code>URI=</code>. This should show a small image of the world's continents.</li>
 </ul>
-You have now successfully set up an OSM render server using your COORDS data storage. Instead of the <code>0/0/0</code> in the above URL, you may use any number triples that conform to the <a href="http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames">Slippy Map Tilename</a> specification (e.g. <code>4/8/5.png</code> for a tile showing Germany and its neighboring countries), and your tile server will dynamically render the corresponding map (rendering may take longer than your browser is willing to wait, though, so you may have to refresh your browser page a few times until the image appears). You can also set up a slippy map web page (e.g. using <a href="http://leafletjs.com/" target="_blank">Leaftlet</a> or <a href="http://openlayers.org/" target="_blank">OpenLayers</a>) that shows your dynamically-rendered tiles and allows your users to pan and zoom the map at will.
+<p>
+You have now successfully set up an OSM render server using your COORDS data storage. Instead of the <code>0/0/0.png</code> in the above URL, you may use any number triples that conform to the <a href="http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames">Slippy Map Tilename</a> specification (e.g. <code>4/8/5.png</code> for a tile showing Germany and its neighboring countries), and your tile server will dynamically render the corresponding map (<strong>Note:</strong> rendering may take longer than your browser is willing to wait, though, so you may have to refresh your browser page a few times until the image appears). You can also set up a slippy map web page (e.g. using <a href="http://leafletjs.com/" target="_blank">Leaftlet</a> or <a href="http://openlayers.org/" target="_blank">OpenLayers</a>) that shows your dynamically-rendered tiles and allows your users to pan and zoom the map at will.
+</p>
+<p>
+    The used map style is just a simple example. You can use any Mapnik styling methods to create your personal map style. In particular, you could:
+    <ul>
+        <li>Directly modify the <code>coordsTestStyle.xml</code> file.</li>
+        <li>Modify the <code>renderMapMergedStyle.py</code> script and re-run it to let it create a new <code>coordsTestStyle.xml</code> based on your modifications.</li>
+        <li>Use <a href="https://www.mapbox.com/tilemill/" target="_blank">TileMill</a> or a text editor to write your style in <a href="https://www.mapbox.com/tilemill/docs/manual/carto/" target="_blank">CartoCSS</a>, and then export it to a Mapnik style XML file. Tilemill currently does not support COORDS data sources natively. So you have to setup an SQL data source to use for styling, then export a Mapnik style XML from TileMill, and finally manually edit that XML file to replace its SQL data sources by COORDS data sources.</li>
+        
+    </ul>
+</p>
+
 
 <h2>COORDS RAM Requirements</h2>
 
-The COORDS toole require relatively little RAM, but will benefit from having big caches. A server with about 4GB of RAM should be sufficient to handle almost all COORDS operations. Only <code>coordsResolveLocations</code> on a full planet dump in <code>RANDOM</code> mode may take a long time (up to several days when run on a hard disk). This can be sped up considerably by switching to <code>BLOCK</code> mode with a block size of about 3GB (to about 10h; less, if more memory is available).
+The COORDS toole require relatively little RAM, but will benefit from having big caches. A server with about 4GB of RAM should be sufficient to handle almost all COORDS operations. Only <code>coordsResolveLocations</code> on a full planet dump in <code>RANDOM</code> mode may take a long time (up to several days when run on a hard disk). This can be sped up considerably by switching to <code>BLOCK</code> mode with a block size of about 3GB (to about 10h; less, if more memory is available).<br>
 
-For small regional extracts, passing the <code>--remap</code> parameter to <code>coorsCreateStorage</code> will ensure that all operations can complete quickly even in <code>RANDOM</code> mode with only 4GB of RAM.
+For small regional extracts, passing the <code>--remap</code> parameter to <code>coorsCreateStorage</code> will ensure that all operations can complete quickly even in <code>RANDOM</code> mode with only 4GB of RAM.<br>
 
-Once the COORDS data source has been created (i.e. <code>coordsCreateTiles</code> finished), access to it requires next to no memory, as the only operations are sequentially reading the data files and passing their contents to Mapnik.
+Once the COORDS data source has been created (i.e. <code>coordsCreateTiles</code> finished), access to it requires next to no memory, as the only operations are sequentially reading the data files and passing their contents to Mapnik.<br>
 
 Process monitoring tools such as "top" may show very high memory sizes for the COORDS tools. For example, top may show a virtual memory (<code>VIRT</code>) size of more than 70GB for <code>coordsresolveLocations</code>. This is correct, but nothing to worry: most input/output of COORDS is done using memory-mapped files, which reserve these amounts of address space, but do not actually use that much RAM concurrently. 
 
