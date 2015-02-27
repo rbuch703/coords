@@ -129,7 +129,7 @@ OsmConsumerDumper::~OsmConsumerDumper()
 
 
 
-/* modifies the 'tag' to reflect the rename rules. 
+/* modifies the 'tag' to reflect  the 'ignore' rules. 
  * @Returns: whether the tag is to be kept (true) or discarded (false) */
  
 bool OsmConsumerDumper::processTag(OSMKeyValuePair &tag) const

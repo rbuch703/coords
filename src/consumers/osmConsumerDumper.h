@@ -27,7 +27,7 @@ private:
 private:
     mmap_t node_index, vertex_data, way_index, relation_index;
     ChunkedFile *nodeData, *wayData, *relationData;
-    RadixTree<string> rename_key; 
+    //RadixTree<string> rename_key; 
     RadixTree<int> ignore_key, ignoreKeyPrefixes;    //ignore key-value pairs which are irrelevant for most applications
     uint64_t nNodes, nWays, nRelations;
     
