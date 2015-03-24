@@ -5,6 +5,36 @@
 #include <map>
 #include "persistentVector.h"
 
+/* The template class SerializableMap represents a dictionary (key-value store) that
+ * is partially backed by on-disk storage, and can manually (via merge() or through
+ * the destructor) be forced to be completely written to disk and thus made persistent.
+ *
+ * The indented use for SerializableMap are huge dictionaries (gigabytes or data) 
+ * that at the same time should be persistent, stored compactly and fast. 
+ * Here, storing the dictionary as a std::map would waste memory: a std::map entry
+ * requires about 16 bytes of memory for book-keeping in addition to storing the
+ * actual data, which can prohibatively increase memory consumption for huge dictionaries
+ * where keys and values themselves require little memory.
+ * Instead, a PersistentVector keeps newly created entries in memory, and - once 
+ * a threshold is reached - write them to disk in bulk. As the on-disk part is memory-mapped,
+ * it will be kept in memory as long as there is enough memory available (as decided by
+ * the OS). And when not enough memory is available, the PersistentVector with transparently
+ * degrade gracefully: the OS will remove some parts of the memory-mapped file from memory,
+ * but these will transparently be loaded again when used.
+ *
+ * Internally, a SerializableMap consists of a std::map and a memory-mapped array of 
+ * key-value pairs that is kept sorted by key. Newly added key-value pairs are stored
+ * in the std::map. Whenever this std::map would contain more than MAX_ITEMS_IN_MEMORY,
+ * its contents are written to disk using a merge step identical to that used in MergeSort.
+ * This merge step creates a separate on-disk file containing the merged contents. After
+ * the merge has completed, the new file atomically overwrites the old one. At this point,
+ * the on-disk storage contains all key-value pairs, and the in-memory storage is cleared.
+ *
+ * Limitations:
+ * - currently, there is no way to remove an entry from a serializable map.
+ * - merges are not currently fsynced for performance reasons, so OS crashes or power outages can lead to data corruption
+*/
+
 template <typename KEY_T, typename VALUE_T, int MAX_ITEMS_IN_MEMORY>
 class SerializableMap
 {

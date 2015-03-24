@@ -201,8 +201,7 @@ void ReverseIndex::addReferenceFromWay(uint64_t targetId, uint64_t wayId)
         }
         
         /* Need to store two way references (the one already present and 
-         * the newly added one). So we would have to allocate space in the
-         * auxiliary index for both entries, which is not yet implemented*/
+         * the newly added one) */
         uint64_t storedWayId = pos[targetId];
         RefList refList = RefList::initialize(&auxIndex, reserveSpaceForRefList(2), 2); //needs to hold two references
         MUST( 0 == refList.add(storedWayId), "RefList data corruption");

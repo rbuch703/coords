@@ -6,6 +6,24 @@
 #include <string.h>
 #include <iostream>
 
+/*  The template class RadixTree implements a specialized dictionary that maps 
+    strings to values of arbitrary type (specified at compile time as the 
+    template argument). In additional, it allows for the specialized call
+    containsPrefixOf(x), which returns whether any key stored in the radix tree
+    is a prefix of 'x'. This is done in O(len(x)) time, irrespective of how many
+    entrys the radix tree has.
+    
+    Internally, the radix tree consists of nodes that each have up to 256 children,
+    and optionally have a value. Each node but the root implicitly has a "char" value,
+    given by the position of its pointer in the child list of its parent (e.g. if a
+    node is the 65th child of its parent, its value is '65', or - equivalently - the
+    letter 'A' in ASCII. Based on this, each node also implicitly has a key, given
+    by the sequence of values of all its parents, from the root node down to itself.
+    
+   
+*/
+
+
 using namespace std;
 
 template<typename t>

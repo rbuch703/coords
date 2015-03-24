@@ -6,11 +6,13 @@
 #include <assert.h>
 /* The template class PersistentVector represents an vector that is
  * backed by a memory-mapped file. It acts mostly like the std::vector,
- * but it is always persistently stored in a memory mapped file.
- * Thus, its contents persist beyond program termination.
+ * but its contents persist beyond program termination.
  *
- * Note: all data is stored exactly like its in-memory representation,
-         including pointer. But all pointers 
+ * Note: Do not store pointers in a PersistentVector !
+ *       All data is stored exactly like its in-memory representation.
+ *       Thus, storing pointers, which are not valid across multiple
+ *       program executions, in a PersistentVector will lead to 
+ *       memory corruption and program crashes
  *       
 /*/
 
