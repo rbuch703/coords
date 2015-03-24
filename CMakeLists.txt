@@ -41,9 +41,9 @@ SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
 ADD_EXECUTABLE(coordsResolveLocations
                src/resolveRefs.cc 
                src/mem_map.cc
-#               src/osm/osmTypes.cc 
-#               src/osm/osmMappedTypes.cc 
-#               src/containers/chunkedFile.cc
+               src/osm/osmTypes.cc 
+               src/osm/osmMappedTypes.cc 
+               src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
                )
 

@@ -193,7 +193,7 @@ void OsmConsumerDumper::filterTags(vector<OSMKeyValuePair> &tags) const
         {
             tags[i] = tags[tags.size()-1];
             tags.pop_back();
-        }   
+        }
         else
             i++;
     }   

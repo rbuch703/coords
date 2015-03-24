@@ -248,8 +248,7 @@ int main(int argc, char** argv)
     }
 
 
-    LightweightWayStore wayStore( (storageDirectory + "ways.idx").c_str(), 
-                                  (storageDirectory + "ways.data").c_str(), true);
+    LightweightWayStore wayStore( storageDirectory + "ways", true);
 
     for (uint64_t i = 0; i < nRuns; i++)
     {

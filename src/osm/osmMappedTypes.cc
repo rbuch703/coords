@@ -318,6 +318,10 @@ LightweightWayStore::LightweightWayStore(const char* indexFileName, const char* 
 
 }
 
+LightweightWayStore::LightweightWayStore(const std::string baseName, bool optimizeForStreaming):
+    LightweightWayStore( (baseName + ".idx").c_str(), (baseName + ".data").c_str(), optimizeForStreaming)
+{ }
+
 
 OsmLightweightWay LightweightWayStore::operator[](uint64_t wayId)
 {

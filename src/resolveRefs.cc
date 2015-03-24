@@ -16,7 +16,7 @@
 
 
 #include "mem_map.h"
-//#include "osm/osmMappedTypes.h"
+#include "osm/osmMappedTypes.h"
 #include "containers/reverseIndex.h"
 
 #ifndef MUST
@@ -55,18 +55,10 @@ struct WayResolvedNodeTuple {
     int32_t  lng;
 };
 
+static const uint64_t RESOLVED_BUCKET_SIZE = 1000000;
 
-int main(int /*argc*/, char** /*argv*/)
+void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 {
-    MUST(sizeof(WayResolvedNodeTuple) == 24, "data structure size mismatch");
-    MUST(sizeof(WayNodeTuple) == 2 * sizeof(uint64_t), "data structure size mismatch");
-
-    string storageDirectory = "intermediate/";
-    
-    if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
-        storageDirectory += "/";
-    
-
     ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse", true);
     //ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", true);     
     //ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", true);
@@ -112,7 +104,7 @@ int main(int /*argc*/, char** /*argv*/)
                     .lat = vertexData[ tuples[i].nodeId * 2],
                     .lng = vertexData[ tuples[i].nodeId * 2 + 1]};
                 
-                uint64_t bucketId = tpl.wayId / 1000000;
+                uint64_t bucketId = tpl.wayId / RESOLVED_BUCKET_SIZE;
                 assert( bucketId < 800 && "getting too close to OS ulimit for open files");
                 if (bucketId >= resolvedNodeBuckets.size() )
                 {
@@ -141,7 +133,103 @@ int main(int /*argc*/, char** /*argv*/)
      * use data from earlier runs.
      */
     unlink( toBucketString(storageDirectory+"nodeRefsResolved", resolvedNodeBuckets.size()).c_str());
+    
+    for (FILE* f : resolvedNodeBuckets)
+        fclose(f);
 
+
+}
+
+
+
+void resolveWayNodeRefs(const string storageDirectory)
+{
+    LightweightWayStore wayStore( storageDirectory + "ways", true);
+
+    uint64_t bucketId = 0;
+    FILE* fBucket;
+    while ( nullptr != (fBucket = fopen(
+        toBucketString(storageDirectory+"nodeRefsResolved", bucketId++).c_str(), "rb")) )
+    {
+        //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
+        map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs; 
+
+        cout << "resolving node references for bucket "<< (bucketId-1) << endl;
+
+        fseek(fBucket, 0, SEEK_END);
+        uint64_t size = ftell(fBucket);
+        fseek(fBucket, 0, SEEK_SET);
+        MUST( size % (sizeof( WayResolvedNodeTuple ) ) == 0, "bucket file corruption");
+        uint64_t numTuples = size / (sizeof(WayResolvedNodeTuple));
+        WayResolvedNodeTuple *tuples = new WayResolvedNodeTuple[numTuples];
+        
+        MUST(1 == fread(tuples, size, 1, fBucket), "bucket read failed");
+        fclose(fBucket);
+        //TODO: the following loop will take some seconds. The OS should be instructed to write back
+        //      all data from the previous iteration of the outer loop to disk
+
+        for (uint64_t i = 0; i < numTuples; i++)
+        {
+            const WayResolvedNodeTuple &tuple = tuples[i];
+            if (! refs.count(tuple.wayId))
+                refs.insert( make_pair(tuple.wayId, map<uint64_t, pair<int32_t, int32_t> >()));
+                
+            if (! refs[tuple.wayId].count(tuple.nodeId))
+                refs[tuple.wayId].insert( make_pair(tuple.nodeId, make_pair( tuple.lat, tuple.lng)));
+            else 
+                assert( refs[tuple.wayId][tuple.nodeId].first  == tuple.lat  && 
+                        refs[tuple.wayId][tuple.nodeId].second == tuple.lng);
+        }
+        
+        for (uint64_t wayId = (bucketId-1) * RESOLVED_BUCKET_SIZE; wayId < bucketId * RESOLVED_BUCKET_SIZE; wayId++)
+        {
+            if (! wayStore.exists(wayId))
+                continue;
+                
+            if (! refs.count(wayId))
+            {
+                cout << "[WARN] no node in way " << wayId << " could be resolved" << endl;
+                continue;
+            }
+            
+            OsmLightweightWay way = wayStore[wayId];
+            assert(way.isDataMapped && "is noop for unmapped data");
+            map<uint64_t, pair<int32_t, int32_t> > &nodeRefs = refs[wayId];
+            for (int i = 0; i < way.numVertices; i++)
+            {
+                uint64_t nodeId = way.vertices[i].id;
+                if (! nodeRefs.count(nodeId))
+                {
+                    cout << "[WARN] reference to node " << nodeId << " could not be resolved in way " << wayId << endl;
+                    continue;
+                }
+                
+                pair<int32_t, int32_t> &pos = nodeRefs[nodeId];
+                way.vertices[i].lat = pos.first;
+                way.vertices[i].lng = pos.second;
+            }
+        }
+        
+        #warning necessary unlink() deactivated
+        //unlink(toBucketString(storageDirectory+"nodeRefsResolved", bucketId++).c_str())
+        
+    }
+
+}
+
+
+int main(int /*argc*/, char** /*argv*/)
+{
+    MUST(sizeof(WayResolvedNodeTuple) == 24, "data structure size mismatch");
+    MUST(sizeof(WayNodeTuple) == 2 * sizeof(uint64_t), "data structure size mismatch");
+
+    string storageDirectory = "intermediate/";
+    
+    if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
+        storageDirectory += "/";
+    
+    buildReverseIndexAndResolvedNodeBuckets(storageDirectory);
+    resolveWayNodeRefs(storageDirectory);
     
 }
 
