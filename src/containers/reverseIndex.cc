@@ -1,8 +1,9 @@
 
 #include "containers/reverseIndex.h"
 
-#include <string.h> //for memcpy
+#include <string.h> //for memcpy()
 #include <assert.h>
+#include <unistd.h>  //for unlink()
 #include <iostream>
 
 #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
@@ -96,9 +97,23 @@ uint64_t RefList::getOffset() const        { return srcOffset; }
       uint64_t* RefList::getBasePtr()       { return (uint64_t*)src->ptr + srcOffset;}
 const uint64_t* RefList::getBasePtr() const { return (uint64_t*)src->ptr + srcOffset;}
 
-ReverseIndex::ReverseIndex(const char* indexFileName, const char* auxFileName) { 
-    index = init_mmap(indexFileName, true, true);
-    auxIndex= init_mmap( auxFileName, true, true);
+ReverseIndex::ReverseIndex(string baseFileName, bool removeOldContent) : 
+    ReverseIndex(baseFileName + ".idx", baseFileName + ".aux", removeOldContent)
+{}
+
+
+ReverseIndex::ReverseIndex(string indexFileName, string auxFileName, bool removeOldContent) 
+{ 
+    if (removeOldContent)
+    {
+        int res = unlink(indexFileName.c_str());
+        MUST( res == 0 || errno == ENOENT, "cannot delete old reverse index");
+        res = unlink(auxFileName.c_str());
+        MUST( res == 0 || errno == ENOENT, "cannot delete old reverse index");
+    }
+
+    index = init_mmap(indexFileName.c_str(), true, true);
+    auxIndex= init_mmap( auxFileName.c_str(), true, true);
     
     /* conservative guess: without a dedicated way of determining where 
        the last auxIndex entry ends, assume that it ends at the end of the

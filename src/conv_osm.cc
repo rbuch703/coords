@@ -38,6 +38,12 @@ int parseArguments(int argc, char** argv)
     return optind;
 }
 
+void deleteFileIfExists(string filename)
+{
+    int res = unlink(filename.c_str());
+    MUST(res == 0 || errno == ENOENT, "cannot access file");
+}
+
 int main(int argc, char** argv)
 {
     int nextArgumentIndex = parseArguments(argc, argv);
@@ -80,13 +86,22 @@ int main(int argc, char** argv)
     if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
         destinationDirectory += "/";
     
-    if (!remapIds) //remove leftover remap files from earlier runs
-    {
-        unlink((destinationDirectory + "mapNodes.idx"    ).c_str());
-        unlink((destinationDirectory + "mapRelations.idx").c_str());
-        unlink((destinationDirectory + "mapWays.idx"     ).c_str());
-    }
+    //remove leftover files from earlier runs:
+    // - remap files
+    deleteFileIfExists(destinationDirectory + "mapNodes.idx"    );
+    deleteFileIfExists(destinationDirectory + "mapRelations.idx");
+    deleteFileIfExists(destinationDirectory + "mapWays.idx"     );
+
+    // - reverse indices
+    deleteFileIfExists(destinationDirectory + "nodeReverse.idx"    );
+    deleteFileIfExists(destinationDirectory + "nodeReverse.aux"    );
+    deleteFileIfExists(destinationDirectory + "wayReverse.idx"     );
+    deleteFileIfExists(destinationDirectory + "wayReverse.aux"     );
+    deleteFileIfExists(destinationDirectory + "relationReverse.idx");
+    deleteFileIfExists(destinationDirectory + "relationReverse.aux");
+
     
+
     MUST(nextArgumentIndex < argc, "argv index out of bounds");
     
     FILE* f = fopen( argv[nextArgumentIndex], "rb");

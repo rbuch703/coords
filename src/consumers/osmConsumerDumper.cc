@@ -1,6 +1,8 @@
 
 #define _FILE_OFFSET_BITS 64
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>   //for PRIu64
 #include <assert.h>
 #include <stdint.h>
 #include <fcntl.h>
@@ -28,6 +30,18 @@ using namespace std;
 
 #define outputBasePath "intermediate/"
 
+static string toBucketString(string storageDirectory, uint64_t bucketId)
+{
+    char tmp [100];
+    MUST( snprintf(tmp, 100, "%05" PRIu64, bucketId) < 100, "bucket id overflow");
+    /* warning: do not attempt to integrate the following concatenation
+     *          into the sprintf statement above. 'storageDirectory' has
+     *          unbounded length, and thus may overflow any preallocated
+     *          char array.*/
+    return storageDirectory + "nodeRefs" + tmp + ".raw";
+}
+
+
 static void truncateFile(string filename) {
     FILE* f= fopen(filename.c_str() , "wb+"); 
     if (f == NULL) 
@@ -39,30 +53,59 @@ static void truncateFile(string filename) {
     fclose(f);
 }
 
+NodeBucket::NodeBucket(std::string filename)
+{
+    f = fopen(filename.c_str(), "wb");
+    unsavedTuples = new uint64_t[2* sizeof(uint64_t) * MAX_NUM_UNSAVED_TUPLES]; //one tuple consists of two uint64_t
+    numUnsavedTuples = 0;
+}
 
-OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0)
+NodeBucket::NodeBucket(): f(nullptr), unsavedTuples(nullptr), numUnsavedTuples(0)
+{
+}
+
+
+NodeBucket::~NodeBucket()
+{
+    MUST( (f == NULL) == (unsavedTuples == NULL), "corrupted bucket");
+    if (f && numUnsavedTuples)
+    {
+        MUST(fwrite(unsavedTuples, 2 * sizeof(uint64_t) * numUnsavedTuples, 1, f) == 1, "error writing bucket");
+        delete [] unsavedTuples;
+    }
+}
+
+void NodeBucket::addTuple(uint64_t wayId, uint64_t nodeId)
+{
+    assert( f && unsavedTuples && "bucket memory corruption");
+    if (numUnsavedTuples == MAX_NUM_UNSAVED_TUPLES)
+    {
+        MUST(fwrite(unsavedTuples, 2* sizeof(uint64_t) * numUnsavedTuples, 1, f) == 1, "error writing bucket");
+        numUnsavedTuples = 0;
+    }
+    
+    MUST( numUnsavedTuples < MAX_NUM_UNSAVED_TUPLES, "bucket memory corruption");
+    
+    unsavedTuples[ 2*numUnsavedTuples  ] = wayId;
+    unsavedTuples[ 2*numUnsavedTuples+1] = nodeId;
+    numUnsavedTuples += 1;
+}
+
+
+OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0), destinationDirectory(destinationDirectory)
 {    
-    MUST(destinationDirectory.length() > 0, "empty destination given");
-    if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
-        destinationDirectory += "/";
+    MUST(this->destinationDirectory.length() > 0, "empty destination given");
+    if (this->destinationDirectory.back() != '/' && this->destinationDirectory.back() != '\\')
+        this->destinationDirectory += "/";
 
-    nodesDataFilename      = destinationDirectory + "nodes.data";
-    nodesIndexFilename     = destinationDirectory + "nodes.idx";
-    verticesDataFilename   = destinationDirectory + "vertices.data";
-    waysDataFilename       = destinationDirectory + "ways.data";
-    waysIndexFilename      = destinationDirectory + "ways.idx";
-    relationsDataFilename  = destinationDirectory + "relations.data";
-    relationsIndexFilename = destinationDirectory + "relations.idx";
+    nodesDataFilename      = this->destinationDirectory + "nodes.data";
+    nodesIndexFilename     = this->destinationDirectory + "nodes.idx";
+    verticesDataFilename   = this->destinationDirectory + "vertices.data";
+    waysDataFilename       = this->destinationDirectory + "ways.data";
+    waysIndexFilename      = this->destinationDirectory + "ways.idx";
+    relationsDataFilename  = this->destinationDirectory + "relations.data";
+    relationsIndexFilename = this->destinationDirectory + "relations.idx";
 
-    //for situations where several annotation keys exist with the same meaning
-    //this dictionary maps them to a common unique key
-    /*rename_key.insert( "postal_code", "addr:postcode");
-    rename_key.insert( "url", "website"); //according to OSM specs, "url" is obsolete
-    rename_key.insert( "phone", "contact:phone");
-    rename_key.insert( "fax", "contact:fax");
-    rename_key.insert( "email", "contact:email");
-    rename_key.insert( "addr:housenumber", "addr:streetnumber");*/
-    //TODO: replace natural=lake by natural=water
     for (uint32_t i = 0; i < num_ignore_keys; i++)
         ignore_key.insert(ignore_keys[i], 0);
 
@@ -88,6 +131,8 @@ OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): nNodes(0
     relation_index = init_mmap(relationsIndexFilename.c_str());
     relationData = new ChunkedFile(relationsDataFilename.c_str());
 
+
+    //FIXME: delete leftover node and way bucket files
 };
 
 OsmConsumerDumper::~OsmConsumerDumper()
@@ -104,6 +149,18 @@ OsmConsumerDumper::~OsmConsumerDumper()
 
     cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
 
+    /* try to delete the bucket file *after* the last one. 
+     * Usually, this one should not exist, and unlink() will just fail gracefully.
+     * But in case there are leftover bucket files from an earlier run, this will
+     * ensure that there is no unbroken sequence of files that contains both old 
+     * and new bucket files. Thus, this deletion ensures that subsequent tools do not
+     * use data from earlier runs.
+     */
+    unlink( toBucketString(destinationDirectory, nodeRefBuckets.size()).c_str());
+
+
+    for (NodeBucket* bucket : nodeRefBuckets)
+        delete bucket;
 }
 
 
@@ -128,35 +185,17 @@ OsmConsumerDumper::~OsmConsumerDumper()
 }*/
 
 
-
-/* modifies the 'tag' to reflect  the 'ignore' rules. 
- * @Returns: whether the tag is to be kept (true) or discarded (false) */
- 
-bool OsmConsumerDumper::processTag(OSMKeyValuePair &tag) const
-{
-    //const string* renameValue = rename_key.at(tag.first.c_str());
-    //if ( renameValue ) tag.first = *renameValue;
-        
-    if ( ignore_key.at(tag.first.c_str()) )
-        return false;
-        
-    if ( ignoreKeyPrefixes.containsPrefixOf( tag.first.c_str()))
-        return false;
-
-    return true;    
-}
-
 void OsmConsumerDumper::filterTags(vector<OSMKeyValuePair> &tags) const
 {
     for (uint64_t i = 0; i < tags.size();)
     {
-        if (processTag(tags[i]) )
-            i++;
-        else
+        if (ignore_key.at(tags[i].first.c_str()) || ignoreKeyPrefixes.containsPrefixOf( tags[i].first.c_str()) )
         {
             tags[i] = tags[tags.size()-1];
             tags.pop_back();
         }   
+        else
+            i++;
     }   
 }
 
@@ -170,40 +209,6 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
     int32_t* vertex_ptr = (int32_t*)vertex_data.ptr;
     vertex_ptr[2*node.id]   = node.lat;
     vertex_ptr[2*node.id+1] = node.lon;
-
-/*    
-    if (nNodes % 1000000 == 0)
-    {
-
-        cout << endl << "\e[1A";
-        cout << "processed " << (nNodes / 1000000) << "M nodes; writing data to disk ...";
-        cout << " (" << ((ftell(node_data) - node_data_synced_pos) / 1000000) << "MB node data)";
-        //sync_file_range( fileno(node_data), node_data_synced_pos, 0, SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER);
-        //posix_fadvise( fileno(node_data), node_data_synced_pos, 0, POSIX_FADV_DONTNEED);
-        node_data_synced_pos = ftell(node_data);
-        
-        
-        uint32_t page_size = sysconf(_SC_PAGESIZE);
-        
-        uint64_t pos = ((node.id * 2 * sizeof(uint32_t)) / page_size + 1) * page_size;
-        cout << "(" << ((pos - node_index_synced_pos) / 1000000) << "MB node index)";
-        cout.flush();
-        
-        //int res = msync( ((uint8_t*)node_index.ptr) + node_index_synced_pos, (pos - node_index_synced_pos), MS_SYNC);
-        //if (res != 0) { perror("msync"); exit(0); }
-        
-        node_index_synced_pos = pos;
-        //res = madvise( node_index.ptr,  node_index.size, MADV_DONTNEED);
-        //if (res != 0) { perror("madvise node_index"); exit(0);}
-
-        //madvise( vertex_data.ptr, vertex_data.size, MADV_DONTNEED);
-        //if (res != 0) { perror("madvise vertex_data"); exit(0);}
-        cout << " done";
-        cout << endl << endl << "\e[2A" << "\e[s";
-        
-        
-    }
-*/
 }
 
 void OsmConsumerDumper::consumeWay ( OSMWay  &way)
@@ -211,6 +216,34 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
     nWays++;
     filterTags(way.tags);
     way.serialize(*wayData, &way_index);
+    
+    /* the following code dumps each (wayId, nodeId) tuple in a bucket file, where bucket 'i'
+       stores the tuples for all nodeIds in the range [i*10M, (i+1)*10M[. These bucket files are
+       later used to efficiently create reverse indices (mapping each node id to a list of way ids
+       that reference said node).
+       
+       For a 2015 planet dump,
+       the highest nodeId is about 3G, requiring about 300 buckets. Note that Linux has a soft
+       ulimit at 1024 open files per process. So the bucket size needs to be adjusted
+       once OSM reaches close to 10G node IDs, in order to not exceed the open file limit.
+    */
+    static const uint64_t BUCKET_SIZE = 10000000;
+    for (const OsmGeoPosition &ref : way.refs)
+    {
+        uint64_t bucketNo = ref.id / BUCKET_SIZE;
+        assert( bucketNo < 800 && "getting too close to the ulimit for #open files");
+        
+        if ( bucketNo >= nodeRefBuckets.size())
+        {
+            uint64_t oldNumBuckets = nodeRefBuckets.size();
+            nodeRefBuckets.resize(bucketNo+1);
+            
+            for (uint64_t i = oldNumBuckets; i <= bucketNo; i++)
+                nodeRefBuckets[i] = new NodeBucket(toBucketString(destinationDirectory, i));
+        }
+        nodeRefBuckets[bucketNo]->addTuple(way.id, ref.id);
+    }
+    
 }
 
 void OsmConsumerDumper::consumeRelation( OsmRelation &relation) 

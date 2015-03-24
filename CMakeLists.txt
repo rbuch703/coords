@@ -10,7 +10,8 @@ include_directories (.)
 include_directories (src)
 include_directories( ${CMAKE_BINARY_DIR} )
 
-set(CMAKE_BUILD_TYPE RELWITHDEBINFO) #Debug)
+#set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+set(CMAKE_BUILD_TYPE Debug)
 
 
 PROTOBUF_GENERATE_CPP(ProtoSources ProtoHeaders proto/osmformat.proto proto/fileformat.proto)
@@ -38,11 +39,11 @@ SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
 
 
 ADD_EXECUTABLE(coordsResolveLocations
-               src/wayIntegrator.cc 
+               src/resolveRefs.cc 
                src/mem_map.cc
-               src/osm/osmTypes.cc 
-               src/osm/osmMappedTypes.cc 
-               src/containers/chunkedFile.cc
+#               src/osm/osmTypes.cc 
+#               src/osm/osmMappedTypes.cc 
+#               src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
                )
 
