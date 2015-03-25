@@ -59,9 +59,12 @@ static const uint64_t RESOLVED_BUCKET_SIZE = 1000000;
 
 void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 {
+    /* we don't actually need the reverse way and relation indices at this point. But since we
+     * create and clear the reverse node index here, this is a good point to ensure that the
+     * other indices are cleared as well */
     ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse", true);
-    //ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", true);     
-    //ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", true);
+    ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", true);
+    ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", true);
         
         
     std::vector<FILE*> resolvedNodeBuckets;
@@ -119,8 +122,8 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
                 MUST( fwrite( &tpl, sizeof(tpl), 1, resolvedNodeBuckets[bucketId]) == 1, "resolved bucket write failed");
             }
         }
-        #warning necessary unlink() deactivated
-        //unlink( toBucketString(storageDirectory+"nodeRefs", bucketId-1).c_str());
+
+        unlink( toBucketString(storageDirectory+"nodeRefs", bucketId-1).c_str());
         
         delete [] tuples;
     }
@@ -180,6 +183,7 @@ void resolveWayNodeRefs(const string storageDirectory)
                 assert( refs[tuple.wayId][tuple.nodeId].first  == tuple.lat  && 
                         refs[tuple.wayId][tuple.nodeId].second == tuple.lng);
         }
+        delete [] tuples;
         
         for (uint64_t wayId = (bucketId-1) * RESOLVED_BUCKET_SIZE; wayId < bucketId * RESOLVED_BUCKET_SIZE; wayId++)
         {
@@ -210,13 +214,32 @@ void resolveWayNodeRefs(const string storageDirectory)
             }
         }
         
-        #warning necessary unlink() deactivated
-        //unlink(toBucketString(storageDirectory+"nodeRefsResolved", bucketId++).c_str())
+        unlink(toBucketString(storageDirectory+"nodeRefsResolved", bucketId-1).c_str());
         
     }
 
 }
 
+void resolveRefsFromRelations(string storageDirectory) {
+    RelationStore relStore( storageDirectory + "relations");
+    ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse", false);
+    ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", false);     
+    ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", false);
+    
+    for (const OsmRelation & rel : relStore)
+    {
+        for (const OsmRelationMember &member : rel.members)
+        {
+            switch (member.type)
+            {
+                case NODE:         reverseNodeIndex.addReferenceFromRelation(member.ref, rel.id); break;
+                case WAY:           reverseWayIndex.addReferenceFromRelation(member.ref, rel.id); break;
+                case RELATION: reverseRelationIndex.addReferenceFromRelation(member.ref, rel.id); break;
+                default: MUST(false, "invalid relation member type"); break;
+            }
+        }
+    }
+}
 
 int main(int /*argc*/, char** /*argv*/)
 {
@@ -228,8 +251,14 @@ int main(int /*argc*/, char** /*argv*/)
     if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
         storageDirectory += "/";
     
+    cout << "Stage 1: Registering reverse dependencies for all ways" << endl;
+    cout << "         and creating bucket files for resolved node locations." << endl;
     buildReverseIndexAndResolvedNodeBuckets(storageDirectory);
-    resolveWayNodeRefs(storageDirectory);
     
+    cout << "Stage 2: Resolving node references for all ways" << endl;
+    resolveWayNodeRefs(storageDirectory);
+
+    cout << "Stage 3: Registering reverse dependencies for all relations" << endl;
+    resolveRefsFromRelations(storageDirectory);
 }
 

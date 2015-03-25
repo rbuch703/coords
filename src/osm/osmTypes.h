@@ -120,7 +120,7 @@ struct OsmRelationMember
     uint32_t getDataSize() const;
     ELEMENT type;  //whether the member is a node, way or relation
     uint64_t ref;  //the node/way/relation id
-    std::string role;   //the role the member play to the relation
+    std::string role;   //the role the member has as part of the relation
     
 };
 

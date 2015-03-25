@@ -463,7 +463,7 @@ OsmRelation::OsmRelation( const uint8_t* data_ptr)
     data_ptr += sizeof(uint32_t);
 
     uint32_t num_members = *(uint32_t*)data_ptr;
-    data_ptr+=4;
+    data_ptr+=sizeof(uint32_t);
 
     //uint32_t members_data_size = *(uint32_t)data_ptr; //don't need these, but their are still present in the data file
     //data_ptr+=4;
@@ -487,7 +487,7 @@ uint64_t OsmRelation::getSerializedSize() const
     uint64_t size = sizeof(uint64_t) + //id
                     sizeof(uint32_t) + //version
                     sizeof(uint32_t) + //numMembers
-                    // type, ref and role null-termination for each member
+                    // type, ref and role null-termination for each member (roles string lengths are added later)
                     (sizeof(ELEMENT)+sizeof(uint64_t) + 1) * members.size() +
                     ::getSerializedSize(this->tags);
                     
@@ -591,7 +591,7 @@ void OsmRelation::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index
         chunk.put(mbr.type);
         chunk.put(mbr.ref);
         const char* str = mbr.role.c_str();
-        chunk.put(str, strlen(str));
+        chunk.put(str, strlen(str)+1);
     }    
     
     serializeTags(tags, chunk);

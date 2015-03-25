@@ -95,7 +95,6 @@ public:
     /* modify data without changing content, to make the underlying pages dirty
      * and force a writeback. This is mostly used to force linear streaming.
        writes of the backing mmap, instead of the much slower random access writes */
-    void touch();
     std::map<std::string, std::string> getTagSet() const;
     Tags getTags() const { return Tags( (char*)tagBytes, numTags);}
     uint64_t size() const;
@@ -170,6 +169,7 @@ private:
 class RelationStore {
 public:
     RelationStore(const char* indexFileName, const char* dataFileName);
+    RelationStore(std::string baseName);
     OsmRelation operator[](uint64_t relationId) const;    
     bool exists(uint64_t relationId) const;
     uint64_t getMaxNumRelations() const;

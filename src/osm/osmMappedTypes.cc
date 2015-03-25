@@ -225,22 +225,6 @@ uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
 }
 
 
-void OsmLightweightWay::touch() {
-    if (!this->isDataMapped)
-        return;
-
-#warning dirty-flagging hack that modifies geometric data
-    for (int i = 0; i < numVertices; i++)
-    {
-        if (vertices[i].lat != INVALID_LAT_LNG && vertices[i].lng != INVALID_LAT_LNG)
-        {
-            vertices[i].lat ^= 0x00000001;	//swap LSB
-            vertices[i].lng ^= 0x00000001;
-        }
-    }        
-}
-
-
 std::map<std::string, std::string> OsmLightweightWay::getTagSet() const
 {
     map<string, string> tags;
@@ -429,6 +413,11 @@ RelationStore::RelationStore(const char* indexFileName, const char* dataFileName
     mapRelationIndex = init_mmap(indexFileName, true, false);
     mapRelationData  = init_mmap(dataFileName, true, true);
 }
+
+RelationStore::RelationStore(string baseName): 
+    RelationStore( (baseName + ".idx").c_str(), (baseName + ".data").c_str())
+{ }
+
 
 OsmRelation RelationStore::operator[](uint64_t relationId) const
 {
