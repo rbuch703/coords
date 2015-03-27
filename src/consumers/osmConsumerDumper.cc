@@ -211,6 +211,8 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
     vertex_ptr[2*node.id+1] = node.lon;
 }
 
+static const uint64_t IS_WAY_REFERENCE = 0x8000000000000000ull;
+
 void OsmConsumerDumper::consumeWay ( OSMWay  &way)
 {
     nWays++;
@@ -227,10 +229,10 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
        ulimit at 1024 open files per process. So the bucket size needs to be adjusted
        once OSM reaches close to 10G node IDs, in order to not exceed the open file limit.
     */
-    static const uint64_t BUCKET_SIZE = 10000000;
+    static const uint64_t NODE_BUCKET_SIZE = 10000000;
     for (const OsmGeoPosition &ref : way.refs)
     {
-        uint64_t bucketNo = ref.id / BUCKET_SIZE;
+        uint64_t bucketNo = ref.id / NODE_BUCKET_SIZE;
         assert( bucketNo < 800 && "getting too close to the ulimit for #open files");
         
         if ( bucketNo >= nodeRefBuckets.size())
@@ -241,7 +243,7 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
             for (uint64_t i = oldNumBuckets; i <= bucketNo; i++)
                 nodeRefBuckets[i] = new NodeBucket(toBucketString(destinationDirectory, i));
         }
-        nodeRefBuckets[bucketNo]->addTuple(way.id, ref.id);
+        nodeRefBuckets[bucketNo]->addTuple(way.id | IS_WAY_REFERENCE, ref.id);
     }
     
 }

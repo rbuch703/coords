@@ -38,14 +38,14 @@ static string toBucketString(string baseName, uint64_t bucketId)
     return baseName + tmp + ".raw";
 }
 
-struct WayNodeTuple {
-    uint64_t wayId;
-    uint64_t nodeId;
+struct RefTuple {
+    uint64_t entityId;
+    uint64_t refId;
 };
 
-int compareTupleByNodeId(const WayNodeTuple* a, const WayNodeTuple* b)
+int compareTuplesByRefId(const RefTuple* a, const RefTuple* b)
 {
-    return a->nodeId - b->nodeId;
+    return a->refId - b->refId;
 }
 
 struct WayResolvedNodeTuple {
@@ -56,6 +56,36 @@ struct WayResolvedNodeTuple {
 };
 
 static const uint64_t RESOLVED_BUCKET_SIZE = 1000000;
+
+/* reads all references from 'file', sorts them by refId, deletes the file, and returns the sorted array*/
+vector<RefTuple> extractSortedReferences(const string fileName)
+{
+    FILE* fBucket = fopen(fileName.c_str(), "rb");
+    if (!fBucket)
+        return vector<RefTuple>();
+    fseek(fBucket, 0, SEEK_END);
+    uint64_t size = ftell(fBucket);
+    fseek(fBucket, 0, SEEK_SET);
+    MUST( size % (2*sizeof(uint64_t)) == 0, "bucket file corruption");
+    uint64_t numTuples = size / (2*sizeof(uint64_t));
+    RefTuple *tuples = new RefTuple[numTuples];
+
+    cout << "creating reverse index for bucket "<< fileName << endl;
+    MUST(1 == fread(tuples, size, 1, fBucket), "bucket read failed");
+    fclose(fBucket);
+    unlink( fileName.c_str());
+
+    //cout << "sorting bucket " << (bucketId-1) << endl;
+    qsort( tuples, numTuples, sizeof(RefTuple), (__compar_fn_t)compareTuplesByRefId);
+    
+    vector<RefTuple> res( tuples, tuples+numTuples);
+    delete [] tuples;
+    return res;
+
+
+}
+
+static const uint64_t IS_WAY_REFERENCE = 0x8000000000000000ull;
 
 void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 {
@@ -75,41 +105,35 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
     uint64_t numVertices = vertex_mmap.size / (2*sizeof(int32_t));
 
     uint64_t bucketId = 0;
-    FILE* fBucket;
-    while ( nullptr != (fBucket = fopen(
-        toBucketString(storageDirectory+"nodeRefs", bucketId++).c_str(), "rb")) )
+
+    vector<RefTuple> tuples;
+    while ( (tuples = extractSortedReferences(toBucketString(storageDirectory+"nodeRefs", bucketId++))).size() )
     {
-        fseek(fBucket, 0, SEEK_END);
-        uint64_t size = ftell(fBucket);
-        fseek(fBucket, 0, SEEK_SET);
-        MUST( size % (2*sizeof(uint64_t)) == 0, "bucket file corruption");
-        uint64_t numTuples = size / (2*sizeof(uint64_t));
-        WayNodeTuple *tuples = new WayNodeTuple[numTuples];
         
-        cout << "creating reverse index for bucket "<< (bucketId-1) << endl;
-        MUST(1 == fread(tuples, size, 1, fBucket), "bucket read failed");
-        fclose(fBucket);
-        
-        //cout << "sorting bucket " << (bucketId-1) << endl;
-        qsort( tuples, numTuples, sizeof(WayNodeTuple), (__compar_fn_t)compareTupleByNodeId);
-        
-        
-        for (uint64_t i = 0; i < numTuples; i++)
+        for ( RefTuple tuple: tuples)
         {
-            reverseNodeIndex.addReferenceFromWay(
-                tuples[i].nodeId, tuples[i].wayId);
+            if (! (tuple.entityId & IS_WAY_REFERENCE)) //is actually a reference from a relation
+            {
+                reverseNodeIndex.addReferenceFromRelation( tuple.refId, tuple.entityId);
+                //nothing more to do; we do not actually resolve node references from relations at this point.
+                continue;
+            }
             
-            if (tuples[i].nodeId < numVertices)
+            tuple.entityId &= ~IS_WAY_REFERENCE; //unset way reference flag to obtain the actual way id
+            reverseNodeIndex.addReferenceFromWay(
+                tuple.refId, tuple.entityId);
+            
+            if (tuple.refId < numVertices)
             {
                 WayResolvedNodeTuple tpl = {
-                    .wayId  = tuples[i].wayId, 
-                    .nodeId = tuples[i].nodeId, 
-                    .lat = vertexData[ tuples[i].nodeId * 2],
-                    .lng = vertexData[ tuples[i].nodeId * 2 + 1]};
+                    .wayId  = tuple.entityId, 
+                    .nodeId = tuple.refId, 
+                    .lat = vertexData[ tuple.refId * 2],
+                    .lng = vertexData[ tuple.refId * 2 + 1]};
                 
                 uint64_t bucketId = tpl.wayId / RESOLVED_BUCKET_SIZE;
                 assert( bucketId < 800 && "getting too close to OS ulimit for open files");
-                if (bucketId >= resolvedNodeBuckets.size() )
+                if (bucketId >= resolvedNodeBuckets.size())
                 {
                     uint64_t oldNumBuckets = resolvedNodeBuckets.size();
                     resolvedNodeBuckets.resize(bucketId+1, nullptr);
@@ -123,9 +147,7 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
             }
         }
 
-        unlink( toBucketString(storageDirectory+"nodeRefs", bucketId-1).c_str());
         
-        delete [] tuples;
     }
 
     /* try to delete the bucket file *after* the last one. 
@@ -221,37 +243,121 @@ void resolveWayNodeRefs(const string storageDirectory)
 }
 
 void resolveRefsFromRelations(string storageDirectory) {
-    RelationStore relStore( storageDirectory + "relations");
-    ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse", false);
-    ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", false);     
-    ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", false);
+    ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", false);
     
+    uint64_t bucketId = 0;
+    vector<RefTuple> tuples;
+    while ( (tuples = extractSortedReferences(toBucketString(storageDirectory+"wayRefs", bucketId++))).size() )
+    {
+        for ( RefTuple tuple: tuples)
+        {
+            MUST(!(tuple.entityId & IS_WAY_REFERENCE), "invalid way referencing another way");
+            reverseWayIndex.addReferenceFromRelation(tuple.refId, tuple.entityId);
+        }
+    }
+    
+    
+    
+     
+    ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", false);
+    bucketId = 0;
+    while ( (tuples = extractSortedReferences(toBucketString(storageDirectory+"relationRefs", bucketId++))).size() )
+    {
+        for ( RefTuple tuple: tuples)
+        {
+            MUST(!(tuple.entityId & IS_WAY_REFERENCE), "invalid way referencing a relation");
+            reverseRelationIndex.addReferenceFromRelation(tuple.refId, tuple.entityId);
+        }
+    }
+
+        
+}
+
+void addReference(vector<FILE*> &buckets, uint64_t bucketSize, string storageDirectory, string fileBaseName, uint64_t relationId, uint64_t refId, bool appendToExistingBucketFile)
+{
+    uint64_t bucketId = refId / bucketSize;
+    assert( bucketId < 800 && "getting too close to OS ulimit for open files");
+    if (bucketId >= buckets.size() )
+    {
+        uint64_t oldNumBuckets = buckets.size();
+        buckets.resize( bucketId + 1, nullptr);
+        
+        for (uint64_t i = oldNumBuckets; i < buckets.size(); i++)
+            //*append* the relation->node ref to the way->node ref data already present
+            buckets[i] = fopen( toBucketString(storageDirectory + fileBaseName, i).c_str(), appendToExistingBucketFile ? "ab" : "wb");
+    }
+    assert( buckets[bucketId]);
+    uint64_t tpl[2] = {relationId, refId};
+    MUST( fwrite( &tpl, sizeof(tpl), 1, buckets[bucketId]) == 1, "bucket write failed");
+}
+
+void addRelationDependenciesToBucketFiles(string storageDirectory)
+{
+    RelationStore relStore( storageDirectory + "relations");
+    
+
+    static const uint64_t BUCKET_SIZE = 10000000;
+    vector<FILE*> nodeRefBuckets;
+    vector<FILE*> wayRefBuckets;
+    vector<FILE*> relationRefBuckets;
+    
+    /*  Note: This loop *adds* the references from relations to nodes to the *existing* nodeRef buckets, 
+              which were created when 'coordsCreateStorage' registered the references from ways to nodes.
+              But it *replaces* the wayRefXXXX and relationRefXXXX files, because none were created before,
+              and any existing files with these names are leftovers from previous program executions (and
+              their content would corrupt the data files if reused).
+        
+     */
     for (const OsmRelation & rel : relStore)
     {
         for (const OsmRelationMember &member : rel.members)
         {
             switch (member.type)
             {
-                case NODE:         reverseNodeIndex.addReferenceFromRelation(member.ref, rel.id); break;
-                case WAY:           reverseWayIndex.addReferenceFromRelation(member.ref, rel.id); break;
-                case RELATION: reverseRelationIndex.addReferenceFromRelation(member.ref, rel.id); break;
+                case NODE:         
+                    addReference(nodeRefBuckets, BUCKET_SIZE, storageDirectory, "nodeRefs", rel.id, member.ref, true);
+                    break;
+                case WAY:
+                    addReference(wayRefBuckets, BUCKET_SIZE, storageDirectory, "wayRefs", rel.id, member.ref, false);
+                    break;
+                case RELATION: 
+                    addReference(relationRefBuckets, BUCKET_SIZE, storageDirectory, "relationRefs", rel.id, member.ref, false);
+                    break;
                 default: MUST(false, "invalid relation member type"); break;
             }
         }
     }
+
+    /* try to delete the bucket files *after* the last one. 
+     * Usually, these should not exist, and unlink() will just fail gracefully.
+     * But in case there are leftover bucket files from an earlier run, this will
+     * ensure that there is no unbroken sequence of files that contains both old 
+     * and new bucket files. Thus, this deletion ensures that subsequent tools do not
+     * use data from earlier runs.
+     */
+    unlink( toBucketString(storageDirectory+"nodeRefs", nodeRefBuckets.size()).c_str());
+    unlink( toBucketString(storageDirectory+"wayRefs", nodeRefBuckets.size()).c_str());
+    unlink( toBucketString(storageDirectory+"relationRefs", nodeRefBuckets.size()).c_str());
+    
+        
+    
 }
 
 int main(int /*argc*/, char** /*argv*/)
 {
     MUST(sizeof(WayResolvedNodeTuple) == 24, "data structure size mismatch");
-    MUST(sizeof(WayNodeTuple) == 2 * sizeof(uint64_t), "data structure size mismatch");
+    MUST(sizeof(RefTuple) == 2 * sizeof(uint64_t), "data structure size mismatch");
 
     string storageDirectory = "intermediate/";
     
     if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
         storageDirectory += "/";
+
+    cout << "Stage 0: adding dependencies from relations to bucket files" << endl;
+    addRelationDependenciesToBucketFiles(storageDirectory);
+
     
-    cout << "Stage 1: Registering reverse dependencies for all ways" << endl;
+    cout << "Stage 1: Registering reverse dependencies" << endl;
     cout << "         and creating bucket files for resolved node locations." << endl;
     buildReverseIndexAndResolvedNodeBuckets(storageDirectory);
     
