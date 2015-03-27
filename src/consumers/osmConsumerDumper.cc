@@ -28,19 +28,9 @@
 
 using namespace std;
 
-#define outputBasePath "intermediate/"
+//#define outputBasePath "intermediate/"
 
-static string toBucketString(string storageDirectory, uint64_t bucketId)
-{
-    char tmp [100];
-    MUST( snprintf(tmp, 100, "%05" PRIu64, bucketId) < 100, "bucket id overflow");
-    /* warning: do not attempt to integrate the following concatenation
-     *          into the sprintf statement above. 'storageDirectory' has
-     *          unbounded length, and thus may overflow any preallocated
-     *          char array.*/
-    return storageDirectory + "nodeRefs" + tmp + ".raw";
-}
-
+static const uint64_t BUCKET_SIZE = 10000000;
 
 static void truncateFile(string filename) {
     FILE* f= fopen(filename.c_str() , "wb+"); 
@@ -53,50 +43,11 @@ static void truncateFile(string filename) {
     fclose(f);
 }
 
-NodeBucket::NodeBucket(std::string filename)
-{
-    f = fopen(filename.c_str(), "wb");
-    unsavedTuples = new uint64_t[2* sizeof(uint64_t) * MAX_NUM_UNSAVED_TUPLES]; //one tuple consists of two uint64_t
-    numUnsavedTuples = 0;
-}
-
-NodeBucket::NodeBucket(): f(nullptr), unsavedTuples(nullptr), numUnsavedTuples(0)
-{
-}
-
-
-NodeBucket::~NodeBucket()
-{
-    MUST( (f == NULL) == (unsavedTuples == NULL), "corrupted bucket");
-    if (f && numUnsavedTuples)
-    {
-        MUST(fwrite(unsavedTuples, 2 * sizeof(uint64_t) * numUnsavedTuples, 1, f) == 1, "error writing bucket");
-        delete [] unsavedTuples;
-    }
-}
-
-void NodeBucket::addTuple(uint64_t wayId, uint64_t nodeId)
-{
-    assert( f && unsavedTuples && "bucket memory corruption");
-    if (numUnsavedTuples == MAX_NUM_UNSAVED_TUPLES)
-    {
-        MUST(fwrite(unsavedTuples, 2* sizeof(uint64_t) * numUnsavedTuples, 1, f) == 1, "error writing bucket");
-        numUnsavedTuples = 0;
-    }
-    
-    MUST( numUnsavedTuples < MAX_NUM_UNSAVED_TUPLES, "bucket memory corruption");
-    
-    unsavedTuples[ 2*numUnsavedTuples  ] = wayId;
-    unsavedTuples[ 2*numUnsavedTuples+1] = nodeId;
-    numUnsavedTuples += 1;
-}
-
-
-OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0), destinationDirectory(destinationDirectory)
+OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): 
+    nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0), 
+    destinationDirectory( (destinationDirectory.back() == '/' || destinationDirectory.back() == '\\' ) ? destinationDirectory : destinationDirectory + "/"), 
+    nodeRefBuckets ( this->destinationDirectory + "nodeRefs", BUCKET_SIZE, false)
 {    
-    MUST(this->destinationDirectory.length() > 0, "empty destination given");
-    if (this->destinationDirectory.back() != '/' && this->destinationDirectory.back() != '\\')
-        this->destinationDirectory += "/";
 
     nodesDataFilename      = this->destinationDirectory + "nodes.data";
     nodesIndexFilename     = this->destinationDirectory + "nodes.idx";
@@ -130,9 +81,6 @@ OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): nNodes(0
 
     relation_index = init_mmap(relationsIndexFilename.c_str());
     relationData = new ChunkedFile(relationsDataFilename.c_str());
-
-
-    //FIXME: delete leftover node and way bucket files
 };
 
 OsmConsumerDumper::~OsmConsumerDumper()
@@ -149,40 +97,7 @@ OsmConsumerDumper::~OsmConsumerDumper()
 
     cout << "statistics: " << nNodes << " nodes, " << nWays << " ways, " << nRelations << " relations" << endl;
 
-    /* try to delete the bucket file *after* the last one. 
-     * Usually, this one should not exist, and unlink() will just fail gracefully.
-     * But in case there are leftover bucket files from an earlier run, this will
-     * ensure that there is no unbroken sequence of files that contains both old 
-     * and new bucket files. Thus, this deletion ensures that subsequent tools do not
-     * use data from earlier runs.
-     */
-    unlink( toBucketString(destinationDirectory, nodeRefBuckets.size()).c_str());
-
-
-    for (NodeBucket* bucket : nodeRefBuckets)
-        delete bucket;
 }
-
-
-//virtual ~OsmConsumerDumper() {};
-//protected:
-
-//pad the data file to a multiple of the page size, so that it can be opened using a memory map
-/*static void padFile(FILE* file)
-{
-    uint64_t file_size = ftello(file);
-    uint32_t page_size = sysconf(_SC_PAGESIZE);
-
-    if (file_size % page_size != 0)
-    {
-        uint32_t padding = page_size - (file_size % page_size);
-        uint8_t dummy = 0;
-        assert(sizeof(dummy) == 1);
-        while (padding--)
-        fwrite(&dummy, sizeof(dummy), 1, file);
-    }
-    assert( ftello(file) % page_size == 0);
-}*/
 
 
 void OsmConsumerDumper::filterTags(vector<OSMKeyValuePair> &tags) const
@@ -229,23 +144,9 @@ void OsmConsumerDumper::consumeWay ( OSMWay  &way)
        ulimit at 1024 open files per process. So the bucket size needs to be adjusted
        once OSM reaches close to 10G node IDs, in order to not exceed the open file limit.
     */
-    static const uint64_t NODE_BUCKET_SIZE = 10000000;
-    for (const OsmGeoPosition &ref : way.refs)
-    {
-        uint64_t bucketNo = ref.id / NODE_BUCKET_SIZE;
-        assert( bucketNo < 800 && "getting too close to the ulimit for #open files");
-        
-        if ( bucketNo >= nodeRefBuckets.size())
-        {
-            uint64_t oldNumBuckets = nodeRefBuckets.size();
-            nodeRefBuckets.resize(bucketNo+1);
-            
-            for (uint64_t i = oldNumBuckets; i <= bucketNo; i++)
-                nodeRefBuckets[i] = new NodeBucket(toBucketString(destinationDirectory, i));
-        }
-        nodeRefBuckets[bucketNo]->addTuple(way.id | IS_WAY_REFERENCE, ref.id);
-    }
     
+    for (const OsmGeoPosition &ref : way.refs)
+        nodeRefBuckets.write(ref.id, way.id | IS_WAY_REFERENCE);
 }
 
 void OsmConsumerDumper::consumeRelation( OsmRelation &relation) 
