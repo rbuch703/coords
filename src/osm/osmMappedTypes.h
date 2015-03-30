@@ -92,9 +92,6 @@ public:
     void     serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     uint8_t* serialize( uint8_t* dest) const;
 
-    /* modify data without changing content, to make the underlying pages dirty
-     * and force a writeback. This is mostly used to force linear streaming.
-       writes of the backing mmap, instead of the much slower random access writes */
     std::map<std::string, std::string> getTagSet() const;
     Tags getTags() const { return Tags( (char*)tagBytes, numTags);}
     uint64_t size() const;

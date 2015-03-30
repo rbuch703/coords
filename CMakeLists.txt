@@ -55,6 +55,15 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/osm/osmMappedTypes.cc 
                src/containers/chunkedFile.cc)
 
+ADD_EXECUTABLE(multipolygonReconstructor
+               src/multipolygonReconstructor.cc
+               src/mem_map.cc
+               src/osm/osmTypes.cc 
+               src/osm/osmMappedTypes.cc
+               src/containers/chunkedFile.cc               
+               )
+
+
 ADD_CUSTOM_TARGET(man ALL)
 
 ADD_CUSTOM_COMMAND(

@@ -81,6 +81,8 @@ typedef struct
 
 bool operator==(const OsmGeoPosition &a, const OsmGeoPosition &b);
 bool operator!=(const OsmGeoPosition &a, const OsmGeoPosition &b);
+bool operator< (const OsmGeoPosition &a, const OsmGeoPosition &b); //just an arbitrary ordering for containers that need one
+
 OsmGeoPosition operator-(const OsmGeoPosition &a, const OsmGeoPosition &b);
 
 struct OSMWay

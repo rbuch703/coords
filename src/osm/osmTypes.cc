@@ -320,7 +320,7 @@ ostream& operator<<(ostream &out, const OSMNode &node)
 
 bool operator==(const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat == b.lat && a.lng == b.lng; }
 bool operator!=(const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat != b.lat || a.lng != b.lng; }
-
+bool operator< (const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat < b.lat || (a.lat == b.lat && a.lng < b.lng);}
 
 
 
