@@ -57,6 +57,8 @@ ADD_EXECUTABLE(coordsCreateTiles
 
 ADD_EXECUTABLE(multipolygonReconstructor
                src/multipolygonReconstructor.cc
+               src/geom/ringSegment.cc
+               src/geom/ring.cc
                src/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc

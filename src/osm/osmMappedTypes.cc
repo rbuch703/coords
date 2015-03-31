@@ -479,7 +479,7 @@ bool RelationStore::RelationIterator::operator !=( RelationIterator &other) cons
 void RelationStore::RelationIterator::advanceToNextRelation() {
     uint64_t endPos = host.getMaxNumRelations();
     uint64_t *relationIndex = (uint64_t*)host.mapRelationIndex.ptr;
-    while (relationIndex[pos] == 0 && pos < endPos)
+    while (pos < endPos && relationIndex[pos] == 0)
         pos+=1;            
 }        
 

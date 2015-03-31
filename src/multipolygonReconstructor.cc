@@ -6,76 +6,12 @@
 #include <list>
 #include <string>
 
-#include <osm/osmMappedTypes.h>
-
+#include "osm/osmMappedTypes.h"
+#include "geom/ringSegment.h"
+#include "geom/ring.h"
 
 using namespace std;
 
-class RingSegment
-{
-public:
-    RingSegment(const OsmGeoPosition &start, const OsmGeoPosition &end):
-        start(start), end(end), child1(nullptr), child2(nullptr), 
-        isReversed(false)//, removeEnd1(false)
-    {
-    }
-    
-    RingSegment( const OsmLightweightWay &way):
-        wayId(way.id), child1(nullptr), child2(nullptr), isReversed(false)
-    {
-        MUST(way.numVertices > 0, "cannot create ring from way without members");
-        start = way.vertices[0];
-        end   = way.vertices[way.numVertices - 1];
-    }
-
-    RingSegment( RingSegment *pChild1, RingSegment *pChild2):
-        wayId(-1), child1(pChild1), child2(pChild2), isReversed(false) 
-    {
-        
-            if (child2->getEndPosition() == child1->getStartPosition() ||
-                child2->getEndPosition() == child1->getEndPosition())
-                child2->reverse();
-            
-            /* now (the) one of the end points of child2 that can be connected to
-             * child1 is the 'start' position of child2 */
-            
-            if (child1->getStartPosition() == child2->getStartPosition())
-                child1->reverse();
-                
-            MUST( child1->getEndPosition() == child2->getStartPosition(), "invalid geometry processing");
-            
-                       
-        start = child1->getStartPosition();
-        end   = child2->getEndPosition();
-    }
-    bool isClosed() const { return (start == end); }
-    OsmGeoPosition getStartPosition() const { return isReversed ? end    : start; }
-    OsmGeoPosition getEndPosition()   const { return isReversed ? start  : end;   }
-    RingSegment*   getFirstChild()    const { return isReversed ? child2 : child1;}
-    RingSegment*   getSecondChild()   const { return isReversed ? child1 : child2;}
-
-private:
-    void reverse() { isReversed = !isReversed; }
-
-private:
-    /* id of the OSM way this ring segment is based on (in which case the ring segment must
-       not have children); or -1 if the ring segment is not directly based on a single OSM way
-       and does have children */
-    int64_t wayId; 
-    OsmGeoPosition start;
-    OsmGeoPosition end;
-    
-    /* NOTE: RingSegment does *not* take ownership of the child RingSegments it points to.
-     *       Those have to be delete'ed separately */
-    RingSegment *child1, *child2; 
-    bool isReversed;       // reverse node order before connecting to its sibling
-
-    //bool removeEnd;     // remove end node  when connecting to the sibling 
-                        // (because it's a duplicate from its sibling node);
-                        // 'end' refers to the last node *after* a possible
-                        // reversal (see above).
-
-};
 
 
 int main()
@@ -84,7 +20,10 @@ int main()
     LightweightWayStore wayStore("intermediate/ways");
     
     for (const OsmRelation &rel : relStore)
+    //int dummy = 0;
+    //for (OsmRelation rel = relStore[60198]; dummy == 0; dummy++)
     {
+        //cout << "processing relation " << rel << endl;
         map<string, string> tags(rel.tags.begin(), rel.tags.end());;
         if ((! tags.count("type")) || (tags["type"] != "multipolygon"))
             continue;
@@ -170,14 +109,24 @@ int main()
 
         if (openEndPoints.size())
         {
-            cerr << "[WARN] multipolygon relation " << rel.id << " has open way end points: " << endl;
+            cerr << "[WARN] multipolygon relation " << rel.id << " has open way end points. Will ignore all affected open rings: " << endl;
             for ( const pair<OsmGeoPosition, RingSegment*> &kv : openEndPoints)
             {
-                cerr << "\t" << kv.first.id << " (" << kv.first.lat << ", " << kv.first.lng << ")" << endl;
+                cerr << "\tnode " << kv.first.id << " (" << (kv.first.lat/10000000.0) << "°, " << (kv.first.lng/10000000.0) << "°)" << endl;
+            }
+        }
+        
+        for (RingSegment* rootSegment : closedRings)
+        {
+            Ring ring(rootSegment, wayStore);
+            //cout << "flattened " << ring.wayIds.size() << " ways to list of " << ring.vertices.size() << " vertices" << endl;
+/*            for (OsmGeoPosition pos : vertices)
+            {
+                cout << pos.lat << ", " << pos.lng << endl;
             }
             
+            exit(0);*/
         }
-
         //cout << rel.members.size() << ", " << rel << endl;
     }
 
