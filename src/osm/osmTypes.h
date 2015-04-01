@@ -63,7 +63,6 @@ struct OSMNode
     bool operator!=(const OSMNode &other) const;
     bool operator< (const OSMNode &other) const;
     uint64_t getSerializedSize() const;    
-//    OSMVertex toVertex() const {return OSMVertex(lat, lon);}
     uint64_t id;
     uint32_t version;
     int32_t lat;    //needs to be signed! -180° < lat < 180°

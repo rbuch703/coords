@@ -65,6 +65,8 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/containers/chunkedFile.cc               
                )
 
+TARGET_LINK_LIBRARIES( multipolygonReconstructor -lgeos )
+
 
 ADD_CUSTOM_TARGET(man ALL)
 
