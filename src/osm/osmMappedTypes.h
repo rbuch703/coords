@@ -125,7 +125,7 @@ class LightweightWayStore {
 
 public:
     LightweightWayStore(const char* indexFileName, const char* dataFileName, bool optimizeForStreaming = false);
-    LightweightWayStore(const std::string baseName, bool optimizeForStreaming = false);
+    LightweightWayStore(const std::string &baseName, bool optimizeForStreaming = false);
     OsmLightweightWay operator[](uint64_t wayId);
     bool exists(uint64_t wayId) const;
     void syncRange(uint64_t lowWayId, uint64_t highWayId) const ;

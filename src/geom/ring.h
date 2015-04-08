@@ -13,10 +13,10 @@
 
 class Ring {
 public:
-    Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64_t> wayIds);
+    //Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64_t> wayIds);
     
     // note: 'Ring' takes ownership of 'geosPolygon', and handles its deletion
-    Ring(geos::geom::Geometry *geosPolygon, const std::vector<uint64_t> wayIds);
+    Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds);
 
     ~Ring();
 //    Ring(RingSegment *rootSegment, LightweightWayStore &ways);
@@ -42,22 +42,21 @@ public:
     bool interiorIntersectsWith(const Ring &other) const;
     
     
-    
 //private:
 public:
 //    std::vector<OsmGeoPosition> vertices;
     std::vector<uint64_t>       wayIds;
     std::vector<Ring*>          children;
-    /* the geometric factory has to have a life time at least as long as
-       any objects it creates. So instead of created one on-demand, we 
-       store it as an instance variable for each Ring that may need to build
-       geometries. */
-    //geos::geom::GeometryFactory *geoFactory;
-    /* Ownership of geosRing stays with the geoFactory*/
-    geos::geom::Geometry      *geosPolygon;
+    geos::geom::Polygon      *geosPolygon;
     double area;
 
+public:
+static std::vector<geos::geom::Polygon*> createSimplePolygons(const std::vector<OsmGeoPosition> &vertices, uint64_t relId);
+
 private:
+/* the geometric factory has to have a life time at least as long as
+   any objects it creates. So instead of created one on-demand, we 
+   store it as a singleton class variable */
 static geos::geom::GeometryFactory factory;  
 
 };

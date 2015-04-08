@@ -16,7 +16,7 @@
 
 geos::geom::GeometryFactory Ring::factory;  
 
-
+#if 0
 Ring::Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64_t> wayIds):
     wayIds(wayIds)
 ///*RingSegment *rootSegment, LightweightWayStore &ways*/)
@@ -28,18 +28,6 @@ Ring::Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64
     //geoFactory = new geos::geom::GeometryFactory();
     //std::cerr << pmFixed.getScale() << std::endl;
 
-    geos::geom::CoordinateSequence *seq = factory.getCoordinateSequenceFactory()->create( (size_t)0, 2);
-    
-    for (const OsmGeoPosition &loc : vertices)
-        seq->add(geos::geom::Coordinate(loc.lat, loc.lng));
-    
-    geos::geom::LinearRing *geosRing = factory.createLinearRing( seq );
-    
-    geos::geom::Geometry *tmp = factory.createPolygon(geosRing, nullptr);;
-    /* somewhat dirty hack: a buffer of 0.0 it a no-op for valid rings,
-       but fixes many types of invalid ones. */
-    this->geosPolygon = tmp->buffer(0.0);
-    delete tmp;
     
     /*area = 0.0;
     for (uint64_t i = 0; i < vertices.size()-1; i++)
@@ -53,14 +41,67 @@ Ring::Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64
     area = this->geosPolygon->getArea();
     //std::cout << "area: " << area << std::endl;
 }
-
-Ring::Ring(geos::geom::Geometry *geosPolygon, const std::vector<uint64_t> wayIds):
+#endif
+Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds):
     wayIds(wayIds), geosPolygon(geosPolygon)
 {
+    assert(geosPolygon->getNumInteriorRing() == 0 || "Not a simple polygon");
     area = this->geosPolygon->getArea();
     
 }
 
+std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<OsmGeoPosition> &vertices, uint64_t relId)
+{
+    geos::geom::CoordinateSequence *seq = factory.getCoordinateSequenceFactory()->create( (size_t)0, 2);    //start with 0 members; each member will have 2 dimensions
+    
+    for (const OsmGeoPosition &loc : vertices)
+        seq->add(geos::geom::Coordinate(loc.lat, loc.lng));
+    
+    geos::geom::LinearRing *geosRing = factory.createLinearRing( seq );
+    
+    geos::geom::Geometry *tmp = factory.createPolygon(geosRing, nullptr);;
+    /* somewhat dirty hack: a buffer of 0.0 is a no-op for valid rings,
+       but fixes many types of invalid ones. Unfortunately, it does not
+       guarantee that the result is a *single* polygon.*/
+    
+    geos::geom::Geometry *healed = tmp->buffer(0.0);
+    delete tmp;
+
+    if (healed->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
+    {
+        std::vector<geos::geom::Polygon*> res;
+        res.push_back(dynamic_cast<geos::geom::Polygon*>(healed));
+        return res;
+    }
+
+    std::cerr << "[WARN] fixing geometry of relation " << relId << " created geometry of type " << healed->getGeometryType() << std::endl;
+
+    std::vector<geos::geom::Polygon*> res;
+    
+    switch (healed->getGeometryTypeId())
+    {
+        case geos::geom::GEOS_MULTIPOLYGON: 
+            std::cerr << "\tmultipolygon consists of" << std::endl;
+            for (uint64_t i = 0; i < healed->getNumGeometries(); i++)
+            {
+                const geos::geom::Geometry *part = healed->getGeometryN(i);
+                std::cerr << "\t\t" << part->getGeometryType();
+                if (part->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
+                    res.push_back(dynamic_cast<geos::geom::Polygon*>(part->clone()));
+                else
+                    std::cerr << " (skipping)";
+                std::cerr << std::endl;
+            }
+            delete healed;
+            return res;
+            break;
+        default: 
+            std::cerr << "\tdon't know how to handle geometry type. Skipping." << std::endl;
+            break;
+    }    
+    
+    return res;
+}
 
 Ring::~Ring()
 {

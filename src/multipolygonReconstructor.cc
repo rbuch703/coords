@@ -6,12 +6,103 @@
 #include <list>
 #include <string>
 #include <algorithm> //for sort()
+#include <geos/geom/Polygon.h>
 
 #include "osm/osmMappedTypes.h"
 #include "geom/ringSegment.h"
 #include "geom/ring.h"
 
 using namespace std;
+
+/* The high-level algorithm to create multipolygons from a multipolygon relation is as follows:
+ *     1. ignore all non-way members
+ *     2. build geometric rings (node sequences that start and end with the same node) by connecting ways
+ *     3. from all rings build a geometric "contains" hierarchy (each ring becomes the child node to that
+ *       ring which directly contains it)
+ *     4. from the "contains" hierarchy, assign inner/outer roles to form the multipolygon (not yet implemented)
+ *     5. import tags from outer ways if necessary (not yet implemented)
+ *
+ *  Details:
+ *  ========
+ *
+ *  2. Building Geometric Rings:
+ *  ------------------
+ *  Basic idea: Repeatedly find ways that share at least one endpoint, and connect those ways until none are left. 
+ *              Then, discard any connected ways that do not start and end at the same point. Those are not closed
+ *              and thus represent invalid parts of a multipolygon geometry. The remaining ways are the rings.
+ *
+ *  Implementation details:
+ *  - In order to connect two ways, one way may need to be reversed to fit. In extreme cases, ways have to be reversed
+ *    for each connecting of two ways. This could potentially impact performance negatively. 
+ *    This implementation instead
+ *    first creates an abstract RingSegment representation for each way, containing only its two end points, a 
+ *    reference to the wayId, and a boolean 'reversed' flag storing whether a way needs to be reversed before connecting
+ *    it (but without actually performing the reversion). The finding and 'connecting' of ways is then performed only
+ *    on the RingSegments: Whenever two RingSegments should be connected, a new RingSegment is created that contains both
+ *    original segments as its child, and contains the open end points of its children (i.e. those that are not connected
+ *    to each other). The 'reversed' flag of the children is set accordingly. From that point on, the two original
+ *    RingSegments are no longer considered for connection to other segments, but only the newly created one is. 
+ *    This effectively creates a binary tree of RingSegments for each ring, where the end points of the top-most 
+ *    RingSegment are identical (if the hierarchy indeed represents a closed ring).
+ *    Once built, this hierarchy is then flattened into the actual ring by traversing it in-order, and adding the
+ *    nodes of all ways referenced by traversed RingSegments to the output (along with the list of wayIds for
+ *    later algorithms that might need that list). In this process, each way is reversed *at most once*.
+ *
+ *  - Finding pairs of ways that can be connected would be ineffective if implemented naively (testing each way against
+ *    every other way). Instead, we use a dictionary to map open (i.e. unconnected) endpoints to the corresponding
+ *    RingSegment and test for connectable RingSegments by checking whether a way's endpoint is present in 
+ *    that dictionary.
+ *    In detail, the dictionary is initially empty, and RingSegments are added to it incrementally: Each RingSegment is only
+ *    added to the dictionary, if none of its endpoints are already in there. Otherwise, the RingSegment
+ *    belonging to that endpoint is removed from the dictionary (i.e. both of its endpoints are removed), a new
+ *    merged RingSegment is created covering the two segments, and only the new RingSegment is re-considered for 
+ *    insertion into the dictionary. Any RingSegment that is closed in itself is never added to the dictionary, but
+ *    is directly stored in a list of closed rings. If the set of all rings form a valid multipolygon, the list of open
+ *    endpoints will be empty, as all rings have been closed. Otherwise (for invalid geometry), the set of open rings
+ *    is discarded. 
+ *    This approach should only need O(n log(n) ) time (adding at most O(n) RingSegments to the dictionary, with each
+ *    insertion requiring O(log(n)) time) in the number of RingSegments, while the naive approach
+ *    requires O(n²) time (testing every way against every other way).
+ *
+ *
+ *    3. Building the 'Contains' Hierarchy
+ *    ====================================
+ *    Multipolygons consist of 'outer' Rings, and 'holes' inside these Rings. In theory, all OSM multipolygon members 
+ *    are correctly tagged with the corresponding 'outer' and 'inner' roles. In practice, however, role tagging can be
+ *    wrong, inconsistent or missing, and the geometry itself may be inconsistent (e.g. an 'outer' ring overlapping
+ *    with an 'inner' ring. Thus, to guarantee creation of valid multipolygons, role tagging must be ignored. Instead,
+ *    geometric inconsistencies must be healed, and the correct roles be reconstructed geometrically.
+ *    To that end, a 'contains' hierarchy of rings is created, where each ring can have any number of other rings as
+ *    children, and a ring A is a direct parent of another ring B iff. A contains B and there is no other ring C which
+ *    is contained in A and in turn contains B. From that hierarchy, the outer/inner roles can easily be determined:
+ *    any ring on the top level is an 'outer' ring. Any ring on the next level is an 'inner' ring (a hole in an 'outer'
+ *    ring). Then, the roles 'outer' and 'inner' alternate for each additional level (e.g. all rings on the third level
+ *    are 'outer' rings, representing a polygon inside a hole of another polygon).
+ *    
+ *    To build this hierarchy efficiently, it is observed that a ring A can only contain another ring B, if the area
+ *    of A is bigger than that of B. Thus, all rings are sorted by area in descending order, and are inserted 
+ *    into the hierarchy one by one in that order. So, no ring can contain any ring inserted into the hierarchy before
+ *    itself, and it is thus guaranteed that once inserted the position of a ring inside the hierarchy never has to
+ *    change.
+ *
+ *    In detail, a ring is inserted into the hierarchy as follows. Each ring is inserted recursively, starting with
+ *    the top level (the list of all top-level rings not contained in any other ring.): at each level the ring under 
+ *    consideration may be:
+ *    - not overlapping with any other ring at that level. In that case it is inserted into the hierarchy at that level.
+ *    - overlap with another ring at that level (i.e. there is some geometry shared by both rings, and some geometry
+ *      exclusive to either ring). In that case the multipolygon geometry is inconsistent (as rings must
+ *      not overlap). This inconsistency is healed by computing the 'union' of the two overlapping rings as a new ring.
+ *      This union is guaranteed to have an area bigger than any of the two original rings, is guaranteed to still be a
+ *      ring (if the overlap is at least of dimension 1, i.e. a line or an area), and is guaranteed to still be directly
+ *      contained in the parent node. Thus, the two original rings are 
+ *      discarded, and the new one is added to the hierarchy at the current level *instead* of the overlapping one 
+ *      that was present before.
+ *    - be completely contained inside another ring at that level. In that case it is inserted recursively as a child
+ *      to that ring.
+ *
+ *    
+ */
+
 
 static void flatten(RingSegment *closedRing, LightweightWayStore &ways,
                     std::vector<OsmGeoPosition> &vertices, 
@@ -100,7 +191,13 @@ void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint
 
             vector<uint64_t> wayIds( root->wayIds.begin(), root->wayIds.end());
             wayIds.insert( wayIds.end(), ring->wayIds.begin(), ring->wayIds.end() );
-            Ring* merged = new Ring( root->geosPolygon->Union(ring->geosPolygon), wayIds);
+            /* FIXME: 'merged' could theoretically be a (multi)polygon instead of a simple ring. This would corrupt
+             *        later data processing. Make sure that 'merged' is either a single ring, or add its sub-rings
+             *        to the hierarchy individually. */
+            Ring* merged = NULL;
+            //Ring* merged = new Ring( root->geosPolygon->Union(ring->geosPolygon), wayIds);
+            cout << "merged geometry is of type " << merged->geosPolygon->getGeometryType() << endl;
+            
             
             /* unions cannot reduce the area, and a reduction would corrupt this algorithm,
              * which assumes that rings are inserted sorted descending by area. */
@@ -138,6 +235,22 @@ void deleteRecursive(Ring* ring)
     delete ring;
 }
 
+void printRingSegmentHierarchy( RingSegment* segment, int depth = 0)
+{
+    string depthSpaces = "";
+    for (int i = 0; i < depth; i++)
+        depthSpaces += "  ";
+        
+    cout << depthSpaces /*<< "segment " << segment*/ << " (way " <<  segment->wayId << ") [" 
+         << segment->start.id << "; " << segment->end.id << "]" << endl;
+    if (segment->child1)
+        printRingSegmentHierarchy(segment->child1, depth+1);
+        
+    if (segment->child2)
+        printRingSegmentHierarchy(segment->child2, depth+1);
+}
+
+
 int main()
 {
 
@@ -159,7 +272,7 @@ int main()
     
     for (const OsmRelation &rel : relStore)
     //int dummy = 0;
-    //for (OsmRelation rel = relStore[120651]; dummy == 0; dummy++)
+    //for (OsmRelation rel = relStore[7660]; dummy == 0; dummy++)
     {
         map<string, string> tags(rel.tags.begin(), rel.tags.end());
         if ((! tags.count("type")) || (tags["type"] != "multipolygon"))
@@ -183,7 +296,7 @@ int main()
             
             if (! wayStore.exists(mbr.ref))
             {
-                cerr << "[WARN] relation " << rel.id << " reference way " << mbr.ref << ", which is not part of the data set" << endl;
+                cerr << "[WARN] relation " << rel.id << " references way " << mbr.ref << ", which is not part of the data set" << endl;
                 continue;
             }
             
@@ -246,10 +359,11 @@ int main()
 
         if (openEndPoints.size())
         {
-            cerr << "[WARN] multipolygon relation " << rel.id << " has open way end points. Will ignore all affected open rings: " << endl;
+            cerr << "[WARN] multipolygon relation " << rel.id << " has unconnected nodes. Will ignore all affected open rings: " << endl;
             for ( const pair<OsmGeoPosition, RingSegment*> &kv : openEndPoints)
             {
-                cerr << "\tnode " << kv.first.id << " (" << (kv.first.lat/10000000.0) << "°, " << (kv.first.lng/10000000.0) << "°)" << endl;
+                //printRingSegmentHierarchy( kv.second);
+                cerr << "\tnode " << kv.first.id << " (" << (kv.first.lat/10000000.0) << "°, " << (kv.first.lng/10000000.0) << "°) ->" << kv.second << endl;
             }
         }
         
@@ -268,26 +382,20 @@ int main()
                 continue;
             }
             
-            multipolygonRings.push_back( new Ring(vertices, wayIds) );
-            //cout << ring.area << endl;
-            //cout << "flattened " << ring.wayIds.size() << " ways to list of " << ring.vertices.size() << " vertices" << endl;
-/*            for (OsmGeoPosition pos : vertices)
-            {
-                cout << pos.lat << ", " << pos.lng << endl;
-            }
+            std::vector<geos::geom::Polygon*> polygons = Ring::createSimplePolygons(vertices, rel.id);
             
-            exit(0);*/
+            for (geos::geom::Polygon* polygon : polygons)
+                multipolygonRings.push_back( new Ring(polygon, wayIds) );
         }
         
         //cout << "processing relation " << rel.id << endl;
         std::sort( multipolygonRings.begin(), multipolygonRings.end(), lessThan);
-        vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
-        for (Ring* ring : roots)
-            deleteRecursive(ring);
-
-        /*for (Ring* ring : multipolygonRings)
-            cout << "\tring with area " << ring->area << endl;*/
-        //cout << rel.members.size() << ", " << rel << endl;
+        
+        for (Ring* r: multipolygonRings)
+            delete r;
+        //vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
+        //for (Ring* ring : roots)
+        //    deleteRecursive(ring);
     }
 
 
