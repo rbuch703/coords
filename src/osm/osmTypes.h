@@ -103,7 +103,6 @@ struct OsmRelationMember
     OsmRelationMember( ELEMENT member_type, uint64_t member_ref, std::string member_role):
         type(member_type), ref(member_ref), role(member_role) { }
 
-    void serialize( FILE* data_file, mmap_t *index_map, const std::map<OsmKeyValuePair, uint8_t> *tag_symbols) const;
     uint32_t getDataSize() const;
     ELEMENT type;  //whether the member is a node, way or relation
     uint64_t ref;  //the node/way/relation id

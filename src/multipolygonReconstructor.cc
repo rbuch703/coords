@@ -9,8 +9,10 @@
 #include <geos/geom/Polygon.h>
 
 #include "osm/osmMappedTypes.h"
+#include "containers/bucketFileSet.h"
 #include "geom/ringSegment.h"
 #include "geom/ring.h"
+#include "geom/ringAssembler.h"
 
 using namespace std;
 
@@ -104,7 +106,7 @@ using namespace std;
  */
 
 
-static void flatten(RingSegment *closedRing, LightweightWayStore &ways,
+static void flatten(RingSegment *closedRing, map<uint64_t, OsmLightweightWay> &ways,
                     std::vector<OsmGeoPosition> &vertices, 
                     std::vector<uint64_t> &wayIds, bool globalReversal = false)
 {
@@ -250,6 +252,29 @@ void printRingSegmentHierarchy( RingSegment* segment, int depth = 0)
         printRingSegmentHierarchy(segment->child2, depth+1);
 }
 
+bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const map<uint64_t, OsmLightweightWay> &ways)
+{
+    if (mbr.type != WAY)
+    {
+        cerr << "[WARN] ref to id=" << mbr.ref << " of invalid type '"<< (mbr.type == NODE ? "node" : mbr.type == RELATION ? "relation" : "<unknown>")<<"' in multipolygon relation " << relationId << endl;
+        return false;
+    }
+    
+    if (! ways.count(mbr.ref))
+    {
+        cerr << "[WARN] relation " << relationId << " references way " << mbr.ref << ", which is not part of the data set" << endl;
+        return false;
+    }
+    
+
+    if (ways.at(mbr.ref).numVertices < 1)
+    {
+        cerr << "[WARN] way " << mbr.ref << " has no member nodes; ignoring it" << endl;
+        return false;
+    }
+    
+    return true;
+}
 
 int main()
 {
@@ -268,134 +293,82 @@ int main()
     exit(0);*/
 
     RelationStore relStore("intermediate/relations");
-    LightweightWayStore wayStore("intermediate/ways");
+    //LightweightWayStore wayStore("intermediate/ways");
+    static const int RELATION_WAYS_BUCKET_SIZE = 100000;
     
-    for (const OsmRelation &rel : relStore)
-    //int dummy = 0;
-    //for (OsmRelation rel = relStore[7660]; dummy == 0; dummy++)
+    BucketFileSet<int> relationWaysBuckets("intermediate/referencedWays",  RELATION_WAYS_BUCKET_SIZE, true);
+    
+    for (uint64_t bucketId = 0; bucketId < relationWaysBuckets.getNumBuckets(); bucketId++)
     {
-        map<string, string> tags(rel.tags.begin(), rel.tags.end());
-        if ((! tags.count("type")) || (tags["type"] != "multipolygon"))
-            continue;
+        std::cout << "reading way bucket " << (bucketId+1) << "/" << relationWaysBuckets.getNumBuckets() << std::endl;
+        FILE* f = relationWaysBuckets.getFile(bucketId* RELATION_WAYS_BUCKET_SIZE);
+        MUST(f != nullptr, "cannot open bucket file");
         
-        /* cannot be a std::vector, because we use pointers into this container,
-         * and pointers into a vector are not guaranteed to be stable when adding
-         * or removing elements from/to it (causing a resize of the underlying array) */
-        list<RingSegment> ringSegments;
-        vector<RingSegment*> closedRings;
+        map<uint64_t, OsmLightweightWay> ways;
         
-        map<OsmGeoPosition, RingSegment*> openEndPoints;
-        
-        for ( const OsmRelationMember &mbr : rel.members)
+        int ch;
+        while ( (ch = fgetc(f)) )
         {
-            if (mbr.type != WAY)
-            {
-                cerr << "[WARN] ref to id=" << mbr.ref << " of invalid type '"<< (mbr.type == NODE ? "node" : mbr.type == RELATION ? "relation" : "<unknown>")<<"' in multipolygon relation " << rel.id << endl;
+            ungetc(ch, f);
+            OsmLightweightWay way(f);
+            ways.insert(make_pair( way.id, way));
+        }
+        
+        for (uint64_t relId =  bucketId   * RELATION_WAYS_BUCKET_SIZE;
+                      relId < (bucketId+1)* RELATION_WAYS_BUCKET_SIZE;
+                      relId++)
+        //for (const OsmRelation &rel : relStore)
+        //int dummy = 0;
+        //for (OsmRelation rel = relStore[7660]; dummy == 0; dummy++)
+        {
+            if (! relStore.exists(relId))
                 continue;
-            }
-            
-            if (! wayStore.exists(mbr.ref))
-            {
-                cerr << "[WARN] relation " << rel.id << " references way " << mbr.ref << ", which is not part of the data set" << endl;
+                
+            OsmRelation rel = relStore[relId];
+        
+            map<string, string> tags(rel.tags.begin(), rel.tags.end());
+            if ((! tags.count("type")) || (tags["type"] != "multipolygon"))
                 continue;
-            }
             
-            OsmLightweightWay way = wayStore[mbr.ref];
-            if (way.numVertices < 1)
-            {
-                cerr << "[WARN] way " << way.id << " has no member nodes; ignoring it" << endl;
-                continue;
-            }
+            RingAssembler ringAssembler;                        
             
-            ringSegments.push_back( RingSegment(way));
-            
-            RingSegment *segment = &ringSegments.back();
-            while (true)
-            {
-                if (segment->isClosed())
-                {
-                    closedRings.push_back(segment);
-                    break;
-                }
-            
-                if (openEndPoints.count( segment->getStartPosition() ))
-                {
-                    RingSegment *sibling = openEndPoints[segment->getStartPosition()];
-                    assert( openEndPoints.count( sibling->getStartPosition()) &&
-                            openEndPoints.count( sibling->getEndPosition()) );
-                    openEndPoints.erase( sibling->getStartPosition() );
-                    openEndPoints.erase( sibling->getEndPosition() );
-                    ringSegments.push_back( RingSegment(segment, sibling));
-                    segment = &ringSegments.back();
-                    //could still be closed in itself or connect to another open segment
-                    // --> loop again
-                    continue; 
-                }
+            for ( const OsmRelationMember &mbr : rel.members)
+                if (isValidWay( mbr, rel.id, ways))
+                    ringAssembler.addWay(ways[mbr.ref]);
 
-                if (openEndPoints.count( segment->getEndPosition() ))
+            ringAssembler.warnUnconnectedNodes(rel.id);
+
+            
+            vector<Ring*> multipolygonRings;
+            
+            for (RingSegment* rootSegment : ringAssembler.getClosedRings())
+            {
+                
+                vector<OsmGeoPosition> vertices;
+                vector<uint64_t>       wayIds;
+                
+                flatten(rootSegment, ways, vertices, wayIds, false);
+                if ( vertices.size() < 4)
                 {
-                    RingSegment *sibling = openEndPoints[segment->getEndPosition()];
-                    assert( openEndPoints.count( sibling->getStartPosition()) &&
-                            openEndPoints.count( sibling->getEndPosition()));
-                    openEndPoints.erase( sibling->getStartPosition() );
-                    openEndPoints.erase( sibling->getEndPosition() );
-                    ringSegments.push_back( RingSegment(segment, sibling));
-                    segment = &ringSegments.back();
-                    //could still be closed in itself or connect to another open segment
-                    // --> loop again
-                    continue; 
+                    cerr << "[WARN] multipolygon ring with less then four vertices in relation " << rel.id << "; skipping it." << endl;
+                    continue;
                 }
                 
-                /* if this point is reached, then 'segment' is not closed in itself,
-                 * and cannot be connected directly to any RingSegment in openEndPoints.
-                 * So register its two endpoints as two additional open endpoints*/
-                 
-                 openEndPoints.insert( make_pair( segment->getStartPosition(), segment));
-                 openEndPoints.insert( make_pair( segment->getEndPosition(), segment));
-                 break;
+                std::vector<geos::geom::Polygon*> polygons = Ring::createSimplePolygons(vertices, rel.id);
+                
+                for (geos::geom::Polygon* polygon : polygons)
+                    multipolygonRings.push_back( new Ring(polygon, wayIds) );
             }
             
+            //cout << "processing relation " << rel.id << endl;
+            std::sort( multipolygonRings.begin(), multipolygonRings.end(), lessThan);
+            
+            for (Ring* r: multipolygonRings)
+                delete r;
+            //vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
+            //for (Ring* ring : roots)
+            //    deleteRecursive(ring);
         }
-
-        if (openEndPoints.size())
-        {
-            cerr << "[WARN] multipolygon relation " << rel.id << " has unconnected nodes. Will ignore all affected open rings: " << endl;
-            for ( const pair<OsmGeoPosition, RingSegment*> &kv : openEndPoints)
-            {
-                //printRingSegmentHierarchy( kv.second);
-                cerr << "\tnode " << kv.first.id << " (" << (kv.first.lat/10000000.0) << "°, " << (kv.first.lng/10000000.0) << "°) ->" << kv.second << endl;
-            }
-        }
-        
-        vector<Ring*> multipolygonRings;
-        
-        for (RingSegment* rootSegment : closedRings)
-        {
-            
-            vector<OsmGeoPosition> vertices;
-            vector<uint64_t>       wayIds;
-            
-            flatten(rootSegment, wayStore, vertices, wayIds, false);
-            if ( vertices.size() < 4)
-            {
-                cerr << "[WARN] multipolygon ring with less then four vertices in relation " << rel.id << "; skipping it." << endl;
-                continue;
-            }
-            
-            std::vector<geos::geom::Polygon*> polygons = Ring::createSimplePolygons(vertices, rel.id);
-            
-            for (geos::geom::Polygon* polygon : polygons)
-                multipolygonRings.push_back( new Ring(polygon, wayIds) );
-        }
-        
-        //cout << "processing relation " << rel.id << endl;
-        std::sort( multipolygonRings.begin(), multipolygonRings.end(), lessThan);
-        
-        for (Ring* r: multipolygonRings)
-            delete r;
-        //vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
-        //for (Ring* ring : roots)
-        //    deleteRecursive(ring);
     }
 
 

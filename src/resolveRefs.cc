@@ -30,12 +30,7 @@ bool comparePairsByFirst(const T &a, const T &b)
 
 void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 {
-    /* we don't actually need the reverse way and relation indices at this point. But since we
-     * create and clear the reverse node index here, this is a good point to ensure that the
-     * other indices are cleared as well */
     ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse", true);
-    ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", true);
-    ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", true);
         
     mmap_t vertex_mmap = init_mmap( (storageDirectory + "vertices.data").c_str(), true, false);
     const int32_t *vertexData = (int32_t*)vertex_mmap.ptr;
@@ -77,67 +72,76 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 
 }
 
+map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > buildReferencesMap(
+    const vector< pair<uint64_t, OsmGeoPosition> > &resolvedReferences)
+{
+    //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
+    map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs; 
 
+    for ( const pair<uint64_t, OsmGeoPosition> &tuple : resolvedReferences)
+    {
+        uint64_t wayId = tuple.first;
+        uint64_t nodeId= tuple.second.id;
+
+        if (! refs.count(wayId))
+            refs.insert( make_pair(wayId, map<uint64_t, pair<int32_t, int32_t> >()));
+            
+        if (! refs[wayId].count(nodeId))
+            refs[wayId].insert( make_pair(nodeId, make_pair( tuple.second.lat, tuple.second.lng)));
+        else 
+            assert( refs[wayId][nodeId].first  == tuple.second.lat  && 
+                    refs[wayId][nodeId].second == tuple.second.lng);
+    }
+
+    return refs;
+}
+
+void resolveNodeLocations(OsmLightweightWay &way, const map<uint64_t, pair<int32_t, int32_t> > &nodeRefs)
+{
+    assert(way.isDataMapped && "is noop for unmapped data");
+    for (int i = 0; i < way.numVertices; i++)
+    {
+        uint64_t nodeId = way.vertices[i].id;
+        if (! nodeRefs.count(nodeId))
+        {
+            cout << "[WARN] reference to node " << nodeId << " could not be resolved in way " << way.id << endl;
+            continue;
+        }
+        
+        const pair<int32_t, int32_t> &pos = nodeRefs.at(nodeId);
+        way.vertices[i].lat = pos.first;
+        way.vertices[i].lng = pos.second;
+    }
+
+}
 
 void resolveWayNodeRefs(const string storageDirectory)
 {
+    ReverseIndex reverseWayIndex(storageDirectory +"wayReverse");
     LightweightWayStore wayStore( storageDirectory + "ways", true);
-    
     BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved", RESOLVED_BUCKET_SIZE, true);
+
+    BucketFileSet<uint64_t> waysReferencedByRelationsBuckets(storageDirectory + "referencedWays", 100000, false);
     
     for (uint64_t i = 0; i < resolvedNodeBuckets.getNumBuckets(); i++)
     {
-        //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
-        map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs; 
-
         cout << "resolving node references for bucket "<< (i) << endl;
-        vector< pair<uint64_t, OsmGeoPosition> > resolvedReferences = resolvedNodeBuckets.getContents(i);
-        
-        //TODO: the following loop will take some seconds. The OS should be instructed to write back
-        //      all data from the previous iteration of the outer loop to disk
+        /*TODO: the following call will take some seconds. The OS should be instructed to 
+                write back all data from the previous iteration of the outer loop to disk*/
 
-        for ( pair<uint64_t, OsmGeoPosition> &tuple : resolvedReferences)
-        {
-            uint64_t wayId = tuple.first;
-            uint64_t nodeId= tuple.second.id;
-
-            if (! refs.count(wayId))
-                refs.insert( make_pair(wayId, map<uint64_t, pair<int32_t, int32_t> >()));
-                
-            if (! refs[wayId].count(nodeId))
-                refs[wayId].insert( make_pair(nodeId, make_pair( tuple.second.lat, tuple.second.lng)));
-            else 
-                assert( refs[wayId][nodeId].first  == tuple.second.lat  && 
-                        refs[wayId][nodeId].second == tuple.second.lng);
-        }
+        //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
+        map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs = buildReferencesMap( resolvedNodeBuckets.getContents(i) );
         
         for (uint64_t wayId = i * RESOLVED_BUCKET_SIZE; wayId < (i+1) * RESOLVED_BUCKET_SIZE; wayId++)
         {
             if (! wayStore.exists(wayId))
                 continue;
                 
-            if (! refs.count(wayId))
-            {
-                cout << "[WARN] no node in way " << wayId << " could be resolved" << endl;
-                continue;
-            }
-            
             OsmLightweightWay way = wayStore[wayId];
-            assert(way.isDataMapped && "is noop for unmapped data");
-            map<uint64_t, pair<int32_t, int32_t> > &nodeRefs = refs[wayId];
-            for (int i = 0; i < way.numVertices; i++)
-            {
-                uint64_t nodeId = way.vertices[i].id;
-                if (! nodeRefs.count(nodeId))
-                {
-                    cout << "[WARN] reference to node " << nodeId << " could not be resolved in way " << wayId << endl;
-                    continue;
-                }
-                
-                pair<int32_t, int32_t> &pos = nodeRefs[nodeId];
-                way.vertices[i].lat = pos.first;
-                way.vertices[i].lng = pos.second;
-            }
+            resolveNodeLocations(way, refs[wayId]);
+            
+            for (uint64_t relId : reverseWayIndex.getReferencingRelations(wayId))
+                way.serialize( waysReferencedByRelationsBuckets.getFile(relId));
         }
         
         //clear bucket contents to save disk space
@@ -204,7 +208,7 @@ void addRelationDependenciesToBucketFiles(string storageDirectory)
               reused). */
     BucketFileSet<uint64_t> nodeRefBuckets(storageDirectory+"nodeRefs", BUCKET_SIZE, true);
     BucketFileSet<uint64_t> wayRefBuckets (storageDirectory+"wayRefs",  BUCKET_SIZE, false);
-    BucketFileSet<uint64_t> relationRefBuckets(storageDirectory+"relationRefs", BUCKET_SIZE, false);;
+    BucketFileSet<uint64_t> relationRefBuckets(storageDirectory+"relationRefs", BUCKET_SIZE, false);
     
     for (const OsmRelation & rel : relStore)
     {
@@ -218,8 +222,7 @@ void addRelationDependenciesToBucketFiles(string storageDirectory)
                 default: MUST(false, "invalid relation member type"); break;
             }
         }
-    }
-        
+    }    
 }
 
 int main(int /*argc*/, char** /*argv*/)
@@ -232,6 +235,8 @@ int main(int /*argc*/, char** /*argv*/)
     cout << "Stage 0: adding dependencies from relations to bucket files" << endl;
     addRelationDependenciesToBucketFiles(storageDirectory);
 
+    cout << "Stage 0a: Registering reverse dependencies for all relations" << endl;
+    resolveRefsFromRelations(storageDirectory);
     
     cout << "Stage 1: Registering reverse dependencies" << endl;
     cout << "         and creating bucket files for resolved node locations." << endl;
@@ -240,7 +245,5 @@ int main(int /*argc*/, char** /*argv*/)
     cout << "Stage 2: Resolving node references for all ways" << endl;
     resolveWayNodeRefs(storageDirectory);
 
-    cout << "Stage 3: Registering reverse dependencies for all relations" << endl;
-    resolveRefsFromRelations(storageDirectory);
 }
 
