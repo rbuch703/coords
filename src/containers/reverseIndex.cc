@@ -135,6 +135,10 @@ ReverseIndex::~ReverseIndex() {
 bool ReverseIndex::isReferenced( uint64_t id) {
     uint64_t* idx = (uint64_t*) index.ptr;
     
+    uint64_t numEntries = index.size / sizeof(uint64_t);
+    if (id >= numEntries)
+        return false;    
+    
     uint64_t val = idx[id];
     if (val == 0)
         return false;
@@ -142,23 +146,26 @@ bool ReverseIndex::isReferenced( uint64_t id) {
     if (val & IS_WAY_REFERENCE)
     {
         val &= ~IS_WAY_REFERENCE; //remove is-way-reference indicator bit from wayId
-        cout << "entry " << id << " is referenced by way " << val << endl;
+        //cout << "entry " << id << " is referenced by way " << val << endl;
         return true;
     }
     
-    bool isReferenced = false;
+    return ( RefList ( &auxIndex, val).getNumEntries() > 0);
+    /*bool isReferenced = false;
     RefList refList( &auxIndex, val);
+    
     for (uint64_t ref: refList)
     {
+    
         if (ref & IS_WAY_REFERENCE)
             cout << "entry " << id << " is referenced by way " << (ref & ~IS_WAY_REFERENCE) << endl;
         else
             cout << "entry " << id << " is referenced by relation " << (ref) << endl;
-        
+      
         isReferenced = true;
     }
     
-    return isReferenced;
+    return isReferenced;*/
 }
     
 uint64_t ReverseIndex::reserveSpaceForRefList(uint64_t numEntries) {
@@ -227,6 +234,7 @@ void ReverseIndex::addReferenceFromWay(uint64_t targetId, uint64_t wayId)
     MUST( 0 == refList.add( wayId | IS_WAY_REFERENCE), "RefList data corruption");
 }
 
+
 void ReverseIndex::addReferenceFromRelation(uint64_t targetId, uint64_t relationId)
 {
     MUST(relationId < (((uint64_t)1) << 31), "relation IDs bigger than or equal 2^63 are currently unsupported");
@@ -265,6 +273,38 @@ void ReverseIndex::addReferenceFromRelation(uint64_t targetId, uint64_t relation
      */
     pos[targetId] = refList.getOffset();
     MUST( 0 == refList.add( relationId), "RefList data corruption");
+}
+
+
+std::vector<uint64_t> ReverseIndex::getReferencingRelations(uint64_t id)
+{
+    std::vector<uint64_t> res;
+        
+    uint64_t numIndexEntries = index.size / sizeof(uint64_t);
+    if (id >= numIndexEntries)
+        return res;
+    
+    uint64_t *indexPtr = (uint64_t*) index.ptr;
+    uint64_t indexEntry = indexPtr[id];
+    
+    if (indexEntry == 0)    //no references exist
+        return res;
+    
+    /* index entry is not an offset into the auxiliary file, but is only a 
+     * single reference from a way--> there are no references from relations */
+    if (indexEntry & IS_WAY_REFERENCE)
+        return res;
+
+    /* index entry is an offset into the auxiliary file, where a list of
+       references to this entity is stored.*/
+    RefList refList( &auxIndex, indexEntry);
+    for (uint64_t reverseRef : refList)
+    {
+        if (! (indexEntry & IS_WAY_REFERENCE))
+            res.push_back(reverseRef);
+    }
+    
+    return res;
 }
 
 

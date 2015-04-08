@@ -3,6 +3,7 @@
 
 #include "mem_map.h"
 #include <string>
+#include <vector>
 
 /* The class ReverseIndex represents a mapping of an OSM entity id (node, way or relation id) to a list
  * of OSM ways and relations that refer to that entity. This class is intended for the process of 
@@ -26,7 +27,7 @@
  * - if Y is 0, there are no reverse dependencies for X
  * - if the most significant bit of Y is set, then X is referenced by exactly one way (and by no relation),
  *   and that way has the ID given by the lower 63 bits of Y
- * - if the most significant bit of Y is not set, then X is references by at least one relation or by multiple way
+ * - if the most significant bit of Y is not set, then X is referenced by at least one relation or by multiple way
      (or a combination thereof). In this case, the value of Y is an offset into the auxiliary files, where the full
      list of reverse dependencies is recorded.
  * As most entities are referred to either not at all, or only by a single way, this storage scheme is fast and 
@@ -49,6 +50,8 @@ public:
     bool isReferenced( uint64_t id);
     void addReferenceFromWay(uint64_t targetId, uint64_t wayId);
     void addReferenceFromRelation(uint64_t targetId, uint64_t relationId);
+    
+    std::vector<uint64_t> getReferencingRelations(uint64_t id);
 
 private:
     uint64_t reserveSpaceForRefList(uint64_t numEntries);

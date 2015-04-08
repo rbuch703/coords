@@ -25,6 +25,7 @@ public:
     BucketFileSet(std::string baseName, uint64_t bucketSize, bool appendToExistingFiles);    
     ~BucketFileSet();
     
+    FILE*    getFile(uint64_t id);
     void     clearBucket(uint64_t bucketId);
     void     clear();
     void     write(uint64_t id, const ValueType& data);
@@ -81,6 +82,18 @@ BucketFileSet<ValueType>::~BucketFileSet()
 {
     for (FILE* f : bucketFiles)
         fclose(f);
+}
+
+
+template<typename ValueType>
+FILE* BucketFileSet<ValueType>::getFile(uint64_t id)
+{
+    uint64_t bucketId = id / this->bucketSize;
+    assert( bucketId < 800 && "getting too close to OS ulimit for open files");
+    if (bucketId >= bucketFiles.size() )
+        addBuckets(bucketId);
+
+    return bucketFiles[bucketId];
 }
 
 template<typename ValueType>
