@@ -114,8 +114,8 @@ static void flatten(RingSegment *closedRing, map<uint64_t, OsmLightweightWay> &w
     {   //is a leaf node, contains a reference to an actual OSM way.
         
         assert( !closedRing->child1 && !closedRing->child2);
-        assert( ways.exists(closedRing->getWayId()) );
-        OsmLightweightWay way = ways[closedRing->getWayId()];
+        assert( ways.count(closedRing->getWayId()) );
+        OsmLightweightWay way = ways.at(closedRing->getWayId());
         bool effectiveReversal = closedRing->isReversed ^ globalReversal;
         
         wayIds.push_back(way.id);
@@ -307,7 +307,7 @@ int main()
         map<uint64_t, OsmLightweightWay> ways;
         
         int ch;
-        while ( (ch = fgetc(f)) )
+        while ( (ch = fgetc(f)) != EOF )
         {
             ungetc(ch, f);
             OsmLightweightWay way(f);

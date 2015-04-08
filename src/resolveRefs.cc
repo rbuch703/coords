@@ -42,6 +42,8 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 
     for (uint64_t bucketId = 0; bucketId < nodeBuckets.getNumBuckets(); bucketId++)
     {
+        cout << "resolving node locations for bucket " << (bucketId + 1) << "/" << nodeBuckets.getNumBuckets() << endl;
+        
         vector<pair<uint64_t, uint64_t> > tuples = nodeBuckets.getContents(bucketId);
         sort( tuples.begin(), tuples.end(), comparePairsByFirst<pair<uint64_t, uint64_t> >);
         
@@ -125,9 +127,10 @@ void resolveWayNodeRefs(const string storageDirectory)
     
     for (uint64_t i = 0; i < resolvedNodeBuckets.getNumBuckets(); i++)
     {
-        cout << "resolving node references for bucket "<< (i) << endl;
+        cout << "resolving node references for bucket "<< (i+1) << "/" << resolvedNodeBuckets.getNumBuckets() << endl;
         /*TODO: the following call will take some seconds. The OS should be instructed to 
-                write back all data from the previous iteration of the outer loop to disk*/
+                write back all data from the previous iteration of the outer loop to disk
+                during that time. */
 
         //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
         map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs = buildReferencesMap( resolvedNodeBuckets.getContents(i) );
