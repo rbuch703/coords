@@ -116,7 +116,7 @@ void OsmXmlParser::parseNode()
     int32_t lon = degValueToInt(line, "lon");
     uint64_t id = strtoull(getValue(line, "id"), NULL, 10);
     uint32_t version = atoi(getValue(line, "version"));
-    vector<OSMKeyValuePair> tags;
+    vector<OsmKeyValuePair> tags;
     if (!strstr(line, "/>")) //node contains tags (kv-pairs)
     {
         while (readNextLine())
@@ -125,10 +125,10 @@ void OsmXmlParser::parseNode()
             assert( strncmp(line, "<tag", 4) == 0 && "Unknown tag in node");
             string key = getValue(line, "k");
             string val = getValue(line, "v");
-            tags.push_back( OSMKeyValuePair(key, val));
+            tags.push_back( OsmKeyValuePair(key, val));
         }
     }
-    OSMNode node(lat, lon, id, version, tags);
+    OsmNode node(lat, lon, id, version, tags);
     consumer->consumeNode(node);
 }
 
@@ -142,7 +142,7 @@ void OsmXmlParser::parseWay()
     int64_t id = strtoul(getValue(line, "id"), NULL, 10);
     uint32_t version = strtoul(getValue(line, "version"), NULL, 10);
 
-    vector<OSMKeyValuePair> tags;
+    vector<OsmKeyValuePair> tags;
     vector<uint64_t> node_refs;
     if (strstr(line, "/>")) //way without node references???
     {
@@ -160,7 +160,7 @@ void OsmXmlParser::parseWay()
         {
             string key = getValue(line, "k");
             string val = getValue(line, "v");
-            tags.push_back( OSMKeyValuePair(key, val));
+            tags.push_back( OsmKeyValuePair(key, val));
         } else assert( false && "Unknown tag in Way" );
     }
     
@@ -170,7 +170,7 @@ void OsmXmlParser::parseWay()
         return; //skip this way
     }
     
-    OSMWay way(id, version, node_refs, tags);
+    OsmWay way(id, version, node_refs, tags);
     consumer->consumeWay(way);
 }
 
@@ -184,7 +184,7 @@ void OsmXmlParser::parseRelation()
     */
     int64_t id       = strtoul(getValue(line, "id"),      NULL, 10);
     uint32_t version = strtoul(getValue(line, "version"), NULL, 10);
-    vector<OSMKeyValuePair> tags;
+    vector<OsmKeyValuePair> tags;
     vector<OsmRelationMember> members;
     
     if (strstr(line, "/>")) //a relation needs at least one member 
@@ -215,7 +215,7 @@ void OsmXmlParser::parseRelation()
         {
             string key = getValue(line, "k");
             string val = getValue(line, "v");
-            tags.push_back( OSMKeyValuePair(key, val));
+            tags.push_back( OsmKeyValuePair(key, val));
         } else assert(false && "Unknown tag in relation" );
     }
     OsmRelation rel(id, version, members, tags);

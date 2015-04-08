@@ -36,7 +36,7 @@ OsmConsumerIdRemapper::~OsmConsumerIdRemapper ()
 
 
 
-void OsmConsumerIdRemapper::consumeNode( OSMNode &node)
+void OsmConsumerIdRemapper::consumeNode( OsmNode &node)
 {
     if (!nodeMap->count(node.id))
         nodeMap->insert( std::make_pair( node.id, ++nodeIdsRemapped));
@@ -46,7 +46,7 @@ void OsmConsumerIdRemapper::consumeNode( OSMNode &node)
     innerConsumer->consumeNode(node);
 }
 
-void OsmConsumerIdRemapper::consumeWay     ( OSMWay  &way) 
+void OsmConsumerIdRemapper::consumeWay( OsmWay  &way) 
 { 
     if (!wayMap->count(way.id))
         wayMap->insert( std::make_pair( way.id, ++wayIdsRemapped));

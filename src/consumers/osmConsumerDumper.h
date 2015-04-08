@@ -20,11 +20,11 @@ public:
 protected:
     static const std::string base_path;
 
-    virtual void consumeNode( OSMNode &node);
-    virtual void consumeWay ( OSMWay  &way);
+    virtual void consumeNode( OsmNode &node);
+    virtual void consumeWay ( OsmWay  &way);
     virtual void consumeRelation( OsmRelation &relation); 
 private:
-    void filterTags(std::vector<OSMKeyValuePair> &tags) const;
+    void filterTags(std::vector<OsmKeyValuePair> &tags) const;
 
 private:
     mmap_t node_index, vertex_data, way_index, relation_index;

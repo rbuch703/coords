@@ -25,27 +25,27 @@ std::ostream& operator <<(std::ostream& os, const OSMVertex v)
     return os;
 }*/
 
-uint64_t getSerializedSize(const std::vector<OSMKeyValuePair> &tags)
+uint64_t getSerializedSize(const std::vector<OsmKeyValuePair> &tags)
 {
     uint64_t size = sizeof(uint16_t) + //uint16_t numTags
                     sizeof(uint32_t) + //uint32_t numTagBytes
                     2 * tags.size();   //zero-termination for each key and value
 
-    for (const OSMKeyValuePair & kv : tags)
+    for (const OsmKeyValuePair & kv : tags)
         size += (kv.first.length() + kv.second.length());
 
     return size;
 }
 
 
-void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
+void serializeTags( const vector<OsmKeyValuePair> &tags, FILE* file)
 {
     assert(tags.size() < (1<<16));
     uint16_t num_tags = tags.size();
     fwrite(&num_tags, sizeof(num_tags), 1, file);
 
     uint32_t numTagBytes = 0;
-    for (const OSMKeyValuePair &tag : tags)
+    for (const OsmKeyValuePair &tag : tags)
     {
         numTagBytes += strlen(tag.first.c_str()) + 1;
         numTagBytes += strlen(tag.second.c_str()) + 1;
@@ -53,7 +53,7 @@ void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
     //storing this total size is redundant, but makes reading the tags back from file much faster 
     fwrite(&numTagBytes, sizeof(numTagBytes), 1, file);
 
-    for (const OSMKeyValuePair &tag : tags)
+    for (const OsmKeyValuePair &tag : tags)
     {
         fwrite( tag.first.c_str(),  strlen(tag.first.c_str()) + 1, 1, file);    //both including their null-termination
         fwrite( tag.second.c_str(), strlen(tag.second.c_str())+ 1, 1, file);
@@ -61,7 +61,7 @@ void serializeTags( const vector<OSMKeyValuePair> &tags, FILE* file)
 
 }
 
-void serializeTags( const vector<OSMKeyValuePair> &tags, Chunk &chunk)
+void serializeTags( const vector<OsmKeyValuePair> &tags, Chunk &chunk)
 {
     assert(tags.size() < (1<<16));
     chunk.put<uint16_t>(tags.size());              //numTags
@@ -69,7 +69,7 @@ void serializeTags( const vector<OSMKeyValuePair> &tags, Chunk &chunk)
     //numTagBytes = serialized size minus 'numTags' and 'numTagBytes' themselves
     chunk.put<uint32_t>(getSerializedSize(tags) - sizeof(uint32_t) - sizeof(uint16_t)); 
 
-    for (const OSMKeyValuePair &tag : tags)
+    for (const OsmKeyValuePair &tag : tags)
     {
         //"+1" : both including their null-termination
         chunk.put( tag.first.c_str(),  strlen(tag.first.c_str())  + 1);
@@ -87,9 +87,9 @@ void fread( void* dest, uint64_t size, FILE* file)
     { perror("[ERR] fread"); exit(0);}
 }
 
-vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
+vector<OsmKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
 {
-    vector<OSMKeyValuePair> tags;
+    vector<OsmKeyValuePair> tags;
     
     uint16_t num_tags  = *((const uint16_t*)data_ptr);
     data_ptr+=2;
@@ -109,13 +109,13 @@ vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
          *       safe beyond the scopof this method: the data pointer is not
          *       guaranteed to stay valid. It may be deallocated, munmap'ed or
          *       mremap'ed, invalidating the strings/char* along with it.
-         *       This loop is safe, because OSMKeyValuePair stores std::strings
+         *       This loop is safe, because OsmKeyValuePair stores std::strings
          *       and not the raw char*, and creating the strings from the char*
          *       also creates a copy of the string data being pointed to.
         */ 
         const char* key = (const char*)data_ptr;
         data_ptr += strlen( (const char*)data_ptr)+1;
-        tags.push_back( OSMKeyValuePair( key, (const char*)data_ptr));
+        tags.push_back( OsmKeyValuePair( key, (const char*)data_ptr));
         data_ptr += strlen( (const char*)data_ptr)+1;
     }
     
@@ -123,9 +123,9 @@ vector<OSMKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
     
 }
 
-vector<OSMKeyValuePair> deserializeTags(FILE* src)
+vector<OsmKeyValuePair> deserializeTags(FILE* src)
 {
-    vector<OSMKeyValuePair> tags;
+    vector<OsmKeyValuePair> tags;
     
     uint16_t num_tags;
     fread( &num_tags, sizeof(num_tags), src);
@@ -144,7 +144,7 @@ vector<OSMKeyValuePair> deserializeTags(FILE* src)
          *       safe beyond the scopof this method: the data pointer is not
          *       guaranteed to stay valid. It may be deallocated, munmap'ed or
          *       mremap'ed, invalidating the strings/char* along with it.
-         *       This loop is safe, because OSMKeyValuePair stores std::strings
+         *       This loop is safe, because OsmKeyValuePair stores std::strings
          *       and not the raw char*, and creating the strings from the char*
          *       also creates a copy of the string data being pointed to.
         */ 
@@ -152,7 +152,7 @@ vector<OSMKeyValuePair> deserializeTags(FILE* src)
         tagBytes += strlen( (const char*)tagBytes)+1;
         assert(tagBytes < beyondTagBytes);
         
-        tags.push_back( OSMKeyValuePair( key, (const char*)tagBytes));
+        tags.push_back( OsmKeyValuePair( key, (const char*)tagBytes));
         tagBytes += strlen( (const char*)tagBytes)+1;
         assert(tagBytes < beyondTagBytes);
     }
@@ -162,16 +162,16 @@ vector<OSMKeyValuePair> deserializeTags(FILE* src)
 }
 
 /*
-list<OSMKeyValuePair> deserializeTags(FILE* data_file, uint64_t file_offset)
+list<OsmKeyValuePair> deserializeTags(FILE* data_file, uint64_t file_offset)
 {
     fseeko(data_file, file_offset, SEEK_SET);
     return deserializeTags(data_file);
 }*/
 
-ostream& operator<<(ostream &out, const vector<OSMKeyValuePair> &tags)
+ostream& operator<<(ostream &out, const vector<OsmKeyValuePair> &tags)
 {
     out << "[";
-    for (vector<OSMKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
+    for (vector<OsmKeyValuePair>::const_iterator it = tags.begin(); it!= tags.end(); it++)
     {
         out << "\"" << it->first << "\" = \"" << it->second << "\"";
         if (++it != tags.end()) out << ", ";
@@ -182,7 +182,7 @@ ostream& operator<<(ostream &out, const vector<OSMKeyValuePair> &tags)
 }
 
 /*
-OSMNode::OSMNode( FILE* data_file, uint64_t offset, uint64_t node_id)
+OsmNode::OsmNode( FILE* data_file, uint64_t offset, uint64_t node_id)
 {
     fseeko(data_file, offset, SEEK_SET);
     fread(&lat, sizeof(lat), data_file);
@@ -192,7 +192,7 @@ OSMNode::OSMNode( FILE* data_file, uint64_t offset, uint64_t node_id)
 }*/
 
 
-OSMNode::OSMNode( const uint8_t* data_ptr)
+OsmNode::OsmNode( const uint8_t* data_ptr)
 {
     id = *(uint64_t*)data_ptr;
     data_ptr += sizeof(uint64_t);
@@ -209,12 +209,12 @@ OSMNode::OSMNode( const uint8_t* data_ptr)
     tags = deserializeTags(data_ptr);
 }
 
-uint64_t OSMNode::getSerializedSize() const
+uint64_t OsmNode::getSerializedSize() const
 {
     return sizeof(id) + sizeof(version) + sizeof(lat) + sizeof(lon) + ::getSerializedSize(tags);
 }
 #if 0
-OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
+OsmNode::OsmNode( FILE* idx, FILE* data, uint64_t node_id)
 {
     fseek(idx, node_id*sizeof(uint64_t), SEEK_SET);
     uint64_t pos;
@@ -243,9 +243,9 @@ OSMNode::OSMNode( FILE* idx, FILE* data, uint64_t node_id)
 }
 #endif
 
-OSMNode::OSMNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OSMKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
+OsmNode::OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
 
-void OSMNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
+void OsmNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
 {
     /** temporary nodes in OSM editors are allowed to have negative node IDs, 
       * but those in the official maps are guaranteed to be positive.
@@ -266,7 +266,7 @@ void OSMNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
     ptr[id] = offset;
 }
 
-void OSMNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map) const
+void OsmNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map) const
 {
     /** temporary nodes in OSM editors are allowed to have negative node IDs, 
       * but those in the official maps are guaranteed to be positive.
@@ -288,29 +288,29 @@ void OSMNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map
 }
 
 
-bool OSMNode::hasKey(string key) const
+bool OsmNode::hasKey(string key) const
 {
-    for (const OSMKeyValuePair &kv : tags)
+    for (const OsmKeyValuePair &kv : tags)
         if (kv.first == key) return true;
 
     return false;
 }
 
-const string& OSMNode::getValue(string key) const
+const string& OsmNode::getValue(string key) const
 {
     static const string empty="";
-    for (const OSMKeyValuePair &kv : tags)
+    for (const OsmKeyValuePair &kv : tags)
         if (kv.first == key) return kv.second;
 
     return empty;
 }
 
 
-bool OSMNode::operator==(const OSMNode &other) const {return lat == other.lat && lon == other.lon;}
-bool OSMNode::operator!=(const OSMNode &other) const {return lat != other.lat || lon != other.lon;}
-bool OSMNode::operator< (const OSMNode &other) const {return id < other.id;}
+bool OsmNode::operator==(const OsmNode &other) const {return lat == other.lat && lon == other.lon;}
+bool OsmNode::operator!=(const OsmNode &other) const {return lat != other.lat || lon != other.lon;}
+bool OsmNode::operator< (const OsmNode &other) const {return id < other.id;}
 
-ostream& operator<<(ostream &out, const OSMNode &node)
+ostream& operator<<(ostream &out, const OsmNode &node)
 {
     out << "Node " << node.id <<" (" << (node.lat/10000000.0) << "°, " << (node.lon/10000000.0) << "°)";
     out << node.tags;
@@ -324,21 +324,21 @@ bool operator< (const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat
 
 
 
-OSMWay::OSMWay( uint64_t id, uint32_t version, 
-            std::vector<uint64_t> way_refs, std::vector<OSMKeyValuePair> tags):
+OsmWay::OsmWay( uint64_t id, uint32_t version, 
+            std::vector<uint64_t> way_refs, std::vector<OsmKeyValuePair> tags):
         id(id), version(version), tags(tags)  
 { 
     for (uint64_t ref : way_refs)
         refs.push_back( (OsmGeoPosition){.id = ref, .lat=INVALID_LAT_LNG, .lng = INVALID_LAT_LNG} );
 }
 
-OSMWay::OSMWay( uint64_t id, uint32_t version, 
+OsmWay::OsmWay( uint64_t id, uint32_t version, 
                 std::vector<OsmGeoPosition> refs, 
-                std::vector<OSMKeyValuePair> tags):
+                std::vector<OsmKeyValuePair> tags):
                 id(id), version(version), refs(refs), tags(tags) { }
 
 
-OSMWay::OSMWay( const uint8_t* data_ptr)
+OsmWay::OsmWay( const uint8_t* data_ptr)
 {
     this->id = *(uint64_t*)data_ptr;
     data_ptr += sizeof( uint64_t );
@@ -359,7 +359,7 @@ OSMWay::OSMWay( const uint8_t* data_ptr)
     tags = deserializeTags(data_ptr);
 }
 
-uint64_t OSMWay::getSerializedSize() const
+uint64_t OsmWay::getSerializedSize() const
 {
     return sizeof(uint64_t) + //id
            sizeof(uint32_t) + //version
@@ -370,7 +370,7 @@ uint64_t OSMWay::getSerializedSize() const
 
         
 
-void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
+void OsmWay::serialize( FILE* data_file, mmap_t *index_map) const
 {
     assert (id > 0);  
     //get offset at which the dumped way *starts*
@@ -399,7 +399,7 @@ void OSMWay::serialize( FILE* data_file, mmap_t *index_map) const
     }
 }
 
-void OSMWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
+void OsmWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
 {
     Chunk chunk = dataFile.createChunk(this->getSerializedSize());
     chunk.put<uint64_t>(this->id);
@@ -420,24 +420,24 @@ void OSMWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
 }
 
 
-bool OSMWay::hasKey(string key) const
+bool OsmWay::hasKey(string key) const
 {
-    for (const OSMKeyValuePair &kv : tags)
+    for (const OsmKeyValuePair &kv : tags)
         if (kv.first == key) return true;
 
     return false;
 }
 
-const string& OSMWay::getValue(string key) const
+const string& OsmWay::getValue(string key) const
 {
     static const string empty="";
-    for (const OSMKeyValuePair &kv : tags)
+    for (const OsmKeyValuePair &kv : tags)
         if (kv.first == key) return kv.second;
 
     return empty;
 }
 
-ostream& operator<<(ostream &out, const OSMWay &way)
+ostream& operator<<(ostream &out, const OsmWay &way)
 {
     out << "Way " << way.id << " (";
     for ( OsmGeoPosition pos : way.refs)
@@ -452,7 +452,7 @@ ostream& operator<<(ostream &out, const OSMWay &way)
 //==================================
 //OsmRelation::OsmRelation( uint64_t relation_id): id(relation_id) {}
 
-OsmRelation::OsmRelation( uint64_t id, uint32_t version, vector<OsmRelationMember> members, vector<OSMKeyValuePair> tags): id(id), version(version), members(members), tags(tags) {}
+OsmRelation::OsmRelation( uint64_t id, uint32_t version, vector<OsmRelationMember> members, vector<OsmKeyValuePair> tags): id(id), version(version), members(members), tags(tags) {}
 
 OsmRelation::OsmRelation( const uint8_t* data_ptr)
 {
@@ -607,7 +607,7 @@ void OsmRelation::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index
 
 bool OsmRelation::hasKey(string key) const
 {
-    for (const OSMKeyValuePair &kv : tags)
+    for (const OsmKeyValuePair &kv : tags)
         if (kv.first == key) return true;
 
     return false;
@@ -616,7 +616,7 @@ bool OsmRelation::hasKey(string key) const
 const string& OsmRelation::getValue(string key) const
 {
     static const string empty="";
-    for (const OSMKeyValuePair &kv : tags)
+    for (const OsmKeyValuePair &kv : tags)
         if (kv.first == key) return kv.second;
 
     return empty;

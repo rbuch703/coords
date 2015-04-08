@@ -9,8 +9,8 @@ public:
     OsmConsumerCounter();
     virtual ~OsmConsumerCounter();
 
-    virtual void consumeNode    ( OSMNode &);
-    virtual void consumeWay     ( OSMWay  &);
+    virtual void consumeNode    ( OsmNode &);
+    virtual void consumeWay     ( OsmWay  &);
     virtual void consumeRelation( OsmRelation &);
     
 private:

@@ -66,7 +66,7 @@ OsmLightweightWay::OsmLightweightWay( const OsmLightweightWay &other): isDataMap
     *this = other;
 }
 
-OsmLightweightWay::OsmLightweightWay( const OSMWay &other)
+OsmLightweightWay::OsmLightweightWay( const OsmWay &other)
 {
     this->id = other.id;
     this->version = other.version;
@@ -136,13 +136,13 @@ OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
     return (*this);
 }
 
-OSMWay OsmLightweightWay::toOsmWay() const {
+OsmWay OsmLightweightWay::toOsmWay() const {
     
     map<string, string> tags = this->getTagSet();
-    return OSMWay( this->id, 
+    return OsmWay( this->id, 
                    this->version, 
                    vector<OsmGeoPosition>( this->vertices, this->vertices + this->numVertices, allocator<map<string, string> >()),
-                   vector<OSMKeyValuePair>( tags.begin(), tags.end()));
+                   vector<OsmKeyValuePair>( tags.begin(), tags.end()));
 }
 
 uint64_t OsmLightweightWay::size() const {
@@ -419,12 +419,12 @@ NodeStore::NodeStore(string baseName):
 { }
 
 
-OSMNode NodeStore::operator[](uint64_t nodeId) const
+OsmNode NodeStore::operator[](uint64_t nodeId) const
 {
     uint64_t *index = (uint64_t*)mapIndex.ptr;
     assert(index[nodeId] != 0 && "trying to access non-existent node");
     uint64_t dataOffset = index[nodeId];
-    return OSMNode((uint8_t*)mapData.ptr + dataOffset);
+    return OsmNode((uint8_t*)mapData.ptr + dataOffset);
 
 }
 
@@ -465,7 +465,7 @@ NodeStore::NodeIterator& NodeStore::NodeIterator::operator++()
     return *this;
 }
 
-OSMNode NodeStore::NodeIterator::operator *() 
+OsmNode NodeStore::NodeIterator::operator *() 
 {
     return host[pos];
 }

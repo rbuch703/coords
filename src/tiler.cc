@@ -171,7 +171,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
 {
     //create a non-mapped copy. This is necessary because the mapped OsmLightweightWay 
     //cannot easily be changed in size
-    OSMWay way =wayIn.toOsmWay();
+    OsmWay way = wayIn.toOsmWay();
 
     int keep =  0;
     
@@ -224,7 +224,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
             if ( way.refs.front() != way.refs.back())
             {
                 cout << "non-closed polygon " << way << endl;
-                for ( const OSMKeyValuePair &kv: way.tags)
+                for ( const OsmKeyValuePair &kv: way.tags)
                     cout << "\t" << kv.first << " -> " << kv.second << endl;
             }
             // average of horizontal and vertical degrees per tile; 
@@ -338,7 +338,7 @@ int main(int argc, char** argv)
             
         numVertices += way.numVertices;
             
-        for (OSMKeyValuePair kv: way.getTags())
+        for (OsmKeyValuePair kv: way.getTags())
         {
             //cout << kv.first << " = " << kv.second << endl;
             numTagBytes += 2 + kv.first.size() + kv.second.size();

@@ -83,12 +83,12 @@ public:
     OsmLightweightWay( FILE* src);
     OsmLightweightWay( uint8_t* data_ptr);
     OsmLightweightWay( const OsmLightweightWay &other);
-    OsmLightweightWay( const OSMWay &other);
+    OsmLightweightWay( const OsmWay &other);
 
     ~OsmLightweightWay ();
 
     OsmLightweightWay &operator=(const OsmLightweightWay &other);
-    OSMWay toOsmWay() const;
+    OsmWay toOsmWay() const;
     void     serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     uint8_t* serialize( uint8_t* dest) const;
 
@@ -199,7 +199,7 @@ class NodeStore {
 public:
     NodeStore(const char* indexFileName, const char* dataFileName);
     NodeStore(std::string baseName);
-    OSMNode operator[](uint64_t relationId) const;    
+    OsmNode operator[](uint64_t relationId) const;    
     bool exists(uint64_t relationId) const;
     uint64_t getMaxNumNodes() const;
 private:
@@ -214,7 +214,7 @@ private:
     public:
         NodeIterator( NodeStore &host, uint64_t pos);        
         NodeIterator& operator++();
-        OSMNode operator *();        
+        OsmNode operator *();        
         bool operator !=( NodeIterator &other) const;    
     private:
         void advanceToNextNode();

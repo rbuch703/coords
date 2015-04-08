@@ -100,7 +100,7 @@ OsmConsumerDumper::~OsmConsumerDumper()
 }
 
 
-void OsmConsumerDumper::filterTags(vector<OSMKeyValuePair> &tags) const
+void OsmConsumerDumper::filterTags(vector<OsmKeyValuePair> &tags) const
 {
     for (uint64_t i = 0; i < tags.size();)
     {
@@ -114,7 +114,7 @@ void OsmConsumerDumper::filterTags(vector<OSMKeyValuePair> &tags) const
     }   
 }
 
-void OsmConsumerDumper::consumeNode( OSMNode &node) 
+void OsmConsumerDumper::consumeNode( OsmNode &node) 
 {
     nNodes++;
     filterTags(node.tags);
@@ -128,7 +128,7 @@ void OsmConsumerDumper::consumeNode( OSMNode &node)
 
 static const uint64_t IS_WAY_REFERENCE = 0x8000000000000000ull;
 
-void OsmConsumerDumper::consumeWay ( OSMWay  &way)
+void OsmConsumerDumper::consumeWay ( OsmWay  &way)
 {
     nWays++;
     filterTags(way.tags);

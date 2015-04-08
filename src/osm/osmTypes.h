@@ -14,20 +14,8 @@
 
 
 enum ELEMENT : uint8_t { NODE, WAY, RELATION, CHANGESET, OTHER };
-typedef std::pair<std::string, std::string> OSMKeyValuePair;
+typedef std::pair<std::string, std::string> OsmKeyValuePair;
 
-/*
-struct OSMVertex
-{
-    OSMVertex() {}
-    OSMVertex( const int32_t pX, const int32_t pY): x(pX), y(pY) {}
-    
-    bool operator==(OSMVertex other) { return x == other.x && y == other.y; }
-    bool operator!=(OSMVertex other) { return x != other.x || y != other.y; }
-public:
-    int32_t x,y;
-};*/
-//std::ostream& operator <<(std::ostream& os, const OSMVertex v);
 
 /** 0x7FFFFFFF is the maximum positive value in signed ints, i.e. ~ 2.1 billion
  *  In OSMs int32_t lat/lng storage, this corresponds to ~ 210°, which is outside
@@ -37,6 +25,7 @@ public:
  **/ 
 const int32_t INVALID_LAT_LNG = 0x7FFFFFFF;
 
+
 /* on-disk format for OsmNode:
     - uint64_t id
     - uint32_t version
@@ -44,13 +33,10 @@ const int32_t INVALID_LAT_LNG = 0x7FFFFFFF;
     - int32_t lon
     - <tags>
 */
-
-struct OSMNode
+struct OsmNode
 {
-    OSMNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
-//    OSMNode( FILE* data_file, uint64_t  offset, uint64_t node_id);
-//    OSMNode( FILE* idx, FILE* data, uint64_t node_id);
-    OSMNode( const uint8_t* data_ptr);
+    OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
+    OsmNode( const uint8_t* data_ptr);
         
     void serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const;
     void serializeWithIndexUpdate( ChunkedFile &dataFile, mmap_t *index_map) const;
@@ -59,18 +45,18 @@ struct OSMNode
     bool hasKey(std::string key) const;
     const std::string &operator[](std::string key) const {return getValue(key);}
     
-    bool operator==(const OSMNode &other) const;
-    bool operator!=(const OSMNode &other) const;
-    bool operator< (const OSMNode &other) const;
+    bool operator==(const OsmNode &other) const;
+    bool operator!=(const OsmNode &other) const;
+    bool operator< (const OsmNode &other) const;
     uint64_t getSerializedSize() const;    
     uint64_t id;
     uint32_t version;
     int32_t lat;    //needs to be signed! -180° < lat < 180°
     int32_t lon;    //                     -90° < lon <  90°
-    std::vector<OSMKeyValuePair> tags;
+    std::vector<OsmKeyValuePair> tags;
 };
 
-std::ostream& operator<<(std::ostream &out, const OSMNode &node);
+std::ostream& operator<<(std::ostream &out, const OsmNode &node);
 
 typedef struct 
 {
@@ -84,18 +70,18 @@ bool operator< (const OsmGeoPosition &a, const OsmGeoPosition &b); //just an arb
 
 OsmGeoPosition operator-(const OsmGeoPosition &a, const OsmGeoPosition &b);
 
-struct OSMWay
+struct OsmWay
 {
 //    OSMWay( uint64_t way_id);
-    OSMWay( uint64_t way_id, uint32_t version, 
+    OsmWay( uint64_t way_id, uint32_t version, 
             std::vector<uint64_t> refs = std::vector<uint64_t>(), 
-            std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+            std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
 
-    OSMWay( uint64_t way_id, uint32_t version, 
+    OsmWay( uint64_t way_id, uint32_t version, 
             std::vector<OsmGeoPosition> refs, 
-            std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+            std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
             
-    OSMWay( const uint8_t* data_ptr);
+    OsmWay( const uint8_t* data_ptr);
 
     uint64_t getSerializedSize() const;
     void serialize( FILE* data_file, mmap_t *index_map) const;
@@ -107,17 +93,17 @@ struct OSMWay
     uint64_t id;
     uint32_t version;
     std::vector<OsmGeoPosition> refs;
-    std::vector<OSMKeyValuePair> tags;
+    std::vector<OsmKeyValuePair> tags;
 };
 
-std::ostream& operator<<(std::ostream &out, const OSMWay &way);
+std::ostream& operator<<(std::ostream &out, const OsmWay &way);
 
 struct OsmRelationMember
 {
     OsmRelationMember( ELEMENT member_type, uint64_t member_ref, std::string member_role):
         type(member_type), ref(member_ref), role(member_role) { }
 
-    void serialize( FILE* data_file, mmap_t *index_map, const std::map<OSMKeyValuePair, uint8_t> *tag_symbols) const;
+    void serialize( FILE* data_file, mmap_t *index_map, const std::map<OsmKeyValuePair, uint8_t> *tag_symbols) const;
     uint32_t getDataSize() const;
     ELEMENT type;  //whether the member is a node, way or relation
     uint64_t ref;  //the node/way/relation id
@@ -131,7 +117,7 @@ struct OsmRelation
     //OsmRelation( uint64_t relation_id);
     OsmRelation( uint64_t id, uint32_t version, 
                 std::vector<OsmRelationMember> members = std::vector<OsmRelationMember>(), 
-                std::vector<OSMKeyValuePair> tags = std::vector<OSMKeyValuePair>());
+                std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
     OsmRelation( const uint8_t* data_ptr);
 /*    OsmRelation( FILE* src, uint64_t rel_id = -1);
     OsmRelation( FILE* idx, FILE* data, uint64_t relation_id);*/
@@ -147,11 +133,11 @@ struct OsmRelation
     uint64_t id;
     uint32_t version;
     std::vector<OsmRelationMember> members;
-    std::vector<OSMKeyValuePair> tags;
+    std::vector<OsmKeyValuePair> tags;
 };
 
 std::ostream& operator<<(std::ostream &out, const OsmRelation &relation);
-std::ostream& operator<<(std::ostream &out, const std::vector<OSMKeyValuePair> &tags);
+std::ostream& operator<<(std::ostream &out, const std::vector<OsmKeyValuePair> &tags);
 
 
 

@@ -169,7 +169,7 @@ void OsmParserPbf::parseDenseNodes( const OSMPBF::DenseNodes &nodes, const Strin
         bool    visible  = (!containsVisibilityInformation) || nodes.denseinfo().visible().Get(i);*/
         
         //cout << "lat/lng:" << latRaw << "/" << lonRaw << endl;
-        OSMNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id, version);
+        OsmNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id, version);
         
         //FIXME: this check is necessary to parse planet dumps; add it to the specification in the wiki
         if (nodes.keys_vals().size() > 0)   
@@ -205,7 +205,7 @@ void OsmParserPbf::parseWays(const google::protobuf::RepeatedPtrField<OSMPBF::Wa
         MUST( way.keys().size()== way.vals().size(), "extraneous key or value");
         int32_t version = way.has_info() && way.info().has_version() ? 
             way.info().version() : 1;
-        OSMWay osmWay(way.id(), version);
+        OsmWay osmWay(way.id(), version);
 
         //osmWay.tags.reserve( way.keys().size());        
         for (int i = 0; i < way.keys().size(); i++)

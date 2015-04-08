@@ -13,8 +13,8 @@ public:
     OsmConsumerIdRemapper(std::string destinationDirectory, OsmBaseConsumer *innerConsumer);
     virtual ~OsmConsumerIdRemapper();    
 protected:
-    virtual void consumeNode    ( OSMNode &);
-    virtual void consumeWay     ( OSMWay  &);
+    virtual void consumeNode    ( OsmNode &);
+    virtual void consumeWay     ( OsmWay  &);
     virtual void consumeRelation( OsmRelation &);
 private:
     OsmBaseConsumer *innerConsumer;
