@@ -13,6 +13,7 @@
 #include "geom/ringSegment.h"
 #include "geom/ring.h"
 #include "geom/ringAssembler.h"
+#include "escapeSequences.h"
 
 using namespace std;
 
@@ -106,51 +107,71 @@ using namespace std;
  */
 
 
-static void flatten(RingSegment *closedRing, map<uint64_t, OsmLightweightWay> &ways,
-                    std::vector<OsmGeoPosition> &vertices, 
+
+static void flatten(const RingSegment &closedRing, map<uint64_t, OsmLightweightWay> &ways,
+                    std::vector<OsmGeoPosition> &verticesOut, 
                     std::vector<uint64_t> &wayIds, bool globalReversal = false)
 {
-    if (closedRing->getWayId() > 0)
+    if (closedRing.getWayId() > 0)
     {   //is a leaf node, contains a reference to an actual OSM way.
         
-        assert( !closedRing->getFirstChild() && !closedRing->getSecondChild());
-        assert( ways.count(closedRing->getWayId()) );
-        OsmLightweightWay way = ways.at(closedRing->getWayId());
+        assert( !closedRing.getFirstChild() && !closedRing.getSecondChild());
+        assert( ways.count(closedRing.getWayId()) );
+        OsmLightweightWay way = ways.at(closedRing.getWayId());
         MUST( way.numVertices > 0, "way without nodes");
 
-        bool effectiveReversal = closedRing->isReversed() ^ globalReversal;
+        bool effectiveReversal = closedRing.isReversed() ^ globalReversal;
         
         wayIds.push_back(way.id);
         
         if (!effectiveReversal)
         {
             uint64_t i = 0;
-            MUST( !vertices.size() || (vertices.back() == way.vertices[0]), "trying to connect segments that do not share an endpoint");
-            if (vertices.size() && vertices.back() == way.vertices[0])
+            MUST( !verticesOut.size() || (verticesOut.back() == way.vertices[0]), "trying to connect segments that do not share an endpoint");
+            if (verticesOut.size() && verticesOut.back() == way.vertices[0])
                 i += 1; //skip duplicate starting vertex
                 
             for (; i < way.numVertices; i++)
-                vertices.push_back( way.vertices[i] );
+                verticesOut.push_back( way.vertices[i] );
         }
         else
         {
             uint64_t i = way.numVertices;
-            MUST( !vertices.size() || (vertices.back() == way.vertices[way.numVertices-1]), "trying to connect segments that do not share an endpoint");
+            MUST( !verticesOut.size() || (verticesOut.back() == way.vertices[way.numVertices-1]), "trying to connect segments that do not share an endpoint");
 
-            if (vertices.size() && vertices.back() == way.vertices[way.numVertices - 1])
+            if (verticesOut.size() && verticesOut.back() == way.vertices[way.numVertices - 1])
                 i-= 1; //skip duplicate (effective) starting vertex
                 
             for (; i > 0; i--)
-                vertices.push_back( way.vertices[i-1]);
+                verticesOut.push_back( way.vertices[i-1]);
         }
         
-    } else {
-        //is an inner node; has no wayReference, but has two child nodes
-        assert( closedRing->getFirstChild() && closedRing->getSecondChild());
-        bool effectiveReversal = closedRing->isReversed() ^ globalReversal;
+    } else if (closedRing.getWayId() == -2)
+    {   /* is an 'artificial' RingSegment not based on an actual OSM way, and just introduced to connect two 
+         * 'actual' RingSegments that do not share a common endpoint. This happens when a broken multipolygon
+         * ring is not closed in OSM, but the opening is small enough to be closed heuristically. 
+         * Such an artificial RingSegment consists only of its two endpoints, without any additional vertices
+         */
+        //assert(false && "code is untested");
+        
+        assert( !closedRing.getFirstChild() && !closedRing.getSecondChild());
+        
+        MUST( (verticesOut.size() == 0) || (verticesOut.back() == 
+              (globalReversal ? closedRing.getEndPosition() : closedRing.getStartPosition())), "trying to connect segments that do not share an endpoint");
 
-        flatten ( globalReversal ? closedRing->getSecondChild(): closedRing->getFirstChild(),  ways, vertices, wayIds, effectiveReversal);
-        flatten ( globalReversal ? closedRing->getFirstChild() : closedRing->getSecondChild(), ways, vertices, wayIds, effectiveReversal);
+        verticesOut.push_back( globalReversal ? closedRing.getStartPosition() : closedRing.getEndPosition() );
+        
+    }    
+    else if (closedRing.getWayId() == -1){
+        //is an inner node; has no wayReference, but has two child nodes
+        assert( closedRing.getFirstChild() && closedRing.getSecondChild());
+        bool effectiveReversal = closedRing.isReversed() ^ globalReversal;
+
+        flatten ( globalReversal ? *closedRing.getSecondChild(): *closedRing.getFirstChild(),  ways, verticesOut, wayIds, effectiveReversal);
+        flatten ( globalReversal ? *closedRing.getFirstChild() : *closedRing.getSecondChild(), ways, verticesOut, wayIds, effectiveReversal);
+    } else
+    {
+        MUST(false, "invalid wayId");
     }
 }
 
@@ -239,7 +260,7 @@ bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const map<uint64_t, 
 {
     if (mbr.type != WAY)
     {
-        cerr << "[WARN] ref to id=" << mbr.ref << " of invalid type '"<< (mbr.type == NODE ? "node" : mbr.type == RELATION ? "relation" : "<unknown>")<<"' in multipolygon relation " << relationId << endl;
+        cerr << ESC_FG_GRAY << "[INFO]" << " ref to id=" << mbr.ref << " of invalid type '"<< (mbr.type == NODE ? "node" : mbr.type == RELATION ? "relation" : "<unknown>")<<"' in multipolygon relation " << relationId << ESC_FG_RESET << endl;
         return false;
     }
     
@@ -281,6 +302,7 @@ int main()
     
     BucketFileSet<int> relationWaysBuckets("intermediate/referencedWays",  RELATION_WAYS_BUCKET_SIZE, true);
     
+    //for (uint64_t bucketId = 0; bucketId == 0; bucketId++)
     for (uint64_t bucketId = 0; bucketId < relationWaysBuckets.getNumBuckets(); bucketId++)
     {
         std::cout << "reading way bucket " << (bucketId+1) << "/" << relationWaysBuckets.getNumBuckets() << std::endl;
@@ -296,13 +318,11 @@ int main()
             OsmLightweightWay way(f);
             ways.insert(make_pair( way.id, way));
         }
-        
+
+        //for( uint64_t relId = 1397; relId == 1397; relId++)
         for (uint64_t relId =  bucketId   * RELATION_WAYS_BUCKET_SIZE;
                       relId < (bucketId+1)* RELATION_WAYS_BUCKET_SIZE;
                       relId++)
-        //for (const OsmRelation &rel : relStore)
-        //int dummy = 0;
-        //for (OsmRelation rel = relStore[7660]; dummy == 0; dummy++)
         {
             if (! relStore.exists(relId))
                 continue;
@@ -320,6 +340,15 @@ int main()
                     ringAssembler.addWay(ways[mbr.ref]);
 
             ringAssembler.warnUnconnectedNodes(rel.id);
+            
+            if (ringAssembler.hasOpenRingSegments())
+            {
+                double diameter = ringAssembler.getAABBDiameter(ways);
+                ringAssembler.tryCloseOpenSegments( diameter / 10.0);
+                if (ringAssembler.hasOpenRingSegments())
+                    cerr << ESC_FG_YELLOW << "\tnot all open rings could be closed heuristically. "
+                         << "Will ignore any ring that is still open" << ESC_FG_RESET << endl;
+            }
 
             
             vector<Ring*> multipolygonRings;
@@ -330,10 +359,11 @@ int main()
                 vector<OsmGeoPosition> vertices;
                 vector<uint64_t>       wayIds;
                 
-                flatten(rootSegment, ways, vertices, wayIds, false);
+                flatten(*rootSegment, ways, vertices, wayIds, false);
                 if ( vertices.size() < 4)
                 {
-                    cerr << "[WARN] multipolygon ring with less then four vertices in relation " << rel.id << "; skipping it." << endl;
+                    cerr << "[WARN] multipolygon ring with less then four vertices in relation " 
+                         << rel.id << "; skipping it." << endl;
                     continue;
                 }
                 

@@ -4,16 +4,16 @@
 #include "ringSegment.h"
 
 
-RingSegment::RingSegment(const OsmGeoPosition &start, const OsmGeoPosition &end):
-        start(start), end(end), child1(nullptr), child2(nullptr), 
-        isSegmentReversed(false)//, removeEnd1(false)
+RingSegment::RingSegment(const OsmGeoPosition &start, const OsmGeoPosition &end, int64_t wayId):
+        wayId(wayId), start(start), end(end), child1(nullptr), child2(nullptr), 
+        isSegmentReversed(false)
 {
 }
 
 RingSegment::RingSegment( const OsmLightweightWay &way ):
     wayId(way.id), child1(nullptr), child2(nullptr), isSegmentReversed(false)
 {
-    MUST(way.numVertices > 0, "cannot create ring from way without members");
+    MUST(way.numVertices > 0, "trying to create ring segment from empty way");
     start = way.vertices[0];
     end   = way.vertices[way.numVertices - 1];
 }
@@ -22,17 +22,17 @@ RingSegment::RingSegment( RingSegment *pChild1, RingSegment *pChild2):
     wayId(-1), child1(pChild1), child2(pChild2), isSegmentReversed(false)
 {
     
-        if (child2->getEndPosition() == child1->getStartPosition() ||
-            child2->getEndPosition() == child1->getEndPosition())
-            child2->reverse();
+    if (child2->getEndPosition() == child1->getStartPosition() ||
+        child2->getEndPosition() == child1->getEndPosition())
+        child2->reverse();
+    
+    /* now (the) one of the end points of child2 that can be connected to
+     * child1 is the 'start' position of child2 */
+    
+    if (child1->getStartPosition() == child2->getStartPosition())
+        child1->reverse();
         
-        /* now (the) one of the end points of child2 that can be connected to
-         * child1 is the 'start' position of child2 */
-        
-        if (child1->getStartPosition() == child2->getStartPosition())
-            child1->reverse();
-            
-        MUST( child1->getEndPosition() == child2->getStartPosition(), "invalid geometry processing");
+    MUST( child1->getEndPosition() == child2->getStartPosition(), "invalid geometry processing");
         
                    
     start = child1->getStartPosition();
