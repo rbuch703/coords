@@ -72,8 +72,10 @@ public:
             std::cerr << "[WARN] multipolygon relation " << relId << " has unconnected nodes. Will ignore all affected open rings: " << std::endl;
             for ( const std::pair<OsmGeoPosition, RingSegment*> &kv : openEndPoints)
             {
-                //printRingSegmentHierarchy( kv.second);
-                std::cerr << "\tnode " << kv.first.id << " (" << (kv.first.lat/10000000.0) << "°, " << (kv.first.lng/10000000.0) << "°) ->" << kv.second << std::endl;
+                std::cerr << "\tnode " << kv.first.id << " at way sequence ";
+                for (uint64_t wayId : kv.second->getWayIdsRecursive())
+                    std::cerr << wayId << ", ";
+                std::cerr << std::endl;
             }
         }
     

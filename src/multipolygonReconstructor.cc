@@ -113,16 +113,19 @@ static void flatten(RingSegment *closedRing, map<uint64_t, OsmLightweightWay> &w
     if (closedRing->getWayId() > 0)
     {   //is a leaf node, contains a reference to an actual OSM way.
         
-        assert( !closedRing->child1 && !closedRing->child2);
+        assert( !closedRing->getFirstChild() && !closedRing->getSecondChild());
         assert( ways.count(closedRing->getWayId()) );
         OsmLightweightWay way = ways.at(closedRing->getWayId());
-        bool effectiveReversal = closedRing->isReversed ^ globalReversal;
+        MUST( way.numVertices > 0, "way without nodes");
+
+        bool effectiveReversal = closedRing->isReversed() ^ globalReversal;
         
         wayIds.push_back(way.id);
         
         if (!effectiveReversal)
         {
             uint64_t i = 0;
+            MUST( !vertices.size() || (vertices.back() == way.vertices[0]), "trying to connect segments that do not share an endpoint");
             if (vertices.size() && vertices.back() == way.vertices[0])
                 i += 1; //skip duplicate starting vertex
                 
@@ -132,6 +135,8 @@ static void flatten(RingSegment *closedRing, map<uint64_t, OsmLightweightWay> &w
         else
         {
             uint64_t i = way.numVertices;
+            MUST( !vertices.size() || (vertices.back() == way.vertices[way.numVertices-1]), "trying to connect segments that do not share an endpoint");
+
             if (vertices.size() && vertices.back() == way.vertices[way.numVertices - 1])
                 i-= 1; //skip duplicate (effective) starting vertex
                 
@@ -141,18 +146,11 @@ static void flatten(RingSegment *closedRing, map<uint64_t, OsmLightweightWay> &w
         
     } else {
         //is an inner node; has no wayReference, but has two child nodes
-        assert( closedRing->child1 && closedRing->child2 );
-        bool effectiveReversal = closedRing->isReversed ^ globalReversal;
+        assert( closedRing->getFirstChild() && closedRing->getSecondChild());
+        bool effectiveReversal = closedRing->isReversed() ^ globalReversal;
 
-        if (!effectiveReversal)        
-        {
-            flatten(closedRing->child1, ways, vertices, wayIds, effectiveReversal);
-            flatten(closedRing->child2, ways, vertices, wayIds, effectiveReversal);
-        } else
-        {   //second child first
-            flatten(closedRing->child2, ways, vertices, wayIds, effectiveReversal);
-            flatten(closedRing->child1, ways, vertices, wayIds, effectiveReversal);
-        }
+        flatten ( globalReversal ? closedRing->getSecondChild(): closedRing->getFirstChild(),  ways, vertices, wayIds, effectiveReversal);
+        flatten ( globalReversal ? closedRing->getFirstChild() : closedRing->getSecondChild(), ways, vertices, wayIds, effectiveReversal);
     }
 }
 
@@ -235,21 +233,6 @@ void deleteRecursive(Ring* ring)
     for (Ring *child : ring->children)
         deleteRecursive(child);
     delete ring;
-}
-
-void printRingSegmentHierarchy( RingSegment* segment, int depth = 0)
-{
-    string depthSpaces = "";
-    for (int i = 0; i < depth; i++)
-        depthSpaces += "  ";
-        
-    cout << depthSpaces /*<< "segment " << segment*/ << " (way " <<  segment->wayId << ") [" 
-         << segment->start.id << "; " << segment->end.id << "]" << endl;
-    if (segment->child1)
-        printRingSegmentHierarchy(segment->child1, depth+1);
-        
-    if (segment->child2)
-        printRingSegmentHierarchy(segment->child2, depth+1);
 }
 
 bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const map<uint64_t, OsmLightweightWay> &ways)

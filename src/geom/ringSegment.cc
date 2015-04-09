@@ -1,14 +1,17 @@
 
+#include <iostream>
+
 #include "ringSegment.h"
+
 
 RingSegment::RingSegment(const OsmGeoPosition &start, const OsmGeoPosition &end):
         start(start), end(end), child1(nullptr), child2(nullptr), 
-        isReversed(false)//, removeEnd1(false)
+        isSegmentReversed(false)//, removeEnd1(false)
 {
 }
 
 RingSegment::RingSegment( const OsmLightweightWay &way ):
-    wayId(way.id), child1(nullptr), child2(nullptr), isReversed(false)
+    wayId(way.id), child1(nullptr), child2(nullptr), isSegmentReversed(false)
 {
     MUST(way.numVertices > 0, "cannot create ring from way without members");
     start = way.vertices[0];
@@ -16,7 +19,7 @@ RingSegment::RingSegment( const OsmLightweightWay &way ):
 }
 
 RingSegment::RingSegment( RingSegment *pChild1, RingSegment *pChild2):
-    wayId(-1), child1(pChild1), child2(pChild2), isReversed(false) 
+    wayId(-1), child1(pChild1), child2(pChild2), isSegmentReversed(false)
 {
     
         if (child2->getEndPosition() == child1->getStartPosition() ||
@@ -38,13 +41,52 @@ RingSegment::RingSegment( RingSegment *pChild1, RingSegment *pChild2):
 
 
 bool RingSegment::isClosed() const { return (start == end); }
-OsmGeoPosition RingSegment::getStartPosition() const { return isReversed ? end    : start; }
-OsmGeoPosition RingSegment::getEndPosition()   const { return isReversed ? start  : end;   }
-RingSegment*   RingSegment::getFirstChild()    const { return isReversed ? child2 : child1;}
-RingSegment*   RingSegment::getSecondChild()   const { return isReversed ? child1 : child2;}
+OsmGeoPosition RingSegment::getStartPosition() const { return isSegmentReversed ? end    : start; }
+OsmGeoPosition RingSegment::getEndPosition()   const { return isSegmentReversed ? start  : end;   }
+RingSegment*   RingSegment::getFirstChild()    const { return isSegmentReversed ? child2 : child1;}
+RingSegment*   RingSegment::getSecondChild()   const { return isSegmentReversed ? child1 : child2;}
+
+bool RingSegment::isReversed() const { return this->isSegmentReversed;}
+
 
 int64_t RingSegment::getWayId() const { return wayId; }
 
 
-void RingSegment::reverse() { isReversed = !isReversed; }
+void RingSegment::reverse() { isSegmentReversed = !isSegmentReversed; }
+
+
+std::vector<uint64_t> RingSegment::getWayIdsRecursive() const
+{
+    std::vector<uint64_t> wayIds;
+    
+    this->getWayIdsRecursive(wayIds);    
+    return wayIds;
+
+}
+
+void RingSegment::getWayIdsRecursive(std::vector<uint64_t> &wayIdsOut) const
+{
+    if ( this->wayId != -1) //if not an internal tree node
+        wayIdsOut.push_back(this->wayId);
+
+    if (this->child1) this->child1->getWayIdsRecursive(wayIdsOut);
+    if (this->child2) this->child2->getWayIdsRecursive(wayIdsOut);
+}
+
+
+void RingSegment::printHierarchy( int depth) const
+{
+    std::string depthSpaces = "";
+    for (int i = 0; i < depth; i++)
+        depthSpaces += "  ";
+        
+    std::cout << depthSpaces << " (way " <<  this->wayId << ") [" 
+              << this->start.id << "; " << this->end.id << "]" << std::endl;
+    if (this->child1)
+        this->child1->printHierarchy(depth + 1);
+        
+    if (this->child2)
+        this->child2->printHierarchy(depth + 1);
+}
+
 
