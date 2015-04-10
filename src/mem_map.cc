@@ -1,6 +1,4 @@
 
-#include "mem_map.h"
-
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -13,9 +11,8 @@
 
 #include <iostream>
 
-#ifndef MUST
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
-#endif
+#include "mem_map.h"
+#include "config.h"
 
 mmap_t init_mmap ( const char* file_name, bool readable, bool writeable, bool clearContents)
 {

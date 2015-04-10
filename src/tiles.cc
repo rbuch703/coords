@@ -5,10 +5,6 @@
 using std::cout;
 using std::endl;
 
-#ifndef MUST
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
-#endif
-
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
 

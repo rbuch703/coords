@@ -11,16 +11,8 @@
 #include "containers/reverseIndex.h"
 #include "containers/bucketFileSet.h"
 
-#ifndef MUST
-    //a macro that is similar to assert(), but is not deactivated by NDEBUG
-    #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
-#endif
-
 using namespace std;
 
-static const uint64_t BUCKET_SIZE = 10000000;
-static const uint64_t RESOLVED_BUCKET_SIZE = 1000000;
-static const uint64_t IS_WAY_REFERENCE = 0x8000000000000000ull;
 
 template<typename T>
 bool comparePairsByFirst(const T &a, const T &b) 
@@ -37,7 +29,8 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
     MUST(vertex_mmap.size % (2*sizeof(int32_t)) == 0, "vertex storage corruption");
     uint64_t numVertices = vertex_mmap.size / (2*sizeof(int32_t));
 
-    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved", RESOLVED_BUCKET_SIZE, false);
+    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved",
+                                                      NODES_OF_WAYS_BUCKET_SIZE, false);
     BucketFileSet<uint64_t>       nodeBuckets(        storageDirectory +"nodeRefs", BUCKET_SIZE, true);
 
     for (uint64_t bucketId = 0; bucketId < nodeBuckets.getNumBuckets(); bucketId++)
@@ -121,9 +114,9 @@ void resolveWayNodeRefs(const string storageDirectory)
 {
     ReverseIndex reverseWayIndex(storageDirectory +"wayReverse");
     LightweightWayStore wayStore( storageDirectory + "ways", true);
-    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved", RESOLVED_BUCKET_SIZE, true);
+    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved", NODES_OF_WAYS_BUCKET_SIZE, true);
 
-    BucketFileSet<uint64_t> waysReferencedByRelationsBuckets(storageDirectory + "referencedWays", 100000, false);
+    BucketFileSet<uint64_t> waysReferencedByRelationsBuckets(storageDirectory + "referencedWays", WAYS_OF_RELATIONS_BUCKET_SIZE, false);
     
     for (uint64_t i = 0; i < resolvedNodeBuckets.getNumBuckets(); i++)
     {
@@ -135,7 +128,8 @@ void resolveWayNodeRefs(const string storageDirectory)
         //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
         map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs = buildReferencesMap( resolvedNodeBuckets.getContents(i) );
         
-        for (uint64_t wayId = i * RESOLVED_BUCKET_SIZE; wayId < (i+1) * RESOLVED_BUCKET_SIZE; wayId++)
+        for (uint64_t wayId =  i    * NODES_OF_WAYS_BUCKET_SIZE; 
+                      wayId < (i+1) * NODES_OF_WAYS_BUCKET_SIZE; wayId++)
         {
             if (! wayStore.exists(wayId))
                 continue;

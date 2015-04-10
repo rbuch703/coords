@@ -8,22 +8,18 @@
 #include <map>
 #include <string>
 
-#include "mem_map.h"
-
 #include <assert.h>
 #include <string.h> //for memcpy
 
-#ifndef MUST
-    //a macro that is similar to assert(), but is not deactivated by NDEBUG
-    #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
-#endif
+#include "mem_map.h"
+#include "config.h"
 
-/* The class "ChunkedFile" represents a file containing data chunks of variable sizes that can be
-   created, read, updated and deleted without having to understand the contents of individual chunks.
-   It is intended for uses where chunk deletions
-   and recreations are quite common. In these cases, allowing arbitrary chunk sizes 
-   would lead to wasted space whenever a chunk is deleted, as its space cannot easily
-   be re-used for chunks of a different size. 
+/* The class "ChunkedFile" represents a file containing data chunks of variable sizes that can 
+   be created, read, updated and deleted without having to understand the contents of 
+   individual chunks.
+   It is intended for uses where chunk deletions and recreations are quite common. In these
+   cases, allowing arbitrary chunk sizes would lead to wasted space whenever a chunk is deleted,
+   as its space cannot easily be re-used for chunks of a different size. 
    Instead, this class only allows certain chunk sizes that follow a power series (
    starting at 27 bytes, and each successive size being 4/3 times as big as its 
    predecessor, rounded down). When creation of a new chunk (of arbitrary size) is 

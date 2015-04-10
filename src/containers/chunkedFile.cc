@@ -3,9 +3,6 @@
 #include <assert.h>
 #include <iostream>
 
-//#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); abort();}}
-
-
 using std::string;
 
 /*const uint64_t ChunkedFile::chunkSizes[] = 

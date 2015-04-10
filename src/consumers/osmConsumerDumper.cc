@@ -20,17 +20,12 @@
 #include "consumers/osmConsumerDumper.h"
 #include "osm/osmTypes.h"
 #include "osm/osm_tags.h"
-//#include "symbolic_tags.h"
-
-#ifndef MUST
-    #define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
-#endif
+#include "config.h"
 
 using namespace std;
 
 //#define outputBasePath "intermediate/"
 
-static const uint64_t BUCKET_SIZE = 10000000;
 
 static void truncateFile(string filename) {
     FILE* f= fopen(filename.c_str() , "wb+"); 
@@ -125,8 +120,6 @@ void OsmConsumerDumper::consumeNode( OsmNode &node)
     vertex_ptr[2*node.id]   = node.lat;
     vertex_ptr[2*node.id+1] = node.lon;
 }
-
-static const uint64_t IS_WAY_REFERENCE = 0x8000000000000000ull;
 
 void OsmConsumerDumper::consumeWay ( OsmWay  &way)
 {

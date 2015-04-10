@@ -45,7 +45,7 @@ Ring::Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64
 Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds):
     wayIds(wayIds), geosPolygon(geosPolygon)
 {
-    assert(geosPolygon->getNumInteriorRing() == 0 || "Not a simple polygon");
+    assert(geosPolygon->getNumInteriorRing() == 0 || "Not a simple polygon/ring");
     area = this->geosPolygon->getArea();
     
 }

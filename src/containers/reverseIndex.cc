@@ -1,14 +1,12 @@
 
 #include "containers/reverseIndex.h"
+#include "config.h"
 
 #include <string.h> //for memcpy()
 #include <assert.h>
 #include <unistd.h>  //for unlink()
 #include <iostream>
 
-#define MUST(action, errMsg) { if (!(action)) {printf("Error: '%s' at %s:%d, exiting...\n", errMsg, __FILE__, __LINE__); assert(false && errMsg); exit(EXIT_FAILURE);}}
-
-static const uint64_t IS_WAY_REFERENCE = 0x8000000000000000ull;
 
 using namespace std;
 
