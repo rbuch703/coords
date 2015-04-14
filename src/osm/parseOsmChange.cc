@@ -265,7 +265,7 @@ void end(ParserState *state, const char *el) {
         assert(state->entityType == ET_WAY);
 
         
-        //FIXME: add code for completing nodes
+        //FIXME: add code for completing ways
         /*
         switch( state->changeType) {
             case CREATE: assert(false && "Not implemented"); break;
@@ -285,7 +285,7 @@ void end(ParserState *state, const char *el) {
         assert(state->entityType == ET_RELATION);
 
         
-        //FIXME: add code for completing nodes
+        //FIXME: add code for completing relations
         /*
         switch( state->changeType) {
             case CREATE: assert(false && "Not implemented"); break;

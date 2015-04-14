@@ -50,26 +50,13 @@ OsmParserPbf::~OsmParserPbf() {
 }
 
 
-void OsmParserPbf::unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unpackBufferOut, uint32_t &unpackedSizeOut)
+void OsmParserPbf::unpackBlob( const OSMPBF::Blob &blob, FILE* /*fIn*/, uint8_t *unpackBufferOut, uint32_t &unpackedSizeOut)
 {
-    if (blob.has_raw())
-    {
-        /*FIXME: according to protobuf-documentation, the blob should already contain the raw data
-                 in its blob.raw() property. However, according to the OSM PBF sample code,
-                 the blob does not contain this data by itself, and the data needs to be loaded
-                 manually from the file.
-        */
-        MUST(false, "unimplemented");
-        fclose(fIn); //just to get rid of compiler warning
-        //memcpy(unpackBuffer, blob.raw
-        return;
-    }
-    
     if (blob.has_zlib_data())
     {
             // zlib information
         z_stream z;
-        z.next_in = (unsigned char*) blob.zlib_data().c_str(),             // next byte to decompress
+        z.next_in = (unsigned char*) blob.zlib_data().c_str(), // next byte to decompress
         z.avail_in  = blob.zlib_data().size(),  // number of bytes to decompress
         z.next_out  = (unsigned char*) unpackBufferOut, // place of next decompressed byte
         z.avail_out = OSMPBF::max_uncompressed_blob_size,     // space for decompressed data
@@ -85,8 +72,9 @@ void OsmParserPbf::unpackBlob( const OSMPBF::Blob &blob, FILE* fIn, uint8_t *unp
         return;
     };
 
-    assert(false && "Not implemented");
-
+    /* could not yet be written and tested as no known tools exist that actually write
+     * blobs uncompressed, or in any compression format other than DEFLATE (->zlib). */
+    MUST(false, "unimplemented");
 }
 
 string OsmParserPbf::prepareBlob(uint8_t *unpackBuffer, uint32_t &dataSizeOut)
@@ -171,7 +159,8 @@ void OsmParserPbf::parseDenseNodes( const OSMPBF::DenseNodes &nodes, const Strin
         //cout << "lat/lng:" << latRaw << "/" << lonRaw << endl;
         OsmNode node( (int32_t)(latRaw * granularity/100 + lat_offset), (int32_t)(lonRaw * granularity/100 + lon_offset), id, version);
         
-        //FIXME: this check is necessary to parse planet dumps; add it to the specification in the wiki
+        /*edge case: if no node in block contains any tags, there are no delimiters,
+         *           but instead the array is simply empty.*/
         if (nodes.keys_vals().size() > 0)   
         {
             while ( nodes.keys_vals().Get(keyValPos) != 0)

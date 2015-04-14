@@ -95,7 +95,7 @@ VALUE_T SerializableMap<KEY_T, VALUE_T, MAX_ITEMS_IN_MEMORY>::getHighestValue() 
 template <typename KEY_T, typename VALUE_T, int MAX_ITEMS_IN_MEMORY>
 void SerializableMap<KEY_T, VALUE_T, MAX_ITEMS_IN_MEMORY>::merge() 
 {
-    /*FIXME: add separate code path for when the biggest key in the on-disk map
+    /*TODO:  add separate code path for when the biggest key in the on-disk map
      *       is smaller than the smallest key in the in-memory map. In that case
      *       the in-memory map can simply be appended to the on-disk map instead
      *       of requiring a merger. This situation should be the norm for OSM ID

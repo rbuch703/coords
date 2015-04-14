@@ -85,8 +85,6 @@ void OsmXmlParser::parse()
     while (readNextLine())
     {   
         
-        //TODO: replace strstr(line_buffer, ...) by strcmp(line, ...)
-        
         if      (strncmp(line, "<changeset" ,10) == 0) { parseChangeset(); }
         else if (strncmp(line, "<node"      , 5) == 0) { parseNode();}
         else if (strncmp(line, "<way"       , 4) == 0) { parseWay();}
@@ -97,7 +95,10 @@ void OsmXmlParser::parse()
         else if (strncmp(line, "<osm ",  5) == 0) { continue;}
         else if (strncmp(line, "</osm>",  6) == 0) { continue;}
         //else if (strstr(line_buffer, "</")) { continue;}
-        //FIXME: assumes that exactly the remainder of the current line is a comment
+        /* note: the following line assumes that the whole remainder of the current line
+         * is a comment, and that the comment ends with the end of that line. This is
+         * true for automatically-generates OSM XML files, but is not valid for general
+         * XML files. */
         else if (strncmp(line, "<!--",   4) == 0) { continue;} 
         else if (strncmp(line, "<bound", 6) == 0) { continue;}
         else

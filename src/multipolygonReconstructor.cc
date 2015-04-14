@@ -7,6 +7,7 @@
 #include <string>
 #include <algorithm> //for sort()
 #include <geos/geom/Polygon.h>
+#include <geos/geom/CoordinateSequence.h>
 
 #include "osm/osmMappedTypes.h"
 #include "containers/bucketFileSet.h"
@@ -14,15 +15,18 @@
 #include "geom/ring.h"
 #include "geom/ringAssembler.h"
 #include "escapeSequences.h"
+#include "config.h"
 
 using namespace std;
 
 /* The high-level algorithm to create multipolygons from a multipolygon relation is as follows:
  *     1. ignore all non-way members
- *     2. build geometric rings (node sequences that start and end with the same node) by connecting ways
- *     3. from all rings build a geometric "contains" hierarchy (each ring becomes the child node to that
- *       ring which directly contains it)
- *     4. from the "contains" hierarchy, assign inner/outer roles to form the multipolygon (not yet implemented)
+ *     2. build geometric rings (node sequences that start and end with the same node) by
+ *        connecting ways
+ *     3. from all rings build a geometric "contains" hierarchy (each ring becomes the child
+ *        node to that ring which directly contains it)
+ *     4. from the "contains" hierarchy, assign inner/outer roles to form the multipolygon (not
+ *        yet implemented)
  *     5. import tags from outer ways if necessary (not yet implemented)
  *
  *  Details:
@@ -30,26 +34,30 @@ using namespace std;
  *
  *  2. Building Geometric Rings:
  *  ------------------
- *  Basic idea: Repeatedly find ways that share at least one endpoint, and connect those ways until none are left. 
- *              Then, discard any connected ways that do not start and end at the same point. Those are not closed
- *              and thus represent invalid parts of a multipolygon geometry. The remaining ways are the rings.
+ *  Basic idea: Repeatedly find ways that share at least one endpoint, and connect those ways 
+ *              until none are left. Then, discard any connected ways that do not start and
+ *              end at the same point. Those are not closed and thus represent invalid parts 
+ *              of a multipolygon geometry. The remaining ways are the rings.
  *
  *  Implementation details:
- *  - In order to connect two ways, one way may need to be reversed to fit. In extreme cases, ways have to be reversed
- *    for each connecting of two ways. This could potentially impact performance negatively. 
- *    This implementation instead
- *    first creates an abstract RingSegment representation for each way, containing only its two end points, a 
- *    reference to the wayId, and a boolean 'reversed' flag storing whether a way needs to be reversed before connecting
- *    it (but without actually performing the reversion). The finding and 'connecting' of ways is then performed only
- *    on the RingSegments: Whenever two RingSegments should be connected, a new RingSegment is created that contains both
- *    original segments as its child, and contains the open end points of its children (i.e. those that are not connected
- *    to each other). The 'reversed' flag of the children is set accordingly. From that point on, the two original
- *    RingSegments are no longer considered for connection to other segments, but only the newly created one is. 
- *    This effectively creates a binary tree of RingSegments for each ring, where the end points of the top-most 
- *    RingSegment are identical (if the hierarchy indeed represents a closed ring).
- *    Once built, this hierarchy is then flattened into the actual ring by traversing it in-order, and adding the
- *    nodes of all ways referenced by traversed RingSegments to the output (along with the list of wayIds for
- *    later algorithms that might need that list). In this process, each way is reversed *at most once*.
+ *  - In order to connect two ways, one way may need to be reversed to fit. In extreme cases, 
+ *    ways have to be reversed for each connecting of two ways. This could potentially impact 
+ *    performance negatively. 
+ *    This implementation instead first creates an abstract RingSegment representation for each 
+ *    way, containing only its two end points, a reference to the wayId, and a boolean 'reversed'
+ *    flag storing whether a way needs to be reversed before connecting it (but without actually
+ *    performing the reversion). The finding and 'connecting' of ways is then performed only on
+ *    the RingSegments: Whenever two RingSegments should be connected, a new RingSegment is 
+ *    created that contains both original segments as its childred, and contains the open end 
+ *    points of its children (i.e. those that are not connected to each other). The 'reversed' 
+ *    flag of the children is set accordingly. From that point on, the two original RingSegments
+ *    are no longer considered for connection to other segments, but only the newly created one is. 
+ *    This effectively creates a binary tree of RingSegments for each ring, where the end points of
+ *    the top-most RingSegment are identical (if the hierarchy indeed represents a closed ring).
+ *    Once built, this hierarchy is then flattened into the actual ring by traversing it in-order, 
+ *    and adding the nodes of all ways referenced by traversed RingSegments to the output (along 
+ *    with the list of wayIds - for later algorithms that might need that list). In this process, 
+ *    each way is reversed *at most once*.
  *
  *  - Finding pairs of ways that can be connected would be ineffective if implemented naively (testing each way against
  *    every other way). Instead, we use a dictionary to map open (i.e. unconnected) endpoints to the corresponding
@@ -147,17 +155,19 @@ static void flatten(const RingSegment &closedRing, map<uint64_t, OsmLightweightW
         }
         
     } else if (closedRing.getWayId() == -2)
-    {   /* is an 'artificial' RingSegment not based on an actual OSM way, and just introduced to connect two 
-         * 'actual' RingSegments that do not share a common endpoint. This happens when a broken multipolygon
-         * ring is not closed in OSM, but the opening is small enough to be closed heuristically. 
-         * Such an artificial RingSegment consists only of its two endpoints, without any additional vertices
+    {   /* is an 'artificial' RingSegment not based on an actual OSM way, and just introduced to
+         * connect two 'actual' RingSegments that do not share a common endpoint. This happens
+         * when a broken multipolygon ring is not closed in OSM, but the opening is small enough
+         * to be closed heuristically. 
+         * Such an artificial RingSegment consists only of its two endpoints, without any
+         * additional vertices.
          */
-        //assert(false && "code is untested");
         
         assert( !closedRing.getFirstChild() && !closedRing.getSecondChild());
         
         MUST( (verticesOut.size() == 0) || (verticesOut.back() == 
-              (globalReversal ? closedRing.getEndPosition() : closedRing.getStartPosition())), "trying to connect segments that do not share an endpoint");
+              (globalReversal ? closedRing.getEndPosition() : closedRing.getStartPosition())),
+               "trying to connect segments that do not share an endpoint");
 
         verticesOut.push_back( globalReversal ? closedRing.getStartPosition() : closedRing.getEndPosition() );
         
@@ -176,9 +186,20 @@ static void flatten(const RingSegment &closedRing, map<uint64_t, OsmLightweightW
 }
 
 
-bool lessThan( Ring* a, Ring* b)
+bool hasBiggerArea( Ring* a, Ring* b)
 {
     return a->area > b->area;
+}
+
+void printPolygon(const geos::geom::Geometry *geo)
+{
+    assert(geo->getGeometryTypeId() == geos::geom::GEOS_POLYGON);
+    auto coords = geo->getCoordinates();
+    for (uint64_t i = 0; i < coords->getSize(); i++)
+        cerr << ((*coords)[i].x+ 3.49E8) << ", " << ((*coords)[i].y - 1.386E9) << endl;
+    
+    
+    delete coords;
 }
 
 void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint64_t relId)
@@ -190,7 +211,7 @@ void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint
         /* note: contains() only means that no part of 'ring' lies outside of 'root'.
                  This is less strict than that the OGC multipolygon requirements (which
                  demand - among others - that the inner ring touches the outer one 
-                 at most at a finite number of points (while contains() allows touching
+                 at most at a finite number of points, while contains() allows touching
                  edges). But contains() is good enough for now to establish a hierarchy.
                  The edge cases (like touching edges) need to be removed in a later 
                  post-processing step (e.g. through CSG subtraction).*/
@@ -199,34 +220,45 @@ void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint
 
         if ( root->interiorIntersectsWith(*ring))
         {
-            cerr << "[WARN] overlapping rings found in relation " << relId << ", merging them." << endl;
-            cerr << "\tRing 1: ";
+            cerr << ESC_FG_YELLOW << "[WARN] overlapping rings found in relation " << relId << ", merging them." << ESC_FG_RESET << endl;
+            cerr << "\tRing 1: ways ";
             for (uint64_t wayId : root->wayIds)
                 cerr << wayId << ", ";
             cerr << endl;
 
-            cerr << "\tRing 2: ";
+            cerr << "\tRing 2: ways ";
             for (uint64_t wayId : ring->wayIds)
                 cerr << wayId << ", ";
             cerr << endl;
 
             vector<uint64_t> wayIds( root->wayIds.begin(), root->wayIds.end());
             wayIds.insert( wayIds.end(), ring->wayIds.begin(), ring->wayIds.end() );
-            /* FIXME: 'merged' could theoretically be a (multi)polygon instead of a simple ring. This would corrupt
-             *        later data processing. Make sure that 'merged' is either a single ring, or add its sub-rings
-             *        to the hierarchy individually. */
-            Ring* merged = NULL;
-            //Ring* merged = new Ring( root->geosPolygon->Union(ring->geosPolygon), wayIds);
-            cout << "merged geometry is of type " << merged->geosPolygon->getGeometryType() << endl;
+
+            cerr << ESC_FG_RED << "Merging overlapping rings in relation " << relId 
+                 << ESC_FG_RESET << endl;
+            geos::geom::Geometry *merged = root->geosPolygon->Union(ring->geosPolygon);
+            MUST( merged->getGeometryTypeId() == geos::geom::GEOS_POLYGON, "merge error");
+
+            /* unions cannot reduce the area, and a reduction would void this algorithm, as
+             * it assumes that rings are inserted sorted descending by area. We still allow
+             * for a very small relative reduction to account for numerical inaccuracies */
+            double relativeArea = merged->getArea() / root->area;
+            MUST( relativeArea >= 0.99999999999999 , "union reduced area");
+
+            Ring *mergedRing = new Ring( dynamic_cast<geos::geom::Polygon*>(merged), wayIds);
+            MUST( ring->children.size() == 0, "simple ring cannot have children");
+            mergedRing->children = root->children;
+
+            /* These assertions should be true geometrically, but can fail in GEOS due to
+             * numerical inaccuracies */
+            /*MUST( merged->covers(root->geosPolygon), "merge error");
+            MUST( merged->covers(ring->geosPolygon), "merge error");*/
             
-            
-            /* unions cannot reduce the area, and a reduction would corrupt this algorithm,
-             * which assumes that rings are inserted sorted descending by area. */
-            assert(merged->area >= root->area);
+
             delete root;
             delete ring;
             
-            rootContainer[i] = merged;
+            rootContainer[i] = mergedRing;
             return;
         }
     }
@@ -239,14 +271,111 @@ void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint
 
 vector<Ring*> buildRingHierarchy( vector<Ring*> &sortedRings, uint64_t relId)
 {
-    assert( is_sorted(sortedRings.begin(), sortedRings.end(), lessThan));
+    assert( is_sorted(sortedRings.begin(), sortedRings.end(), hasBiggerArea));
     vector<Ring*> roots;
     
     for ( Ring *ring : sortedRings)
         addToRingHierarchyRecursive( ring, roots, relId);
     
+    /*  addToRingHierarchyRecursive() takes ownership of all rings passed to it:
+        they are either incorporated into the hierarchy, or deleted. So at this point, 
+        sortedRings is just an array of stale pointers, and can (and should!) be cleared. */
     sortedRings.clear();
     return roots;
+}
+
+template <typename T> void removeAt(vector<T> &v, uint64_t pos)
+{
+    v[pos] = v[v.size()-1];
+    v.pop_back();
+}
+
+
+void replaceByDifferencePolygon( vector<Ring*> &root, uint64_t parentPos, uint64_t childPos, geos::geom::Geometry* diff)
+{
+    Ring* parent = root[parentPos];
+    Ring* child  = parent->children[childPos];
+    /* computes the geometric difference of 'parent' and 'child', 
+     * and replaces both by that difference. */
+    //MUST(false, "untested branch");
+    geos::geom::Polygon *diffPoly = dynamic_cast<geos::geom::Polygon*>(diff);
+    /* All ring hierarchy algorithms used here assume that each element is
+     * a geometric ring, i.e. a simple polygon without holes. So the result
+     * of the geometric difference has to be a ring as well. And since both
+     * input geometries to the difference operation were rings whose outlines
+     * overlap in at least a single point and where one is completely 
+     * contained in the other, the result should always be a ring as well. */
+    MUST( diffPoly->getNumInteriorRing() == 0, "invalid difference result");
+    
+    vector<uint64_t> wayIds = parent->wayIds;
+    wayIds.insert(wayIds.end(), child->wayIds.begin(), child->wayIds.end());
+    Ring* diffRing = new Ring(diffPoly, wayIds);
+    
+    diffRing->children = parent->children;
+    /* remove child (which is going to be deleted) from list of children*/
+    removeAt( diffRing->children, childPos);
+    delete parent;
+    
+    root.insert(root.end(), child->children.begin(), child->children.end());
+    delete child;
+    
+    root[parentPos] = diffRing;
+}
+void removeBoundaryOverlaps( vector<Ring*> &root, uint64_t relId)
+{
+    uint64_t parentPos = 0;
+    while (parentPos < root.size())
+    {
+        Ring* parent = root[parentPos];
+        bool parentHasChanged = false;
+        
+        for (uint64_t childPos = 0; childPos < parent->children.size(); childPos++)
+        {
+//            MUST(false, "untested branch");
+
+            Ring* child = parent->children[childPos];
+            MUST( parent->contains(*child), "inclusion hierarchy violation");
+
+            if (!Ring::boundariesTouch(*parent, *child))
+                continue;
+
+            cerr << ESC_FG_YELLOW << "[Warn] in relation " << relId << ": child ring (ways ";
+            for (uint64_t wayId : child->wayIds)
+                cerr << wayId << ", ";
+            cerr << ") touches parent ring (ways ";
+            for (uint64_t wayId : parent->wayIds)
+                cerr << wayId << ", ";
+            cerr << "). Computing geometric difference polygon." << ESC_FG_RESET << endl;
+            
+            
+
+            
+
+            geos::geom::Geometry *diff = parent->geosPolygon->difference( child->geosPolygon);
+            
+            switch (diff->getGeometryTypeId())
+            {
+                case geos::geom::GEOS_POLYGON:
+                {
+                    replaceByDifferencePolygon(root, parentPos, childPos, diff);
+                    parentHasChanged = true;
+                    break;
+                }
+                case geos::geom::GEOS_MULTIPOLYGON:
+                    MUST(false, "untested branch");
+                    for (uint64_t i = 0; i < diff->getNumGeometries(); i++)
+                        MUST( diff->getGeometryN(i)->getGeometryTypeId() == geos::geom::GEOS_POLYGON, "unknown result of geometric difference");
+                    break;
+                default:
+                    MUST(false, "unknown result of geometric difference");
+                    break;
+            } //switch
+            
+        } //for childPos
+        
+        if (!parentHasChanged)
+            parentPos++;
+    }
 }
 
 void deleteRecursive(Ring* ring)
@@ -296,17 +425,15 @@ int main()
     cout << ring.area << endl;
     exit(0);*/
 
-    RelationStore relStore("intermediate/relations");
-    //LightweightWayStore wayStore("intermediate/ways");
-    static const int RELATION_WAYS_BUCKET_SIZE = 100000;
+    RelationStore relStore("intermediate"/*"/multipolygon_world"*/"/relations");
     
-    BucketFileSet<int> relationWaysBuckets("intermediate/referencedWays",  RELATION_WAYS_BUCKET_SIZE, true);
-    
-    //for (uint64_t bucketId = 0; bucketId == 0; bucketId++)
+    BucketFileSet<int> relationWaysBuckets("intermediate"/*"/multipolygon_world"*/"/referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
+
+    //for (uint64_t bucketId = 16; bucketId == 16; bucketId++)
     for (uint64_t bucketId = 0; bucketId < relationWaysBuckets.getNumBuckets(); bucketId++)
     {
         std::cout << "reading way bucket " << (bucketId+1) << "/" << relationWaysBuckets.getNumBuckets() << std::endl;
-        FILE* f = relationWaysBuckets.getFile(bucketId* RELATION_WAYS_BUCKET_SIZE);
+        FILE* f = relationWaysBuckets.getFile(bucketId* WAYS_OF_RELATIONS_BUCKET_SIZE);
         MUST(f != nullptr, "cannot open bucket file");
         
         map<uint64_t, OsmLightweightWay> ways;
@@ -319,9 +446,14 @@ int main()
             ways.insert(make_pair( way.id, way));
         }
 
-        //for( uint64_t relId = 1397; relId == 1397; relId++)
-        for (uint64_t relId =  bucketId   * RELATION_WAYS_BUCKET_SIZE;
-                      relId < (bucketId+1)* RELATION_WAYS_BUCKET_SIZE;
+        //for( uint64_t relId = 1698122; relId == 1698122; relId++)
+        /*for (uint64_t relId =  1698122 > bucketId   * WAYS_OF_RELATIONS_BUCKET_SIZE ?
+                               1698122 : bucketId   * WAYS_OF_RELATIONS_BUCKET_SIZE;
+                      relId < (bucketId+1)* WAYS_OF_RELATIONS_BUCKET_SIZE;
+                      relId++)*/
+
+        for (uint64_t relId =  bucketId   * WAYS_OF_RELATIONS_BUCKET_SIZE;
+                      relId < (bucketId+1)* WAYS_OF_RELATIONS_BUCKET_SIZE;
                       relId++)
         {
             if (! relStore.exists(relId))
@@ -346,10 +478,10 @@ int main()
                 double diameter = ringAssembler.getAABBDiameter(ways);
                 ringAssembler.tryCloseOpenSegments( diameter / 10.0);
                 if (ringAssembler.hasOpenRingSegments())
-                    cerr << ESC_FG_YELLOW << "\tnot all open rings could be closed heuristically. "
-                         << "Will ignore any ring that is still open" << ESC_FG_RESET << endl;
+                    cerr << ESC_FG_YELLOW << "\tnot all open rings could be closed "
+                         << "heuristically. Will ignore any ring that is still open" 
+                         << ESC_FG_RESET << endl;
             }
-
             
             vector<Ring*> multipolygonRings;
             
@@ -362,8 +494,13 @@ int main()
                 flatten(*rootSegment, ways, vertices, wayIds, false);
                 if ( vertices.size() < 4)
                 {
-                    cerr << "[WARN] multipolygon ring with less then four vertices in relation " 
-                         << rel.id << "; skipping it." << endl;
+                    
+                    cerr << ESC_FG_YELLOW << "[WARN] multipolygon ring in relation " << rel.id 
+                         << " based on ways (";
+                    for (uint64_t wayId : wayIds)
+                        cerr << wayId << ", ";
+                    
+                    cerr << ") has less then four vertices ; skipping it." << ESC_FG_RESET <<endl;
                     continue;
                 }
                 
@@ -374,13 +511,14 @@ int main()
             }
             
             //cout << "processing relation " << rel.id << endl;
-            std::sort( multipolygonRings.begin(), multipolygonRings.end(), lessThan);
+            std::sort( multipolygonRings.begin(), multipolygonRings.end(), hasBiggerArea);
             
-            for (Ring* r: multipolygonRings)
-                delete r;
-            //vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
-            //for (Ring* ring : roots)
-            //    deleteRecursive(ring);
+            /*for (Ring* r: multipolygonRings)
+                delete r;*/
+            vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
+            removeBoundaryOverlaps(roots, rel.id);
+            for (Ring* ring : roots)
+                deleteRecursive(ring);
         }
     }
 

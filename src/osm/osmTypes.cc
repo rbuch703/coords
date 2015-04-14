@@ -18,13 +18,6 @@
 
 using namespace std;
 
-/*
-std::ostream& operator <<(std::ostream& os, const OSMVertex v)
-{
-    os << "( " << v.x << ", " << v.y << ")";
-    return os;
-}*/
-
 uint64_t getSerializedSize(const std::vector<OsmKeyValuePair> &tags)
 {
     uint64_t size = sizeof(uint16_t) + //uint16_t numTags
@@ -42,7 +35,7 @@ void serializeTags( const vector<OsmKeyValuePair> &tags, FILE* file)
 {
     assert(tags.size() < (1<<16));
     uint16_t num_tags = tags.size();
-    fwrite(&num_tags, sizeof(num_tags), 1, file);
+    MUST( fwrite(&num_tags, sizeof(num_tags), 1, file) == 1, "write error");
 
     uint32_t numTagBytes = 0;
     for (const OsmKeyValuePair &tag : tags)
@@ -51,11 +44,12 @@ void serializeTags( const vector<OsmKeyValuePair> &tags, FILE* file)
         numTagBytes += strlen(tag.second.c_str()) + 1;
     }
     //storing this total size is redundant, but makes reading the tags back from file much faster 
-    fwrite(&numTagBytes, sizeof(numTagBytes), 1, file);
+    MUST( fwrite(&numTagBytes, sizeof(numTagBytes), 1, file) == 1, "write error");
 
     for (const OsmKeyValuePair &tag : tags)
     {
-        fwrite( tag.first.c_str(),  strlen(tag.first.c_str()) + 1, 1, file);    //both including their null-termination
+        //both including their null-termination
+        fwrite( tag.first.c_str(),  strlen(tag.first.c_str()) + 1, 1, file);
         fwrite( tag.second.c_str(), strlen(tag.second.c_str())+ 1, 1, file);
     }
 
@@ -75,16 +69,6 @@ void serializeTags( const vector<OsmKeyValuePair> &tags, Chunk &chunk)
         chunk.put( tag.first.c_str(),  strlen(tag.first.c_str())  + 1);
         chunk.put( tag.second.c_str(), strlen(tag.second.c_str()) + 1);
     }
-}
-
-
-void fread( void* dest, uint64_t size, FILE* file)
-{
-    //FIXME: switch "1" and "size"
-    uint64_t num_read = fread(dest, 1, size, file);
-    assert(num_read == size);
-    if (num_read < 1)
-    { perror("[ERR] fread"); exit(0);}
 }
 
 vector<OsmKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
@@ -128,11 +112,11 @@ vector<OsmKeyValuePair> deserializeTags(FILE* src)
     vector<OsmKeyValuePair> tags;
     
     uint16_t num_tags;
-    fread( &num_tags, sizeof(num_tags), src);
+    MUST( fread( &num_tags, sizeof(num_tags), 1, src) == 1, "read error");
     tags.reserve(num_tags);
     
     uint32_t numTagBytes;
-    fread( &numTagBytes, sizeof(numTagBytes), src);
+    MUST( fread( &numTagBytes, sizeof(numTagBytes), 1, src) == 1, "read error");
     char* tagBytes = new char[numTagBytes];
 #ifndef NDEBUG 
     char* beyondTagBytes = tagBytes + numTagBytes;
@@ -161,12 +145,6 @@ vector<OsmKeyValuePair> deserializeTags(FILE* src)
     
 }
 
-/*
-list<OsmKeyValuePair> deserializeTags(FILE* data_file, uint64_t file_offset)
-{
-    fseeko(data_file, file_offset, SEEK_SET);
-    return deserializeTags(data_file);
-}*/
 
 ostream& operator<<(ostream &out, const vector<OsmKeyValuePair> &tags)
 {
@@ -180,16 +158,6 @@ ostream& operator<<(ostream &out, const vector<OsmKeyValuePair> &tags)
     out << "]";
     return out;
 }
-
-/*
-OsmNode::OsmNode( FILE* data_file, uint64_t offset, uint64_t node_id)
-{
-    fseeko(data_file, offset, SEEK_SET);
-    fread(&lat, sizeof(lat), data_file);
-    fread(&lon, sizeof(lon), data_file);
-    tags = deserializeTags(data_file);
-    id = node_id;
-}*/
 
 
 OsmNode::OsmNode( const uint8_t* data_ptr)
@@ -213,35 +181,6 @@ uint64_t OsmNode::getSerializedSize() const
 {
     return sizeof(id) + sizeof(version) + sizeof(lat) + sizeof(lon) + ::getSerializedSize(tags);
 }
-#if 0
-OsmNode::OsmNode( FILE* idx, FILE* data, uint64_t node_id)
-{
-    fseek(idx, node_id*sizeof(uint64_t), SEEK_SET);
-    uint64_t pos;
-    int nRead = fread( &pos, sizeof(uint64_t), 1, idx);
-    /*there is only a magic byte at file position 0. Pos == 0 is the marker representing that no relation 
-      with that id exists */
-    if ((nRead != 1) || (pos == 0))
-    {
-        id = -1;
-        lat = INVALID_LAT_LNG;
-        lon = INVALID_LAT_LNG;
-        return;
-    }
-
-    fseek(data, pos, SEEK_SET);
-    nRead =  fread(&lat, sizeof(int32_t), 1, data);
-    nRead += fread(&lon, sizeof(int32_t), 1, data);
-    id = node_id;
-    if (nRead != 2)
-    {
-        cout << "Invalid read operation" << endl;
-        exit(0);
-    }
-
-    tags = deserializeTags(data);
-}
-#endif
 
 OsmNode::OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
 

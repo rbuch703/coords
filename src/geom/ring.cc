@@ -16,32 +16,6 @@
 
 geos::geom::GeometryFactory Ring::factory;  
 
-#if 0
-Ring::Ring(const std::vector<OsmGeoPosition> &vertices, const std::vector<uint64_t> wayIds):
-    wayIds(wayIds)
-///*RingSegment *rootSegment, LightweightWayStore &ways*/)
-{
-
-//    flatten(rootSegment, ways, this->vertices, this->wayIds, false);
-
-    //static geos::geom::PrecisionModel pmFixed(1.0);
-    //geoFactory = new geos::geom::GeometryFactory();
-    //std::cerr << pmFixed.getScale() << std::endl;
-
-    
-    /*area = 0.0;
-    for (uint64_t i = 0; i < vertices.size()-1; i++)
-    {
-            area += 0.5 * ( vertices[i].lat * vertices[i+1].lng -
-                            vertices[i].lng * vertices[i+1].lat );
-    }
-    area += 0.5 * (vertices[vertices.size()-1].lat * vertices[0].lng -
-                   vertices[vertices.size()-1].lng * vertices[0].lat );*/
-    
-    area = this->geosPolygon->getArea();
-    //std::cout << "area: " << area << std::endl;
-}
-#endif
 Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds):
     wayIds(wayIds), geosPolygon(geosPolygon)
 {
@@ -120,6 +94,7 @@ bool Ring::overlapsWith(const Ring &other) const
     return true;
 }*/
 
+#if 0
 bool Ring::containsInInterior(const Ring &other) const
 {
     /* containsInInterior: 'this' and 'other' must overlap in their
@@ -144,12 +119,19 @@ bool Ring::containsAsInner(const Ring &other) const
     //std::cout << "# " << res << std::endl;
     return res;
 }
+#endif
 
 bool Ring::contains(const Ring &other) const
 {
     return this->geosPolygon->contains(other.geosPolygon);
 }
 
+bool Ring::boundariesTouch(const Ring &a, const Ring &b)
+{
+    // cf. http://en.wikipedia.org/wiki/DE-9IM */
+    static const std::string touchesMatrix = "****T****";
+    return a.geosPolygon->relate( b.geosPolygon, touchesMatrix );
+}
 
 bool Ring::interiorIntersectsWith(const Ring &other) const
 {

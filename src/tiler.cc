@@ -206,8 +206,9 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
     GeoAABB bounds = getBounds(wayIn);
     uint64_t solidAngle = abs(bounds.latMax - bounds.latMin);
     solidAngle *= abs(bounds.lngMax - bounds.lngMin);
-    /* WARNING!!!: FIXME: these are very rough computations based on a lat/lng grid. More accurate computations
-     *                    would need to take into account the coordinates after mercator projection */
+    /* WARNING!!!: FIXME: these are very rough computations based on a lat/lng grid (plate
+     * carree). More accurate computations would need to take into account the coordinates 
+     * in web mercator projection (the projection the data will be rendered in) */
     double solidAngleDeg = solidAngle / (10000000.0 * 10000000.0);
     // at zoom level 12: a tile is on average 0.0879° wide and 0.0415° high, and has 256x256 pixels
     double solidAnglePixel = (0.0879/256) *(0.0415/256);
