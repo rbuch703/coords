@@ -1,9 +1,10 @@
 
-#ifndef ENVELOPE_H
-#define ENVELOPE_H
+#ifndef GEOM_ENVELOPE_H
+#define GEOM_ENVELOPE_H
 
 #include <stdint.h>
-#include "osm/osmMappedTypes.h"
+#include <iostream>
+//#include "osm/osmMappedTypes.h"
 
 
 class Envelope{
@@ -22,8 +23,8 @@ public:
     
 };
 
-Envelope getBounds(const OsmLightweightWay &way);
 std::ostream& operator<<(std::ostream &os, const Envelope &aabb);
 
 
 #endif
+

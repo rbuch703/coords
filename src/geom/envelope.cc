@@ -1,6 +1,5 @@
 
 #include "envelope.h"
-#include <iostream>
 
 static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
@@ -34,15 +33,6 @@ const Envelope& Envelope::getWorldBounds()
     return world;
 }
 
-Envelope getBounds(const OsmLightweightWay &way)
-{
-    Envelope aabb( way.vertices[0].lat, way.vertices[0].lng);
-        
-    for (const OsmGeoPosition &pos : way.getVertices())
-        aabb.add( pos.lat, pos.lng );
-
-    return aabb;
-}
 
 std::ostream& operator<<(std::ostream &os, const Envelope &aabb)
 {

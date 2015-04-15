@@ -98,6 +98,15 @@ OsmLightweightWay::OsmLightweightWay( const OsmWay &other)
     
 }
 
+OsmLightweightWay::~OsmLightweightWay()
+{
+    if (!isDataMapped)  // if 'vectices' and 'tagBytes' are not pointers to pre-allocated storage
+    {
+        delete [] vertices;
+        delete [] tagBytes;
+    }
+}
+
 
 
 OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
@@ -152,15 +161,18 @@ uint64_t OsmLightweightWay::size() const {
            + sizeof(numTags) + sizeof(numTagBytes) + numTagBytes;
 }
 
-
-OsmLightweightWay::~OsmLightweightWay()
+Envelope OsmLightweightWay::getBounds() const
 {
-    if (!isDataMapped)  // if 'vectices' and 'tagBytes' are not pointers to pre-allocated storage
-    {
-        delete [] vertices;
-        delete [] tagBytes;
-    }
+    MUST( numVertices > 0, "cannot create envelope for empty way");
+    Envelope aabb( vertices[0].lat, vertices[0].lng);
+    
+    for (uint64_t i = 0; i < numVertices; i++)
+        aabb.add( vertices[i].lat, vertices[i].lng );
+
+    return aabb;
 }
+
+
 
 void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
 {

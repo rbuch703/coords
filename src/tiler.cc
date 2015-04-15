@@ -204,7 +204,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
             keep = 5;
 
 
-    Envelope bounds = getBounds(wayIn);
+    Envelope bounds = wayIn.getBounds();
     uint64_t solidAngle = abs(bounds.latMax - bounds.latMin);
     solidAngle *= abs(bounds.lngMax - bounds.lngMin);
     /* WARNING!!!: FIXME: these are very rough computations based on a lat/lng grid (plate
@@ -331,7 +331,7 @@ int main(int argc, char** argv)
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
 
-        storage.add(way, getBounds(way) );
+        storage.add(way, way.getBounds() );
         numWays += 1;
 
         way = getLod12Version(way);
@@ -346,7 +346,7 @@ int main(int argc, char** argv)
             numTagBytes += 2 + kv.first.size() + kv.second.size();
         }
             
-        storageLod12.add(way, getBounds(way));
+        storageLod12.add(way, way.getBounds());
         numLod12Ways += 1;
     }
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "

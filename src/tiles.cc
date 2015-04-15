@@ -109,7 +109,7 @@ void MemoryBackedTile::subdivide() {
     {
         const OsmLightweightWay &way = ways.front();
 
-        Envelope wayBounds = getBounds(way);
+        Envelope wayBounds = way.getBounds();
 
         assert ( wayBounds.overlapsWith(topLeftChild    ->bounds) ||
                  wayBounds.overlapsWith(topRightChild   ->bounds) ||
@@ -236,7 +236,7 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
         {
             OsmLightweightWay way(&data[pos]);
             pos += way.size();
-            shadowNode->add(way, getBounds(way));
+            shadowNode->add(way, way.getBounds());
         }
         /*int ch;
         while ( (ch = fgetc(fData)) != EOF)
@@ -296,7 +296,7 @@ void FileBackedTile::subdivide()
         ungetc( ch, fData);
 
         OsmLightweightWay way(fData);
-        Envelope wayBounds = getBounds(way);
+        Envelope wayBounds = way.getBounds();
 
         assert ( wayBounds.overlapsWith(topLeftChild    ->bounds) ||
                  wayBounds.overlapsWith(topRightChild   ->bounds) ||
