@@ -53,6 +53,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc 
+               src/geom/envelope.cc
                src/containers/chunkedFile.cc)
 
 ADD_EXECUTABLE(multipolygonReconstructor

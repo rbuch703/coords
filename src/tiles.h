@@ -5,32 +5,15 @@
 #include <list>
 #include <string>
 #include "osm/osmMappedTypes.h"
+#include "geom/envelope.h"
 
-class GeoAABB{
-public:
-    GeoAABB() {};
-    GeoAABB( int32_t lat, int32_t lng);
-    GeoAABB( int32_t latMin, int32_t latMax, int32_t lngMin, int32_t lngMax);
-
-    void add (int32_t lat, int32_t lng);
-    bool overlapsWith(const GeoAABB &other) const;
-    static const GeoAABB& getWorldBounds();
-    
-public:
-    int32_t latMin, latMax;
-    int32_t lngMin, lngMax;
-    
-};
-
-GeoAABB getBounds(const OsmLightweightWay &way);
-std::ostream& operator<<(std::ostream &os, const GeoAABB &aabb);
 
 class MemoryBackedTile {
 public:
-    MemoryBackedTile(const char*fileName, const GeoAABB &bounds, uint64_t maxNodeSize);
+    MemoryBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize);
     ~MemoryBackedTile();
     
-    void add(const OsmLightweightWay &way, const GeoAABB &wayBounds);
+    void add(const OsmLightweightWay &way, const Envelope &wayBounds);
     void writeToDiskRecursive(bool includeSelf);
     
     uint64_t getSize() const { return size; }
@@ -43,7 +26,7 @@ private:
 
 private:
     std::list<OsmLightweightWay> ways;
-    GeoAABB bounds;
+    Envelope bounds;
     std::string fileName;
     uint64_t size;
     uint64_t maxNodeSize;
@@ -51,9 +34,9 @@ private:
 
 class FileBackedTile {
 public:
-    FileBackedTile(const char*fileName, const GeoAABB &bounds, uint64_t maxNodeSize);
+    FileBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize);
     ~FileBackedTile();
-    void add(OsmLightweightWay &way, const GeoAABB &wayBounds);
+    void add(OsmLightweightWay &way, const Envelope &wayBounds);
     void releaseMemoryResources();
     void subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBackedStorage = false);
 private:
@@ -61,7 +44,7 @@ private:
 
 private:
     FILE* fData;
-    GeoAABB bounds;
+    Envelope bounds;
     std::string fileName;
     uint64_t size;
     uint64_t maxNodeSize;

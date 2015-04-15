@@ -10,6 +10,7 @@
 
 #include "tiles.h"
 #include "osm/osmMappedTypes.h"
+#include "geom/envelope.h"
 
 using namespace std;
 
@@ -203,7 +204,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
             keep = 5;
 
 
-    GeoAABB bounds = getBounds(wayIn);
+    Envelope bounds = getBounds(wayIn);
     uint64_t solidAngle = abs(bounds.latMax - bounds.latMin);
     solidAngle *= abs(bounds.lngMax - bounds.lngMin);
     /* WARNING!!!: FIXME: these are very rough computations based on a lat/lng grid (plate
@@ -314,8 +315,8 @@ int main(int argc, char** argv)
                                   (storageDirectory + "ways.data").c_str());
 
     ensureDirectoryExists(destinationDirectory);
-    FileBackedTile storage( (destinationDirectory + "node").c_str(), GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
-    FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), GeoAABB::getWorldBounds(), MAX_META_NODE_SIZE);
+    FileBackedTile storage( (destinationDirectory + "node").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
+    FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
     uint64_t numLod12Ways = 0;

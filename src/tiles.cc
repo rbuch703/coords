@@ -1,12 +1,10 @@
 
 #include "tiles.h"
+#include "geom/envelope.h"
 #include <unistd.h> //for ftruncate()
 #include <sys/mman.h>
 using std::cout;
 using std::endl;
-
-static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
-static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
 
 static void deleteContentsAndClose(FILE* &file)
 {
@@ -15,57 +13,9 @@ static void deleteContentsAndClose(FILE* &file)
     file = NULL;
 }
 
-GeoAABB::GeoAABB( int32_t lat, int32_t lng): latMin(lat), latMax(lat), lngMin(lng), lngMax(lng) {};
-
-GeoAABB::GeoAABB( int32_t latMin, int32_t latMax, int32_t lngMin, int32_t lngMax): 
-    latMin(latMin), latMax(latMax), lngMin(lngMin), lngMax(lngMax) {};
-
-
-void GeoAABB::add (int32_t lat, int32_t lng)
-{
-    if (lat > latMax) latMax = lat;
-    if (lat < latMin) latMin = lat;
-    if (lng > lngMax) lngMax = lng;
-    if (lng < lngMin) lngMin = lng;
-}
-
-
-bool GeoAABB::overlapsWith(const GeoAABB &other) const
-{    
-    return (max( lngMin, other.lngMin) <= min( lngMax, other.lngMax)) && 
-           (max( latMin, other.latMin) <= min( latMax, other.latMax));
-}
-
-const GeoAABB& GeoAABB::getWorldBounds() 
-{ 
-    static GeoAABB world = (GeoAABB){
-        .latMin = -900000000, .latMax = 900000000, 
-        .lngMin = -1800000000,.lngMin = 1800000000};
-    return world;
-}
-
-GeoAABB getBounds(const OsmLightweightWay &way)
-{
-    GeoAABB aabb( way.vertices[0].lat, way.vertices[0].lng);
-        
-    for (const OsmGeoPosition &pos : way.getVertices())
-        aabb.add( pos.lat, pos.lng );
-
-    return aabb;
-}
-
-std::ostream& operator<<(std::ostream &os, const GeoAABB &aabb)
-{
-    os << "( lat: " << aabb.latMin << " -> " << aabb.latMax 
-       << "; lng: " << aabb.lngMin << " -> " << aabb.lngMax << ")";
-         
-    return os;
-}
-
-
 // ============== MEMORY-BACKED STORAGE ==============
 
-MemoryBackedTile::MemoryBackedTile(const char*fileName, const GeoAABB &bounds, uint64_t maxNodeSize):
+MemoryBackedTile::MemoryBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize):
     topLeftChild(NULL), topRightChild(NULL), bottomLeftChild(NULL), bottomRightChild(NULL),
     bounds(bounds), fileName(fileName), size(0), maxNodeSize(maxNodeSize)
 {
@@ -81,7 +31,7 @@ MemoryBackedTile::~MemoryBackedTile()
     
 }
 
-void MemoryBackedTile::add(const OsmLightweightWay &way, const GeoAABB &wayBounds)
+void MemoryBackedTile::add(const OsmLightweightWay &way, const Envelope &wayBounds)
 {
     assert( (!topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild) ||
             ( topLeftChild &&  topRightChild &&  bottomLeftChild &&  bottomRightChild));
@@ -145,10 +95,10 @@ void MemoryBackedTile::subdivide() {
     int32_t latMid = (((int64_t)bounds.latMax) + bounds.latMin) / 2;    //would overflow in int32_t
     int32_t lngMid = (((int64_t)bounds.lngMax) + bounds.lngMin) / 2;
     assert(!ways.empty() && !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-    GeoAABB aabbTopLeft(            latMid, bounds.latMax, bounds.lngMin, lngMid       );
-    GeoAABB aabbTopRight(           latMid, bounds.latMax,        lngMid, bounds.lngMax);
-    GeoAABB aabbBottomLeft(  bounds.latMin,        latMid, bounds.lngMin, lngMid       );
-    GeoAABB aabbBottomRight( bounds.latMin,        latMid,        lngMid, bounds.lngMax);
+    Envelope aabbTopLeft(            latMid, bounds.latMax, bounds.lngMin, lngMid       );
+    Envelope aabbTopRight(           latMid, bounds.latMax,        lngMid, bounds.lngMax);
+    Envelope aabbBottomLeft(  bounds.latMin,        latMid, bounds.lngMin, lngMid       );
+    Envelope aabbBottomRight( bounds.latMin,        latMid,        lngMid, bounds.lngMax);
     
     topLeftChild =    new MemoryBackedTile( (fileName+"0").c_str(), aabbTopLeft,     maxNodeSize);
     topRightChild=    new MemoryBackedTile( (fileName+"1").c_str(), aabbTopRight,    maxNodeSize);
@@ -159,7 +109,7 @@ void MemoryBackedTile::subdivide() {
     {
         const OsmLightweightWay &way = ways.front();
 
-        GeoAABB wayBounds = getBounds(way);
+        Envelope wayBounds = getBounds(way);
 
         assert ( wayBounds.overlapsWith(topLeftChild    ->bounds) ||
                  wayBounds.overlapsWith(topRightChild   ->bounds) ||
@@ -180,7 +130,7 @@ void MemoryBackedTile::subdivide() {
 
 // ================== FILE-BACKED TILE =================
 
-FileBackedTile::FileBackedTile(const char*fileName, const GeoAABB &bounds, uint64_t maxNodeSize): 
+FileBackedTile::FileBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize): 
         bounds(bounds), fileName(fileName), size(0), maxNodeSize(maxNodeSize),
         topLeftChild(NULL), topRightChild(NULL), bottomLeftChild(NULL), bottomRightChild(NULL)
         {
@@ -201,7 +151,7 @@ FileBackedTile::~FileBackedTile()
     fData = NULL;
 }
 
-void FileBackedTile::add(OsmLightweightWay &way, const GeoAABB &wayBounds)
+void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
 {
     if (fData)
     {
@@ -328,10 +278,10 @@ void FileBackedTile::subdivide()
     int32_t latMid = (((int64_t)bounds.latMax) + bounds.latMin) / 2;    //would overflow in int32_t
     int32_t lngMid = (((int64_t)bounds.lngMax) + bounds.lngMin) / 2;
     assert(fData && !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-    GeoAABB aabbTopLeft(            latMid, bounds.latMax, bounds.lngMin, lngMid       );
-    GeoAABB aabbTopRight(           latMid, bounds.latMax,        lngMid, bounds.lngMax);
-    GeoAABB aabbBottomLeft(  bounds.latMin,        latMid, bounds.lngMin, lngMid       );
-    GeoAABB aabbBottomRight( bounds.latMin,        latMid,        lngMid, bounds.lngMax);
+    Envelope aabbTopLeft(            latMid, bounds.latMax, bounds.lngMin, lngMid       );
+    Envelope aabbTopRight(           latMid, bounds.latMax,        lngMid, bounds.lngMax);
+    Envelope aabbBottomLeft(  bounds.latMin,        latMid, bounds.lngMin, lngMid       );
+    Envelope aabbBottomRight( bounds.latMin,        latMid,        lngMid, bounds.lngMax);
 
     topLeftChild =    new FileBackedTile( (fileName+"0").c_str(), aabbTopLeft,     maxNodeSize);
     topRightChild=    new FileBackedTile( (fileName+"1").c_str(), aabbTopRight,    maxNodeSize);
@@ -346,7 +296,7 @@ void FileBackedTile::subdivide()
         ungetc( ch, fData);
 
         OsmLightweightWay way(fData);
-        GeoAABB wayBounds = getBounds(way);
+        Envelope wayBounds = getBounds(way);
 
         assert ( wayBounds.overlapsWith(topLeftChild    ->bounds) ||
                  wayBounds.overlapsWith(topRightChild   ->bounds) ||
