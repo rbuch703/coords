@@ -387,15 +387,20 @@ void deleteRecursive(Ring* ring)
 
 bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const map<uint64_t, OsmLightweightWay> &ways)
 {
-    if (mbr.type != WAY)
+    if (mbr.type != OSM_ENTITY_TYPE::WAY)
     {
-        cerr << ESC_FG_GRAY << "[INFO]" << " ref to id=" << mbr.ref << " of invalid type '"<< (mbr.type == NODE ? "node" : mbr.type == RELATION ? "relation" : "<unknown>")<<"' in multipolygon relation " << relationId << ESC_FG_RESET << endl;
+        cerr << ESC_FG_GRAY << "[INFO]" << " ref to id=" << mbr.ref << " of invalid type '"
+             << (mbr.type == OSM_ENTITY_TYPE::NODE ? "node" : 
+                 mbr.type == OSM_ENTITY_TYPE::RELATION ? "relation" : "<unknown>"
+                )
+             << "' in multipolygon relation " << relationId << ESC_FG_RESET << endl;
         return false;
     }
     
     if (! ways.count(mbr.ref))
     {
-        cerr << "[WARN] relation " << relationId << " references way " << mbr.ref << ", which is not part of the data set" << endl;
+        cerr << "[WARN] relation " << relationId << " references way " << mbr.ref 
+             << ", which is not part of the data set" << endl;
         return false;
     }
     

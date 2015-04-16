@@ -409,8 +409,8 @@ OsmRelation::OsmRelation( const uint8_t* data_ptr)
     
     while (num_members--)
     {
-        ELEMENT type = *(ELEMENT*)data_ptr;
-        data_ptr+=sizeof(ELEMENT);
+        OSM_ENTITY_TYPE type = *(OSM_ENTITY_TYPE*)data_ptr;
+        data_ptr+=sizeof(OSM_ENTITY_TYPE);
         uint64_t ref = *(uint64_t*)data_ptr;
         data_ptr+=sizeof(uint64_t);
         const char* role = (const char*)data_ptr;
@@ -427,7 +427,7 @@ uint64_t OsmRelation::getSerializedSize() const
                     sizeof(uint32_t) + //version
                     sizeof(uint32_t) + //numMembers
                     // type, ref and role null-termination for each member (roles string lengths are added later)
-                    (sizeof(ELEMENT)+sizeof(uint64_t) + 1) * members.size() +
+                    (sizeof(OSM_ENTITY_TYPE)+sizeof(uint64_t) + 1) * members.size() +
                     ::getSerializedSize(this->tags);
                     
     for (const OsmRelationMember& mbr : members)
@@ -444,8 +444,8 @@ void OsmRelation::initFromFile(FILE* src)
     
     while (num_members--)
     {
-        ELEMENT type;
-        if (1 != fread (&type, sizeof(ELEMENT), 1, src)) return;
+        OSM_ENTITY_TYPE type;
+        if (1 != fread (&type, sizeof(OSM_ENTITY_TYPE), 1, src)) return;
         
         uint64_t ref;
         if (1 != fread (&ref, sizeof(ref), 1, src)) return;
@@ -567,7 +567,7 @@ ostream& operator<<(ostream &out, const OsmRelation &relation)
     out << "Relation " << relation.id << " ";
     for (const OsmRelationMember &mbr : relation.members)
     {
-        out << " (" << mbr.role << " " <<ELEMENT_NAMES[mbr.type] << " " << mbr.ref << ")" ;
+        out << " (" << mbr.role << " " <<ELEMENT_NAMES[(uint8_t)mbr.type] << " " << mbr.ref << ")" ;
     }
     
     out << " "<< relation.tags;
@@ -576,6 +576,6 @@ ostream& operator<<(ostream &out, const OsmRelation &relation)
 
 uint32_t OsmRelationMember::getDataSize() const 
 { 
-    return sizeof(ELEMENT) + sizeof(uint64_t) + strlen(role.c_str()) + 1; //1 byte for NULL-termination
+    return sizeof(OSM_ENTITY_TYPE) + sizeof(uint64_t) + strlen(role.c_str()) + 1; //1 byte for NULL-termination
 } 
 

@@ -243,10 +243,14 @@ void OsmParserPbf::parseRelations(const google::protobuf::RepeatedPtrField<OSMPB
             const string& role = stringTable[rel.roles_sid().Get(i)];
             OSMPBF::Relation::MemberType iType = (OSMPBF::Relation::MemberType)rel.types().Get(i);
             
-            ELEMENT type = (iType == OSMPBF::Relation::NODE) ? NODE : 
-                           (iType == OSMPBF::Relation::WAY)  ? WAY :
-                           (iType == OSMPBF::Relation::RELATION) ? RELATION: OTHER;
-            MUST( type == NODE || type == WAY || type == RELATION, "invalid type");
+            OSM_ENTITY_TYPE type = 
+                           (iType == OSMPBF::Relation::NODE) ? OSM_ENTITY_TYPE::NODE : 
+                           (iType == OSMPBF::Relation::WAY)  ? OSM_ENTITY_TYPE::WAY :
+                           (iType == OSMPBF::Relation::RELATION) ? OSM_ENTITY_TYPE::RELATION:
+                           OSM_ENTITY_TYPE::OTHER;
+            MUST( type == OSM_ENTITY_TYPE::NODE || 
+                  type == OSM_ENTITY_TYPE::WAY  || 
+                  type == OSM_ENTITY_TYPE::RELATION, "invalid type");
             osmRel.members.push_back( OsmRelationMember(type, ref, role));
         }
         

@@ -201,10 +201,10 @@ void OsmXmlParser::parseRelation()
         if (strncmp(line, "<member", 7) == 0) 
         {
             const char* type_str = getValue(line, "type");
-            ELEMENT type;
-            if      (strcmp(type_str, "node")     == 0 ) type = NODE;
-            else if (strcmp(type_str, "way")      == 0 ) type = WAY;
-            else if (strcmp(type_str, "relation") == 0 ) type = RELATION;
+            OSM_ENTITY_TYPE type;
+            if      (strcmp(type_str, "node")     == 0 ) type = OSM_ENTITY_TYPE::NODE;
+            else if (strcmp(type_str, "way")      == 0 ) type = OSM_ENTITY_TYPE::WAY;
+            else if (strcmp(type_str, "relation") == 0 ) type = OSM_ENTITY_TYPE::RELATION;
             else {printf("[ERR] relation member with unknown type '%s'\n", type_str); continue;}
             
             uint64_t ref = strtoul( getValue(line, "ref"), NULL, 10);

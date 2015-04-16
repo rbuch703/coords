@@ -76,19 +76,19 @@ void OsmConsumerIdRemapper::consumeRelation( OsmRelation &relation)
     for (OsmRelationMember &mbr : relation.members)
         switch (mbr.type)
         {
-            case NODE: 
+            case OSM_ENTITY_TYPE::NODE: 
                 if (! nodeMap->count(mbr.ref))
                     nodeMap->insert( std::make_pair(mbr.ref, ++nodeIdsRemapped));
                     
                 mbr.ref = (*nodeMap)[mbr.ref];
                 break;
-            case WAY: 
+            case OSM_ENTITY_TYPE::WAY: 
                 if (!wayMap->count(mbr.ref))
                     wayMap->insert( std::make_pair( mbr.ref, ++wayIdsRemapped));
                 
                 mbr.ref = (*wayMap)[mbr.ref];
                 break;
-            case RELATION: 
+            case OSM_ENTITY_TYPE::RELATION: 
                 if (!relationMap->count(mbr.ref))
                     relationMap->insert( std::make_pair( mbr.ref, ++relationIdsRemapped));
                 

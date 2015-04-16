@@ -13,7 +13,8 @@
 #include "containers/chunkedFile.h"
 
 
-enum ELEMENT : uint8_t { NODE, WAY, RELATION, CHANGESET, OTHER };
+enum struct OSM_ENTITY_TYPE : uint8_t { NODE, WAY, RELATION, CHANGESET, OTHER };
+
 typedef std::pair<std::string, std::string> OsmKeyValuePair;
 
 
@@ -100,11 +101,11 @@ std::ostream& operator<<(std::ostream &out, const OsmWay &way);
 
 struct OsmRelationMember
 {
-    OsmRelationMember( ELEMENT member_type, uint64_t member_ref, std::string member_role):
+    OsmRelationMember( OSM_ENTITY_TYPE member_type, uint64_t member_ref, std::string member_role):
         type(member_type), ref(member_ref), role(member_role) { }
 
     uint32_t getDataSize() const;
-    ELEMENT type;  //whether the member is a node, way or relation
+    OSM_ENTITY_TYPE type;  //whether the member is a node, way or relation
     uint64_t ref;  //the node/way/relation id
     std::string role;   //the role the member has as part of the relation
     

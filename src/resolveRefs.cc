@@ -213,9 +213,15 @@ void addRelationDependenciesToBucketFiles(string storageDirectory)
         {
             switch (member.type)
             {
-                case NODE:     nodeRefBuckets.write(    member.ref, rel.id);   break;
-                case WAY:      wayRefBuckets.write(     member.ref, rel.id);   break;
-                case RELATION: relationRefBuckets.write(member.ref, rel.id);   break;
+                case OSM_ENTITY_TYPE::NODE:     
+                    nodeRefBuckets.write(    member.ref, rel.id);   
+                    break;
+                case OSM_ENTITY_TYPE::WAY:      
+                    wayRefBuckets.write(     member.ref, rel.id);   
+                    break;
+                case OSM_ENTITY_TYPE::RELATION: 
+                    relationRefBuckets.write(member.ref, rel.id);   
+                    break;
                 default: MUST(false, "invalid relation member type"); break;
             }
         }
