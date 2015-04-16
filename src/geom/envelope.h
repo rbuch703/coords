@@ -9,7 +9,7 @@
 
 class Envelope{
 public:
-    Envelope() {};
+    Envelope();
     Envelope( int32_t lat, int32_t lng);
     Envelope( int32_t latMin, int32_t latMax, int32_t lngMin, int32_t lngMax);
 

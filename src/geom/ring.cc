@@ -77,6 +77,26 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
     return res;
 }
 
+/* takes a polygon that potentially has holes, and converts it to a vector of polygon rings */
+std::vector<geos::geom::Polygon*> Ring::createRings(const geos::geom::Polygon *poly, uint64_t /*relId*/)
+{
+    std::vector<geos::geom::Polygon*> rings;
+    
+    rings.push_back( factory.createPolygon(
+                       factory.createLinearRing(
+                         poly->getExteriorRing()->getCoordinates()), nullptr));
+                           
+    for (uint64_t i = 0; i < poly->getNumInteriorRing(); i++)
+    {
+        rings.push_back( factory.createPolygon(
+                           factory.createLinearRing(
+                             poly->getInteriorRingN(i)->getCoordinates()), nullptr));
+    }
+    
+    return rings;
+}
+
+
 Ring::~Ring()
 {
     /* Note: the geosPolygon is the only GEOS object that needs to be destroyed explicitly.

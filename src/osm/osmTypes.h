@@ -18,15 +18,6 @@ enum struct OSM_ENTITY_TYPE : uint8_t { NODE, WAY, RELATION, CHANGESET, OTHER };
 typedef std::pair<std::string, std::string> OsmKeyValuePair;
 
 
-/** 0x7FFFFFFF is the maximum positive value in signed ints, i.e. ~ 2.1 billion
- *  In OSMs int32_t lat/lng storage, this corresponds to ~ 210°, which is outside
- *  the valid range for latitude and longitude, and thus can be used to mark
- *  invalid entries.
- *  note: 0xFFFFFFFF in two's complement is -1, and thus a valid lat/lng value.
- **/ 
-const int32_t INVALID_LAT_LNG = 0x7FFFFFFF;
-
-
 /* on-disk format for OsmNode:
     - uint64_t id
     - uint32_t version

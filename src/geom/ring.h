@@ -55,7 +55,10 @@ public:
 public:
 static std::vector<geos::geom::Polygon*> createSimplePolygons(const std::vector<OsmGeoPosition> &vertices, uint64_t relId);
 
-private:
+/* takes a polygon that potentially has holes, and converts it to a vector of polygon rings */
+static std::vector<geos::geom::Polygon*> createRings(const geos::geom::Polygon *poly, uint64_t relId);
+
+public:
 /* the geometric factory has to have a life time at least as long as
    any objects it creates. So instead of created one on-demand, we 
    store it as a singleton class variable */
