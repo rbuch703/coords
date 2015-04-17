@@ -9,8 +9,6 @@
 #include "osm/osmTypes.h"
 #include "geom/envelope.h"
 
-typedef Envelope ENV;
-
 template <typename T>
 class ArrayIterator {
 public:

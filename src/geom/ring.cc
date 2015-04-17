@@ -19,8 +19,37 @@ geos::geom::GeometryFactory Ring::factory;
 Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds):
     wayIds(wayIds), geosPolygon(geosPolygon)
 {
-    assert(geosPolygon->getNumInteriorRing() == 0 || "Not a simple polygon/ring");
+    MUST(geosPolygon->getNumInteriorRing() == 0, "Not a simple polygon/ring");
     area = this->geosPolygon->getArea();
+    
+}
+
+double Ring::getArea() const
+{
+    return this->area;
+}
+
+void toSimplePolygons( geos::geom::Polygon *poly, std::vector<geos::geom::Polygon*> &polysOut)
+{
+    if (poly->getNumInteriorRing() == 0)
+    {
+        polysOut.push_back(poly);
+        return;
+    }
+    
+    polysOut.push_back( Ring::factory.createPolygon( 
+        Ring::factory.createLinearRing( poly->getExteriorRing()->getCoordinates() ), nullptr));
+        
+    
+    for (uint64_t i = 0; i < poly->getNumInteriorRing(); i++)
+    {
+        polysOut.push_back( Ring::factory.createPolygon( 
+            Ring::factory.createLinearRing( 
+                poly->getInteriorRingN(i)->getCoordinates() ), nullptr));
+
+    }
+    
+    delete poly;
     
 }
 
@@ -33,7 +62,7 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
     
     geos::geom::LinearRing *geosRing = factory.createLinearRing( seq );
     
-    geos::geom::Geometry *tmp = factory.createPolygon(geosRing, nullptr);;
+    geos::geom::Geometry *tmp = factory.createPolygon(geosRing, nullptr);
     /* somewhat dirty hack: a buffer of 0.0 is a no-op for valid rings,
        but fixes many types of invalid ones. Unfortunately, it does not
        guarantee that the result is a *single* polygon.*/
@@ -44,7 +73,7 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
     if (healed->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
     {
         std::vector<geos::geom::Polygon*> res;
-        res.push_back(dynamic_cast<geos::geom::Polygon*>(healed));
+        toSimplePolygons(dynamic_cast<geos::geom::Polygon*>(healed), res);
         return res;
     }
 
@@ -61,7 +90,7 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
                 const geos::geom::Geometry *part = healed->getGeometryN(i);
                 std::cerr << "\t\t" << part->getGeometryType();
                 if (part->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
-                    res.push_back(dynamic_cast<geos::geom::Polygon*>(part->clone()));
+                    toSimplePolygons(dynamic_cast<geos::geom::Polygon*>(part->clone()), res);
                 else
                     std::cerr << " (skipping)";
                 std::cerr << std::endl;
@@ -159,4 +188,45 @@ bool Ring::interiorIntersectsWith(const Ring &other) const
     static const std::string interiorsIntersectMatrix = "2********";
     return geosPolygon->relate( other.geosPolygon, interiorsIntersectMatrix);
 }
+
+
+void Ring::serialize(FILE* fOut, bool reverseVertexOrder) const
+{
+    MUST(this->geosPolygon->getNumInteriorRing() == 0, "Ring cannot have interior rings");
+    const geos::geom::LineString* boundary = this->geosPolygon->getExteriorRing();
+    const std::vector<geos::geom::Coordinate>& coords = *boundary->getCoordinatesRO()->toVector();
+    
+    uint32_t numVertices = coords.size();
+    MUST( fwrite(&numVertices, sizeof(uint32_t), 1, fOut) == 1, "write error");
+    
+    if (!reverseVertexOrder)
+    {
+        for (uint64_t i = 0; i < coords.size(); i++)
+        {
+            int32_t lat = coords[i].x;
+            int32_t lng = coords[i].y;
+            MUST( fwrite(&lat, sizeof(lat), 1, fOut) == 1, "write error");
+            MUST( fwrite(&lng, sizeof(lng), 1, fOut) == 1, "write error");
+        }
+    } else
+    {
+        for (int64_t i = coords.size()-1; i >= 0 ; i--)
+        {
+            int32_t lat = coords[i].x;
+            int32_t lng = coords[i].y;
+            MUST( fwrite(&lat, sizeof(lat), 1, fOut) == 1, "write error");
+            MUST( fwrite(&lng, sizeof(lng), 1, fOut) == 1, "write error");
+        }
+    }
+}
+
+uint64_t Ring::getSerializedSize() const
+{
+    MUST(this->geosPolygon->getNumInteriorRing() == 0, "Ring cannot have interior rings");
+    return sizeof(uint32_t) +   // uint32_t numVertices
+           sizeof( int32_t) * 2 * // two int32_t's per vertex (lat, lng)
+           this->geosPolygon->getExteriorRing()->getCoordinatesRO()->toVector()->size();
+    
+}
+
 

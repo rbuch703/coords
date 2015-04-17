@@ -42,13 +42,20 @@ public:
     /* returns true iff 'this' and 'other' have at least one point in common
        that does not lie on the boundary or either ring. */
     bool interiorIntersectsWith(const Ring &other) const;
+
+    void serialize(FILE* fOut, bool reverseVertexOrder) const;
+    uint64_t getSerializedSize() const;
+    const geos::geom::Polygon* getPolygon() { return this->geosPolygon; }
     
-    
+    //const std::vector<uint64_t> & getWayIds() const { return wayIds;}
 //private:
 public:
-//    std::vector<OsmGeoPosition> vertices;
-    std::vector<uint64_t>       wayIds;
     std::vector<Ring*>          children;
+    std::vector<uint64_t>       wayIds;
+
+
+private:
+//    std::vector<OsmGeoPosition> vertices;
     geos::geom::Polygon      *geosPolygon;
     double area;
 

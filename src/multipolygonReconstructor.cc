@@ -194,8 +194,8 @@ static void flatten(const RingSegment &closedRing, map<uint64_t, OsmLightweightW
 }
 
 
-bool hasBiggerArea ( Ring* a, Ring* b) { return a->area > b->area; }
-bool hasSmallerArea( Ring* a, Ring* b) { return a->area < b->area; }
+bool hasBiggerArea ( Ring* a, Ring* b) { return a->getArea() > b->getArea(); }
+bool hasSmallerArea( Ring* a, Ring* b) { return a->getArea() < b->getArea(); }
 
 void printPolygon(const geos::geom::Geometry *geo)
 {
@@ -257,13 +257,13 @@ void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint
 
             cerr << ESC_FG_RED << "Merging overlapping rings in relation " << relId 
                  << ESC_FG_RESET << endl;
-            geos::geom::Geometry *merged = root->geosPolygon->Union(ring->geosPolygon);
+            geos::geom::Geometry *merged = root->getPolygon()->Union(ring->getPolygon());
             MUST( merged->getGeometryTypeId() == geos::geom::GEOS_POLYGON, "merge error");
 
             /* unions cannot reduce the area, and a reduction would void this algorithm, as
              * it assumes that rings are inserted sorted descending by area. We still allow
              * for a very small relative reduction to account for numerical inaccuracies */
-            double relativeArea = merged->getArea() / root->area;
+            double relativeArea = merged->getArea() / root->getArea();
             MUST( relativeArea >= 0.99999999999999 , "union reduced area");
 
             Ring *mergedRing = new Ring( dynamic_cast<geos::geom::Polygon*>(merged), wayIds);
@@ -518,7 +518,7 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
         {
             Ring* ring2 = rings[pos2];
             MUST(ring != ring2, "attempt to compare ring to itself");
-            geos::geom::IntersectionMatrix *mat = ring->geosPolygon->relate(ring2->geosPolygon);
+            geos::geom::IntersectionMatrix *mat = ring->getPolygon()->relate(ring2->getPolygon());
             /* are adjacent if their interiors overlap, or if their boundaries touch
              * in at least 1 dimension (i.e. a line) */
             bool areAdjacentOrOverlap = mat->isOverlaps(2, 2) || mat->get(1,1) >= 1;
@@ -556,22 +556,23 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
             
             
                 
-            cerr << ESC_FG_GRAY << "[INFO] merging adjacent rings in relation " << relId 
-                 << ": (" << ring->wayIds << ") and (" << ring2->wayIds << ")"
-                 << ESC_FG_RESET << endl;
+            cerr << ESC_FG_GRAY << "[INFO] merging rings "
+                 << "(" << ring->wayIds << ") and (" << ring2->wayIds << ")" 
+                 << " in relation " << relId << " as ";
+
             
             geos::geom::Geometry* joined;           
             if (mat->isWithin())    
             {
-                cerr << "\t merge operator will be 'difference B-A'" << endl;
+                cerr << ESC_FG_YELLOW << "'difference B-A'" << ESC_FG_RESET << endl;
                 /* if 'ring' lies completely within 'ring2', but they share an outer edge.
                  * 'ring' is likely to be supposed to be subtracted */
-                joined = ring2->geosPolygon->difference(ring->geosPolygon);
+                joined = ring2->getPolygon()->difference(ring->getPolygon());
             } else if (mat->isContains()) // 'ring
                 /* same with 'ring2' being inside 'ring' */
             {
-                cerr << "\t merge operator will be 'difference A-B'" << endl;
-                joined = ring->geosPolygon->difference(ring2->geosPolygon);
+                cerr << ESC_FG_YELLOW << "'difference A-B'" << ESC_FG_RESET << endl;
+                joined = ring->getPolygon()->difference(ring2->getPolygon());
             } else
                 /* generic overlap: either both rings only share an edge (but no interior),
                    or both rings overlap partially, with no ring being completely inside 
@@ -579,10 +580,11 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
                    In this case, the supposed geometric interpretation is likely a union.*/
             {
                 if (mat->isOverlaps(2,2))
-                    cerr << "[warn] overlapping rings in relation " << relId << ": (ways "
-                         << ring->wayIds << ") and (ways " << ring2->wayIds << ")." << endl;
-                cerr << "\t merge operator will be 'union'" << endl;
-                joined = ring->geosPolygon->Union(ring2->geosPolygon);
+                    cerr << ESC_FG_YELLOW << "'union of overlaps'" << ESC_FG_RESET  << endl;
+                else
+                    cerr << "'union'"  << ESC_FG_RESET << endl;
+
+                joined = ring->getPolygon()->Union(ring2->getPolygon());
                 MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
                       "geometric join failed");
             }
@@ -594,7 +596,7 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
             delete ring;
             delete ring2;
             
-            cerr << "#" << relId << " - " << joined->getGeometryType() << endl;
+            //cerr << "#" << relId << " - " << joined->getGeometryType() << endl;
             MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON ||
                   joined->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON,
                   "geometric join failed");
@@ -644,10 +646,9 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
  * to a hierarchy of depth at most 2, i.e. to a list of outer rings where each outer ring
  * can contain an arbitrary number of inner rings (but no further nesting).
  *
- * This method does no geometric processing; the ring hierarchy is assumed to be topologically
- * correct and overlap-free. It simply moves anything that is the child of an inner ring to
- * the top-level of outer rings.
- * 
+ * This method does no geometric processing. It simply moves anything that is the child of an
+ * inner ring to the top-level of outer rings. The input ring hierarchy is assumed to be 
+ * topologically correct and overlap-free.
  */
 void flattenHierarchyToPolygons(vector<Ring*> &roots)
 {
@@ -666,13 +667,65 @@ void flattenHierarchyToPolygons(vector<Ring*> &roots)
 
 typedef std::map<std::string, std::string> TagSet;
 
+uint64_t getSerializedSize(const TagSet &tagSet)
+{
+    uint64_t numTags = tagSet.size();
+    uint64_t numNames = numTags * 2;    //one key, one value
+    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
+    
+    uint64_t numTagBytes = 0;
+    for (OsmKeyValuePair kv : tagSet)
+        numTagBytes += (kv.first.length() + 1) + (kv.second.length() + 1);
+    
+    return sizeof(uint16_t) + 
+           bitfieldSize * sizeof(uint8_t) +
+           numTagBytes;
+
+}
+
+void serializeTagSet(const TagSet & tagSet, FILE* fOut)
+{
+    uint64_t tmp = getSerializedSize(tagSet);
+    MUST(tmp < (1ull)<<32, "tag set size overflow");
+    uint32_t numBytes = tmp;
+    MUST(fwrite( &numBytes, sizeof(numBytes), 1, fOut) == 1, "write error");
+    int64_t filePos = ftell(fOut);
+
+    MUST( tagSet.size() < 1<<16, "attribute count overflow");
+    uint16_t numTags = tagSet.size();
+    MUST(fwrite( &numTags,  sizeof(numTags),  1, fOut) == 1, "write error");
+
+    uint64_t numNames = numTags * 2;    //one key, one value
+    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
+    while (bitfieldSize--)
+    {
+        uint8_t bf = 0;
+        MUST(fwrite( &bf, sizeof(bf), 1, fOut) == 1, "write error");
+    }
+
+    for (OsmKeyValuePair kv : tagSet)
+    {
+        const char* key = kv.first.c_str();
+        MUST( fwrite( key, strlen(key)+1, 1, fOut) == 1, "write error");
+
+        const char* val = kv.second.c_str();
+        MUST( fwrite( val, strlen(val)+1, 1, fOut) == 1, "write error");
+    }
+    
+    MUST( ftell(fOut)- numBytes == filePos, "tag set size mismatch");
+    //cout << "tag set size calculated: " << numBytes << ", actual: " << (ftell(fOut) - filePos) << endl;
+    
+}
+
+
 /* This method heuristically adds tags to multipolygons based on the tags of its outer ways.
    Theoretically, all multipolgons should be tagged directly at their MultiPolygon relation.
    However, an old tagging scheme tagged the outer way of the relation instead. And some
    workflows (e.g. adding a hole to an area that was formerly represented by a single way)
    can also lead to outer ways being tagged instead of the whole multipolygon relation.
 */
-TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64_t, OsmLightweightWay> &ways)
+TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64_t, 
+                            OsmLightweightWay> &ways, const TagSet &outerTags)
 {
     TagSet tags;
     for (const OsmKeyValuePair &kv : rel.tags)
@@ -682,15 +735,21 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
     MUST(ring->wayIds.size() > 0, "not a multipolygon");
     tags.erase("type");
     
+    /* the "valid" case: the relation itself is tagged --> just use those tags*/
     if (tags.size() > 0)
         return tags;
 
+    /* heuristic 1: relation is untagged, but the polygon outer ring consists of only one way
+     *              --> use the tags from that way.
+     */
     if (ring->wayIds.size() == 1)
     {
         uint64_t outerWayId = ring->wayIds.front();
-        cerr << ESC_FG_GRAY << "[INFO] relation " << rel.id << " has no tags. Will use tags from"
-             << " outer way " << outerWayId << "."
-             << ESC_FG_RESET  << endl;
+        /* This is the case for about 10% of all multipolygons. Its currently too prevalent
+         * to warn or even just inform about it. */
+        /*cerr << ESC_FG_GRAY << "[INFO] relation " << rel.id << " has no tags. " <<
+               << "Will use tags from" << " outer way " << outerWayId << "."
+               << ESC_FG_RESET  << endl;*/
              
         MUST( ways.count(outerWayId) == 1, "cannot access outer way");
         
@@ -700,18 +759,27 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
         
         return tags;
     }
+    
+    /* heuristic 2: relation is untagged, but only one of its ways is tagged with the 'outer'
+     *              role - though this way need not actually form the outer ring --> 
+     *              --> use tags from that way */
+    if (outerTags.size() > 0)
+    {
+        for (const OsmKeyValuePair &kv : outerTags)
+            tags.insert( make_pair(kv.first, kv.second));
+        
+        return tags;
+        
+    }
+    
+    /* heuristic 3: relation is untagged, and no single way is used or tagged as the only
+     *              'outer' way --> use all those tags that all outer ways have in common.
+     **/
 
-    /*FIXME: currently, attributes are taken from the only way *used* as an outer way, not
-     *       the only one *tagged* as an outer way.
-     *       This fails when other ways touch (overlapping edges) or fully intersect with the
-     *       outer way, because these then become used as outer ways as well. Thus, there
-     *       is no unique outer way to use tags from; and ways intended to be used as inner ways
-     *       are usually tagged differently, meaning that the test for agreement on tags
-     *       will fail as well, potentially leaving the relation with no tags at all */
     vector<TagSet> outerWayTagSets;
     for (uint64_t outerWayId : ring->wayIds)
     {
-        MUST( ways.count(outerWayId) == 1, "cannot access outer way");
+        MUST( ways.count(outerWayId) > 0, "cannot access outer way");
 
         TagSet ts;
         for (const OsmKeyValuePair &kv : ways.at(outerWayId).getTags())
@@ -740,6 +808,42 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
              << " members tag-merging." << ESC_FG_RESET << endl;
 
     return tags;
+}
+
+void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE* fOut)
+{
+    //cerr << "serializing relation " << relId << endl;
+    uint64_t sizeTmp = 
+                    sizeof(uint8_t)  + // 'type' field
+                    sizeof(uint64_t) + // 'id' field
+                    getSerializedSize(tags) + //tags size
+                    sizeof(uint32_t) +   // 'numRings' field
+                    poly.getSerializedSize(); // outer ring size
+
+    for (const Ring* inner : poly.children)
+        sizeTmp += inner->getSerializedSize();
+                    
+    MUST( sizeTmp < (1ull) <<  32, "polygon size overflow");
+    uint32_t size = sizeTmp;        
+    MUST(fwrite( &size, sizeof(size), 1, fOut) == 1, "write error");
+    uint64_t posBefore = ftell(fOut);
+    
+    OSM_ENTITY_TYPE et = OSM_ENTITY_TYPE::RELATION;
+    MUST(fwrite( &et,    sizeof(et),    1, fOut) == 1, "write error");
+    MUST(fwrite( &relId, sizeof(relId), 1, fOut) == 1, "write error");
+    
+    serializeTagSet(tags, fOut);
+    
+    poly.serialize(fOut, false);
+
+    for (const Ring* inner : poly.children)
+        inner->serialize(fOut, true);
+    
+    uint64_t endPos = ftell(fOut);
+    //cout << "size calculated: " << size << ", actual: " << (endPos - posBefore) << endl;
+    MUST( endPos == size + posBefore, " polygon size mismatch");
+    
+    
 }
 
 //vector<pair<Ring*, TagSet> > importTags(
@@ -795,7 +899,8 @@ removeBoundaryOverlaps(roots, -1);
 for (Ring* ring : roots)
     deleteRecursive(ring);*/
 
-
+    FILE* fOut = fopen("intermediate/multipolygons.bin", "wb");
+    MUST( fOut, "cannot open output file");
     RelationStore relStore("intermediate"/*"/multipolygon_world"*/"/relations");
     
     BucketFileSet<int> relationWaysBuckets("intermediate"/*"/multipolygon_world"*/"/referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
@@ -834,6 +939,8 @@ for (Ring* ring : roots)
             RingAssembler ringAssembler;                        
 
             set<uint64_t> waysAdded;
+            TagSet outerTags;
+            uint64_t numOuterWays = 0;
             
             for ( const OsmRelationMember &mbr : rel.members)
                 if (isValidWay( mbr, rel.id, ways))
@@ -845,7 +952,14 @@ for (Ring* ring : roots)
                              << "occurrence." << ESC_FG_RESET << endl;
                         continue;
                     }
-                    ringAssembler.addWay(ways[mbr.ref]);
+                    
+                    OsmLightweightWay way = ways[mbr.ref];
+                    if (mbr.role == "outer")
+                    {
+                        outerTags = way.getTagSet();
+                        numOuterWays += 1;
+                    }
+                    ringAssembler.addWay(way);
                     waysAdded.insert(mbr.ref);
                 }
 
@@ -895,7 +1009,10 @@ for (Ring* ring : roots)
             flattenHierarchyToPolygons(roots);
             
             for (Ring* poly: roots)
-                getMultipolygonTags(poly, rel, ways);
+            {
+                TagSet tags = getMultipolygonTags(poly, rel, ways, outerTags);
+                serializePolygon(*poly, tags, rel.id, fOut);
+            }
             //removeBoundaryOverlaps(roots, rel.id);
             for (Ring* ring : roots)
                 deleteRecursive(ring);
