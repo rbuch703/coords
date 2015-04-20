@@ -3,6 +3,7 @@
 #define CONFIG_H
 
 #include <stdio.h> //since MUST() needs printf()
+#include <stdint.h>
 
 #ifndef MUST
     //a macro that is similar to assert(), but is not deactivated by NDEBUG

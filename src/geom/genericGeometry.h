@@ -5,15 +5,7 @@
 #include "config.h"
 #include "osm/osmTypes.h"
 #include "geom/envelope.h"
-/* on-disk layout for tags:
-    uint32_t numBytes
-    uint16_t numTags (one tag = two names (key + value)
-    uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
-    
-    for each name:
-    1. if is symbolic --> one uint8_t index into symbolicNames
-    2. if is not symbolic --> zero-terminated string
-*/
+#include "geom/ring.h"
 
 /* on-disk layout:
     uint32_t size in bytes (not counting the size field itself)
@@ -42,100 +34,41 @@
                 int32_t lng;
     
 */
+
+/* on-disk layout for tags:
+    uint32_t numBytes
+    uint16_t numTags (one tag = two names (key + value)
+    uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
+    
+    for each name:
+    1. if is symbolic --> one uint8_t index into symbolicNames
+    2. if is not symbolic --> zero-terminated string
+*/
+
 enum struct FEATURE_TYPE: uint8_t {POINT, LINE, POLYGON};
+std::ostream& operator<<(std::ostream& os, FEATURE_TYPE ft);
+std::ostream& operator<<(std::ostream& os, OSM_ENTITY_TYPE et);
+
+typedef std::map<std::string, std::string> TagSet;
+void     serializeTagSet(  const TagSet &tagSet, FILE* fOut);
+
+void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE* fOut);
+void serializeWayPolygon(const OsmWay &way, uint64_t wayId, FILE* fOut);
+void serializeWay(const OsmLightweightWay &way, uint64_t wayId, bool asPolygon, FILE* fOut);
+
 
 class OpaqueOnDiskGeometry {
 public:
-    FEATURE_TYPE getFeatureType() const {
-        MUST( numBytes > 0, "corrupted on-disk geometry");
-        return (FEATURE_TYPE)bytes[0];
-    }
+    OpaqueOnDiskGeometry(FILE* f);
+    ~OpaqueOnDiskGeometry();
     
-    OSM_ENTITY_TYPE getEntityType() const {
-        MUST( numBytes >= 9, "corrupted on-disk geometry");
-        uint64_t id = *((uint64_t*)bytes+1);
-        switch (getFeatureType())
-        {
-            case FEATURE_TYPE::POINT: return OSM_ENTITY_TYPE::NODE;
-            case FEATURE_TYPE::LINE:  return OSM_ENTITY_TYPE::WAY;
-            case FEATURE_TYPE::POLYGON:
-                return (id & IS_WAY_REFERENCE) ? OSM_ENTITY_TYPE::WAY :
-                                                 OSM_ENTITY_TYPE::RELATION;
-                break;
-            default:
-                MUST(false, "invalid FEATURE_TYPE");
-                break;
-        }
-    }
-    
-    uint64_t getEntityId() const {
-        MUST( numBytes >= 9, "corrupted on-disk geometry");
-        uint64_t id = *((uint64_t*)bytes+1);
-        return id & ~IS_WAY_REFERENCE;
-    }
-    
-    Envelope getBounds() const {
-        const int32_t *pos = (const int32_t*)(bytes + sizeof(uint8_t) + sizeof(uint64_t));
-        switch (getFeatureType())
-        {
-            case FEATURE_TYPE::POINT: return Envelope( pos[0], pos[1]);
-            case FEATURE_TYPE::LINE:  return getLineBounds();
-            case FEATURE_TYPE::POLYGON: return getPolygonBounds();
-            default: MUST(false, "invalid feature type"); break;
-        }
-    }
+    FEATURE_TYPE getFeatureType() const;    //POINT/LINE/POLYGON
+    OSM_ENTITY_TYPE getEntityType() const;  //NODE/WAY/RELATION
+    uint64_t getEntityId() const;
+    Envelope getBounds() const;    
 private:
-    Envelope getLineBounds() const {
-        uint8_t *beyond = bytes + numBytes;
-        
-        //skipping beyond 'type' and 'id'
-        uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
-        uint32_t numTagBytes = *(uint32_t*)tagsStart;
-        uint32_t *lineStart = (uint32_t*)tagsStart + sizeof(uint32_t) + numTagBytes;
-        uint32_t numPoints = *lineStart;
-        
-        Envelope env;
-        int32_t* points = (int32_t*)(lineStart + 1);
-        while (numPoints--)
-        {
-            MUST(points + 2 <= (int32_t*)beyond, "out-of-bounds");
-            env.add( points[0], points[1]);
-            points += 2;
-        }
-        
-        return env;
-    }
-    
-    Envelope getPolygonBounds() const {
-        uint8_t *beyond = bytes + numBytes;
-        
-        //skipping beyond 'type' and 'id'
-        uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
-        uint32_t numTagBytes = *(uint32_t*)tagsStart;
-
-        uint32_t *ringsStart = (uint32_t*)tagsStart + sizeof(uint32_t) + numTagBytes;
-      
-        uint32_t numRings = *ringsStart;
-
-        Envelope env;
-        
-        uint32_t *lineStart = ringsStart +1;
-        while (numRings--)        
-        {
-            uint32_t numPoints = *lineStart;
-            int32_t* points = (int32_t*)(lineStart + 1);
-            lineStart += (1 + numPoints);
-            
-            while (numPoints)
-            {
-                MUST(points + 2 <= (int32_t*)beyond, "out-of-bounds");
-                env.add( points[0], points[1]);
-                points += 2;
-            }
-        }
-        return env;
-    
-    }
+    Envelope getLineBounds() const;
+    Envelope getPolygonBounds() const;
 public:
     uint32_t numBytes;
     uint8_t *bytes;

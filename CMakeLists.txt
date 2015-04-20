@@ -63,11 +63,27 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/geom/ringSegment.cc
                src/geom/ring.cc
                src/geom/envelope.cc
+               src/geom/genericGeometry.cc
                src/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc
                src/containers/chunkedFile.cc               
                )
+
+ADD_EXECUTABLE(geomReader
+               src/geomReader.cc
+               src/geom/envelope.cc
+               src/geom/genericGeometry.cc
+               src/geom/ring.cc
+               src/mem_map.cc
+               src/osm/osmTypes.cc 
+               src/osm/osmMappedTypes.cc
+               src/containers/chunkedFile.cc               
+               )
+
+TARGET_LINK_LIBRARIES( geomReader -lgeos )
+
+
 
 TARGET_LINK_LIBRARIES( multipolygonReconstructor -lgeos )
 
