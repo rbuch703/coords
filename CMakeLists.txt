@@ -56,6 +56,8 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc 
                src/geom/envelope.cc
+               src/geom/genericGeometry.cc
+               src/geom/ring.cc
                src/containers/chunkedFile.cc)
 
 ADD_EXECUTABLE(multipolygonReconstructor
@@ -82,6 +84,7 @@ ADD_EXECUTABLE(geomReader
                )
 
 TARGET_LINK_LIBRARIES( geomReader -lgeos )
+TARGET_LINK_LIBRARIES( coordsCreateTiles -lgeos)
 
 
 

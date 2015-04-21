@@ -53,8 +53,7 @@ typedef std::map<std::string, std::string> TagSet;
 void     serializeTagSet(  const TagSet &tagSet, FILE* fOut);
 
 void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE* fOut);
-void serializeWayPolygon(const OsmWay &way, uint64_t wayId, FILE* fOut);
-void serializeWay(const OsmLightweightWay &way, uint64_t wayId, bool asPolygon, FILE* fOut);
+void serializeWay(const OsmLightweightWay &way, bool asPolygon, FILE* fOut);
 
 
 class OpaqueOnDiskGeometry {

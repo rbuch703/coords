@@ -6,6 +6,7 @@
 #include <string>
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
+#include "geom/genericGeometry.h"
 
 
 class FileBackedTile {
@@ -13,8 +14,9 @@ public:
     FileBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize);
     ~FileBackedTile();
     void add(OsmLightweightWay &way, const Envelope &wayBounds);
-    void releaseMemoryResources();
-    void subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBackedStorage = false);
+    void add(OpaqueOnDiskGeometry &geom, const Envelope &wayBounds);
+    void closeFiles();
+    void subdivide(uint64_t maxSubdivisionNodeSize);
 private:
     void subdivide();
 

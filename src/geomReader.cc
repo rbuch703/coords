@@ -13,14 +13,17 @@ int main()
     {
         ungetc(ch, f);
         OpaqueOnDiskGeometry geom(f);
-        std::cout << geom.getEntityType() << " " << geom.getEntityId() << " - "
-                  << geom.getFeatureType();
                   
         Envelope env = geom.getBounds();
+        if (geom.numBytes > 1000000)
+            std::cout << geom.getEntityType() << " " << geom.getEntityId()
+                      << " has " << (geom.numBytes/1000000.0) << "MB" << std::endl;
+                  
+/*
         std::cout << " lat: " << (env.latMin / 10000000.0) << "-> " << (env.latMax / 10000000.0);
         std::cout << ", ";
         std::cout << "lng: " << (env.lngMin / 10000000.0) << "-> " << (env.lngMax / 10000000.0);
-        std::cout << std::endl;
+        std::cout << std::endl;*/
     }
 
     return EXIT_SUCCESS;

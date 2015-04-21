@@ -316,10 +316,10 @@ int main(int argc, char** argv)
 
     ensureDirectoryExists(destinationDirectory);
     FileBackedTile storage( (destinationDirectory + "node").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
-    FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
+    //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
-    uint64_t numLod12Ways = 0;
+    //uint64_t numLod12Ways = 0;
     uint64_t pos = 0;
     uint64_t numVertices = 0;
     uint64_t numTagBytes = 0;
@@ -334,10 +334,6 @@ int main(int argc, char** argv)
         storage.add(way, way.getBounds() );
         numWays += 1;
 
-        way = getLod12Version(way);
-        if (!way.id)    //has been invalidated by getLod12Version() --> should not be stored
-            continue;
-            
         numVertices += way.numVertices;
             
         for (OsmKeyValuePair kv: way.getTags())
@@ -345,9 +341,13 @@ int main(int argc, char** argv)
             //cout << kv.first << " = " << kv.second << endl;
             numTagBytes += 2 + kv.first.size() + kv.second.size();
         }
+
+        /*way = getLod12Version(way);
+        if (!way.id)    //has been invalidated by getLod12Version() --> should not be stored
+            continue;
             
         storageLod12.add(way, way.getBounds());
-        numLod12Ways += 1;
+        numLod12Ways += 1;*/
     }
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
          << (MAX_NODE_SIZE/1000000) << "MB." << endl;
@@ -357,15 +357,17 @@ int main(int argc, char** argv)
        concurrently may easily exceed that limit. But in stage 2, we only need to keep
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
-    storage.releaseMemoryResources();
-    storage.subdivide(MAX_NODE_SIZE, true);
+    storage.closeFiles();
+    storage.subdivide(MAX_NODE_SIZE);
  
-    storageLod12.releaseMemoryResources();
-    storageLod12.subdivide(MAX_NODE_SIZE, true);
+    /*storageLod12.closeFiles();
+    storageLod12.subdivide(MAX_NODE_SIZE, true);*/
     cout << "done." << endl;
 
-    cout << "stats: data set contains " << (numWays     / 1000) << "k ways." << endl;   
-    cout << "stats: data set contains " << (numLod12Ways/ 1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes / 1000) << "kB tags at LOD 12." << endl;   
+    cout << "stats: data set contains " << (numWays     / 1000000) << "M ways "
+         << "with " << (numVertices/1000000) << "M vertices and " << (numTagBytes / 1000000) 
+         << "MB tags" << endl;
+    //cout << "stats: data set contains " << (numLod12Ways/ 1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes / 1000) << "kB tags at LOD 12." << endl;   
     cout << "stats: skipped: "  << frequencies[0] << 
                  ", landuse: "  << frequencies[1] << 
                  ", natural: "  << frequencies[2] << 

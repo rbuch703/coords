@@ -71,7 +71,7 @@ Envelope OpaqueOnDiskGeometry::getLineBounds() const {
     //skipping beyond 'type' and 'id'
     uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
     uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    uint32_t *lineStart = (uint32_t*)tagsStart + sizeof(uint32_t) + numTagBytes;
+    uint32_t *lineStart = (uint32_t*)(tagsStart + sizeof(uint32_t) + numTagBytes);
     uint32_t numPoints = *lineStart;
     
     Envelope env;
@@ -183,12 +183,14 @@ void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE
 }
 
 
-void serializeWay(const OsmLightweightWay &way, uint64_t wayId, bool asPolygon, FILE* fOut)
+void serializeWay(const OsmLightweightWay &way, bool asPolygon, FILE* fOut)
 {
     OsmGeoPosition v0 = way.vertices[0];
     OsmGeoPosition vn = way.vertices[way.numVertices-1];
     
-    MUST( v0.lat == vn.lat && v0.lng == vn.lng, "not a ring");
+    if (asPolygon)
+        MUST( v0.lat == vn.lat && v0.lng == vn.lng, "not a ring");
+        
     //cerr << "serializing relation " << relId << endl;
     TagSet tags(way.getTagSet());
     uint64_t sizeTmp = 
@@ -209,7 +211,7 @@ void serializeWay(const OsmLightweightWay &way, uint64_t wayId, bool asPolygon, 
     
     FEATURE_TYPE ft = asPolygon ? FEATURE_TYPE::POLYGON : FEATURE_TYPE::LINE;
     MUST(fwrite( &ft,    sizeof(ft),    1, fOut) == 1, "write error");
-    MUST(fwrite( &wayId, sizeof(wayId), 1, fOut) == 1, "write error");
+    MUST(fwrite( &way.id, sizeof(way.id), 1, fOut) == 1, "write error");
     
     serializeTagSet(tags, fOut);
 
@@ -219,15 +221,19 @@ void serializeWay(const OsmLightweightWay &way, uint64_t wayId, bool asPolygon, 
         MUST(fwrite( &numRings, sizeof(uint32_t), 1, fOut) == 1, "write error");
     }
 
+    uint32_t numVertices = way.numVertices;
+    MUST(fwrite( &numVertices, sizeof(uint32_t), 1, fOut) == 1, "write error");
+    
     for (int i = 0; i < way.numVertices; i++)
     {
         MUST(fwrite( &way.vertices[i].lat, sizeof(int32_t), 1, fOut) == 1, "write error");
         MUST(fwrite( &way.vertices[i].lng, sizeof(int32_t), 1, fOut) == 1, "write error");
-    }        
+    }       
 
     
     uint64_t endPos = ftell(fOut);
-    //cout << "size calculated: " << numBytes << ", actual: " << (endPos - posBefore) << endl;
+    //std::cout << "size calculated: " << numBytes << ", actual: " << (endPos - posBefore) 
+    //          << std::endl;
     MUST( endPos == numBytes + posBefore, " polygon size mismatch");
 }
 

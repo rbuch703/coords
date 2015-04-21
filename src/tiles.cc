@@ -41,14 +41,17 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
     if (fData)
     {
         assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-#ifndef NDEBUG
+/*#ifndef NDEBUG
         uint64_t posBefore = ftell(fData);
-#endif
-        way.serialize(fData);
-        assert( ftell(fData) - posBefore == way.size());
-        size += way.size();
+#endif*/
+        
+        serializeWay(way, false, fData);
+        this->size = ftell(fData);
+        //way.serialize(fData);
+        //assert( ftell(fData) - posBefore == way.size());
+        //size += way.size();
 
-        if (size > maxNodeSize)
+        if ( (uint64_t)ftell(fData) > maxNodeSize)
             subdivide();
     } else 
     {
@@ -62,7 +65,38 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
     
 }
 
-void FileBackedTile::releaseMemoryResources()
+void FileBackedTile::add(OpaqueOnDiskGeometry &geom, const Envelope &bounds)
+{
+    if (fData)
+    {
+        assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
+/*#ifndef NDEBUG
+        uint64_t posBefore = ftell(fData);
+#endif*/
+        
+        MUST( fwrite(&geom.numBytes, sizeof(geom.numBytes), 1, fData) == 1, "write error");
+
+        MUST( fwrite(geom.bytes, geom.numBytes, 1, fData) == 1, "write error");
+        //serializeWay(way, false, fData);
+        //way.serialize(fData);
+        //assert( ftell(fData) - posBefore == way.size());
+        //size += way.size();
+
+        if ( (uint64_t)ftell(fData) > maxNodeSize)
+            subdivide();
+    } else 
+    {
+        assert( topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
+        if (bounds.overlapsWith(topLeftChild->bounds)) topLeftChild->add(geom, bounds);
+        if (bounds.overlapsWith(topRightChild->bounds)) topRightChild->add(geom, bounds);
+        if (bounds.overlapsWith(bottomLeftChild->bounds)) bottomLeftChild->add(geom, bounds);
+        if (bounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(geom, bounds);
+    }
+    
+}
+
+
+void FileBackedTile::closeFiles()
 {
     if (fData)
     {
@@ -70,14 +104,14 @@ void FileBackedTile::releaseMemoryResources()
         fData = NULL;
     }
     
-    if (topLeftChild)     topLeftChild->    releaseMemoryResources();
-    if (topRightChild)    topRightChild->   releaseMemoryResources();
-    if (bottomLeftChild)  bottomLeftChild-> releaseMemoryResources();
-    if (bottomRightChild) bottomRightChild->releaseMemoryResources();
+    if (topLeftChild)     topLeftChild->    closeFiles();
+    if (topRightChild)    topRightChild->   closeFiles();
+    if (bottomLeftChild)  bottomLeftChild-> closeFiles();
+    if (bottomRightChild) bottomRightChild->closeFiles();
 }
 
-void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBackedStorage) {
-    //cout << "size of node " << this << " is " << size 
+void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize) {
+    //cout << "size of node " << this << " is " << size << endl;
     this->maxNodeSize = maxSubdivisionNodeSize;
     if (size <= maxSubdivisionNodeSize)
     {
@@ -89,10 +123,10 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
         if (fData)
             fclose(fData);
 
-        if (topLeftChild)     topLeftChild->    subdivide(maxSubdivisionNodeSize,useMemoryBackedStorage);
-        if (topRightChild)    topRightChild->   subdivide(maxSubdivisionNodeSize,useMemoryBackedStorage);
-        if (bottomLeftChild)  bottomLeftChild-> subdivide(maxSubdivisionNodeSize,useMemoryBackedStorage);
-        if (bottomRightChild) bottomRightChild->subdivide(maxSubdivisionNodeSize,useMemoryBackedStorage);
+        if (topLeftChild)     topLeftChild->    subdivide(maxSubdivisionNodeSize);
+        if (topRightChild)    topRightChild->   subdivide(maxSubdivisionNodeSize);
+        if (bottomLeftChild)  bottomLeftChild-> subdivide(maxSubdivisionNodeSize);
+        if (bottomRightChild) bottomRightChild->subdivide(maxSubdivisionNodeSize);
             
         return;
     }
@@ -112,7 +146,7 @@ void FileBackedTile::subdivide(uint64_t maxSubdivisionNodeSize, bool useMemoryBa
     rewind(fData);
 
     this->subdivide(); //also deletes file contents and frees file pointer
-    this->releaseMemoryResources();
+    this->closeFiles();
     
 }
 
@@ -139,19 +173,23 @@ void FileBackedTile::subdivide()
     while ( (ch = fgetc(fData)) != EOF)
     {
         ungetc( ch, fData);
+        
+        OpaqueOnDiskGeometry geom(fData);
+        //OsmLightweightWay way(fData);
+        static uint64_t cntr = 0;
+        cntr++;
+        
+        Envelope bounds = geom.getBounds();
 
-        OsmLightweightWay way(fData);
-        Envelope wayBounds = way.getBounds();
+        assert ( bounds.overlapsWith(topLeftChild    ->bounds) ||
+                 bounds.overlapsWith(topRightChild   ->bounds) ||
+                 bounds.overlapsWith(bottomLeftChild ->bounds) ||
+                 bounds.overlapsWith(bottomRightChild->bounds) );
 
-        assert ( wayBounds.overlapsWith(topLeftChild    ->bounds) ||
-                 wayBounds.overlapsWith(topRightChild   ->bounds) ||
-                 wayBounds.overlapsWith(bottomLeftChild ->bounds) ||
-                 wayBounds.overlapsWith(bottomRightChild->bounds) );
-
-        if (wayBounds.overlapsWith(topLeftChild    ->bounds)) topLeftChild->add(    way, wayBounds);
-        if (wayBounds.overlapsWith(topRightChild   ->bounds)) topRightChild->add(   way, wayBounds);
-        if (wayBounds.overlapsWith(bottomLeftChild ->bounds)) bottomLeftChild->add( way, wayBounds);
-        if (wayBounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(way, wayBounds);
+        if (bounds.overlapsWith(topLeftChild    ->bounds)) topLeftChild->add(    geom, bounds);
+        if (bounds.overlapsWith(topRightChild   ->bounds)) topRightChild->add(   geom, bounds);
+        if (bounds.overlapsWith(bottomLeftChild ->bounds)) bottomLeftChild->add( geom, bounds);
+        if (bounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(geom, bounds);
         
     }
     
