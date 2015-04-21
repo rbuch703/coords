@@ -8,12 +8,15 @@ const char * ignore_key_prefixes[]={
     "VRS:",     // annotations of a single local German public transport system
     "AND_",     // annotations from a Netherlands database
     "AND:",
+    "bag:",
     "b5m:",
     "bak:", 
+    "building:ruian:",
     "cladr:",   //annotations from Russian CLADR database
-    "canvec:", //"CanVec is a digital cartographic reference product produced by Natural Resources Canada."
+    "canvec:", //"Canadian database by Natural Resources Canada."
     "dcgis:", 
     "educamadrid:",
+    "ewmapa:",
     "geobase:",
     "GeoBaseNHN:",
     "gns_",
@@ -21,11 +24,16 @@ const char * ignore_key_prefixes[]={
     "GNS:",
     "GNIS:", //annotations from import from US Geographic Names Information System
     "gnis:",
+    "gst:",
     "ideewfs:",
     "it:fvg:",
     "kms:",
     "KSJ2:", //annotations from import from Japanese KSJ2 database
+    "lbcs:",
+    "LINZ:",
+    "maaamet:"
     "massgis:",      // annotations from MassGIS (Massachusetts, US)
+    "mvdgis:",
     "naptan:", // annotations from import from UK NaPTAN database
     "ngbe:",
     "NHD_", //The National Hydrography Dataset (NHD) is a United States-
@@ -33,18 +41,25 @@ const char * ignore_key_prefixes[]={
     "NHD:",
     "nhd_",
     "nhd-",
-    "nhd:",    
+    "nhd:", 
+    "note:",   
     "openGeoDB:",
     "opengeodb:",
+    "osak:",    //Danish OSAK database
     "rednap:",
+    "ref:ruian",
+    "ref:FR:",
+    "ref:opendataparis:",
     "semnav:",
-    "siruta:"
+    "siruta:",
+    "surrey:",
     "teryt:", // annotations from Polish TERYT database
     "tiger:",
     "TIGER:",
     "TMC:cid_58:",   //data source from German TMC system
     "USGS-LULC:",      //US geological survey?
     "WroclawGIS:",
+    "yh:"
 };
 
 uint32_t num_ignore_key_prefixes = sizeof(ignore_key_prefixes)/ sizeof(const char *);
@@ -53,58 +68,59 @@ const char * ignore_keys[]={
     "created_by", // author of node/way/relation
     "converted_by",
     "note",       //notes are usually information for fellow mappers, but not relevant for viewers;
+    "comment",
     "source",      // generic data source
-    "3dshapes:ggmodelk",
     "FIXME",
     "fixme",
-    "GoeVB:id",  // ???
-    "IBNR",
-    "ID:tobwen",
-    "ID_SLH_IMPORT",
-    "attribution",
-    "odbl",
-    "build",
-    "import",
-    "import_uuid",
-    "note:import-bati",
-    "uic_ref",   //unique international train station id; not needed right now TODO: white-list this later?
-    "onkz",      //German telephone area codes ("Ortskennzahl")
     "AND",      // annotations from a Netherlands database
+    "attribution",
+    "addr:city:simc",
+    "addr:street:simc",
+    "addr:street:sym_ul",
+    "addr:postcode:source",
+    "build",
+    "building:type:pl",
+    "building:usage:pl",
+    "building:use:pl",  
+    "chicago:building_id",
     "cladr:code",   //annotations from Russian CLADR database
-    "canvec",   //"CanVec is a digital cartographic reference product produced by Natural Resources Canada."
-    "canvec tile",
     "cxx:code",
     "cxx:id",
     "de:amtlicher_gemeindeschluessel",
     "dcgis",
     "dibavod:id",
-    
     "educamadrid",
-    
     "fresno_APN",       //Fresno_County_GIS 
-    "lot_description",  //part of the former
-    "fresno_TX_area_CD",
     "fresno_lot_width",
     "fresno_lot_depth",
     "fresno_lot_area",
+    "fresno_TX_area_CD",
     "geonames_id", 
     "gnis", //annotations from import from US Geographic Names Information System
+    "GoeVB:id",  // ???
     "gtfs_id",
+    "IBNR",
+    "ID:tobwen",
+    "ID_SLH_IMPORT",
     "idee:name",
+    "import",
+    "import_uuid",
     "koatuu",        //???
-    "LINZ:source_version",
+    "lot_description",  
+    "lojic:bgnum",
     "mvdgis:padron",
     "mvdgis:cod_nombre",
-    "osak:identifier",
-    "osak:municipality_no",
-    "osak:revision",
-    "osak:street",
-    "osak:street_no",
-    "osak:subdivision",
-    "uir_adr:ADRESA_KOD",
-    "GNS:id",
-    "openGeocodeDB:postal_codes",
-    "surrey:addrid",
+    "nycdoitt:bin",
+    "odbl",
+    "onkz",      //German telephone area codes ("Ortskennzahl")
+    "project:eurosha_2012",
+    "ref:bag",      //reference number for the BAG database of properties in the Netherlands. 
+    "ref:bagid",
+    "ref:INSEE",    //annotations from French INSEE database
+    "ref:SIREN",
+    "ref:UrbIS",
+    "ref:old",
+    "SK53_bulk:load",
     "source_ref",   //generic name of the data source
     "statscan:rbuid",
     "tiger 2010:way_id", // annotations from the US census bureau TIGER road database
@@ -113,20 +129,10 @@ const char * ignore_keys[]={
     "tiger_base",
     "tiger_name_type",
     "tiger-reviewed",        
+    "uic_ref",   //unique international train station id; not needed right now TODO: white-list this later?
+    "uir_adr:ADRESA_KOD",
     "us.fo:Adressutal", //annotations from Umhvørvisstovan (http://www.us.fo); the Faroese National Survey and cadastre
     "usar_addr:edit_date",
-    "ref:INSEE",    //annotations from French INSEE database
-    "ref:SIREN",
-
-    "yh:STRUCTURE",
-    "yh:TOTYUMONO",
-    "yh:TYPE",
-    "yh:WIDTH",
-    "yh:WIDTH_RANK",
-    "yh:LINE_NAME",
-    "yh:LINE_NUM",
-
-    "www.prezzibenzina.it"
     };
     
 uint32_t num_ignore_keys = sizeof(ignore_keys)/ sizeof(const char *);
