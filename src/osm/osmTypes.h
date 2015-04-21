@@ -3,19 +3,14 @@
 #define OSM_TYPES_H
 
 #include <stdint.h> 
-#include <assert.h>
+//#include <assert.h>
 
 #include <string>
-#include <map>
 #include <vector>
 
+#include "osmBaseTypes.h"
 #include "mem_map.h"
 #include "containers/chunkedFile.h"
-
-
-enum struct OSM_ENTITY_TYPE : uint8_t { NODE, WAY, RELATION, CHANGESET, OTHER };
-
-typedef std::pair<std::string, std::string> OsmKeyValuePair;
 
 
 /* on-disk format for OsmNode:
@@ -50,18 +45,6 @@ struct OsmNode
 
 std::ostream& operator<<(std::ostream &out, const OsmNode &node);
 
-typedef struct 
-{
-    uint64_t id;
-    int32_t lat, lng;
-} OsmGeoPosition;
-
-bool operator==(const OsmGeoPosition &a, const OsmGeoPosition &b);
-bool operator!=(const OsmGeoPosition &a, const OsmGeoPosition &b);
-bool operator< (const OsmGeoPosition &a, const OsmGeoPosition &b); //just an arbitrary ordering for containers that need one
-
-OsmGeoPosition operator-(const OsmGeoPosition &a, const OsmGeoPosition &b);
-
 struct OsmWay
 {
 //    OSMWay( uint64_t way_id);
@@ -89,19 +72,6 @@ struct OsmWay
 };
 
 std::ostream& operator<<(std::ostream &out, const OsmWay &way);
-
-struct OsmRelationMember
-{
-    OsmRelationMember( OSM_ENTITY_TYPE member_type, uint64_t member_ref, std::string member_role):
-        type(member_type), ref(member_ref), role(member_role) { }
-
-    uint32_t getDataSize() const;
-    OSM_ENTITY_TYPE type;  //whether the member is a node, way or relation
-    uint64_t ref;  //the node/way/relation id
-    std::string role;   //the role the member has as part of the relation
-    
-};
-
 
 struct OsmRelation
 {

@@ -20,7 +20,8 @@ ADD_EXECUTABLE(coordsCreateStorage
     src/conv_osm.cc 
     src/mem_map.cc 
     src/osm/osmTypes.cc 
-    src/osm/osmMappedTypes.cc 
+#    src/osm/osmMappedTypes.cc 
+    src/osm/osmBaseTypes.cc
     src/osm/osm_tags.cc 
     src/osm/osmParserXml.cc
     src/osm/osmParserPbf.cc 
@@ -43,10 +44,13 @@ ADD_EXECUTABLE(coordsResolveLocations
                src/resolveRefs.cc 
                src/mem_map.cc
                src/osm/osmTypes.cc 
+               src/osm/osmBaseTypes.cc 
                src/osm/osmMappedTypes.cc 
                src/geom/envelope.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
+               src/containers/osmWayStore.cc
+               src/containers/osmRelationStore.cc
                )
 
 ADD_EXECUTABLE(coordsCreateTiles
@@ -55,10 +59,13 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc 
+               src/osm/osmBaseTypes.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/geom/ring.cc
-               src/containers/chunkedFile.cc)
+               src/containers/chunkedFile.cc
+               src/containers/osmWayStore.cc
+               )
 
 ADD_EXECUTABLE(multipolygonReconstructor
                src/multipolygonReconstructor.cc
@@ -67,9 +74,11 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/mem_map.cc
+               src/osm/osmBaseTypes.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc
                src/containers/chunkedFile.cc               
+               src/containers/osmRelationStore.cc
                )
 
 ADD_EXECUTABLE(geomReader
@@ -77,10 +86,11 @@ ADD_EXECUTABLE(geomReader
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/geom/ring.cc
-               src/mem_map.cc
-               src/osm/osmTypes.cc 
+#               src/mem_map.cc
+#               src/osm/osmTypes.cc 
+#               src/osm/osmBaseTypes.cc 
                src/osm/osmMappedTypes.cc
-               src/containers/chunkedFile.cc               
+#               src/containers/chunkedFile.cc               
                )
 
 TARGET_LINK_LIBRARIES( geomReader -lgeos )

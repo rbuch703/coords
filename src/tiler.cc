@@ -11,6 +11,7 @@
 #include "tiles.h"
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
+#include "containers/osmWayStore.h"
 
 using namespace std;
 
@@ -165,6 +166,49 @@ bool simplifyStroke(vector<OsmGeoPosition> &segment, double allowedDeviation)
     return segment.size() > 1;
 }
 
+OsmWay getEditableCopy(OsmLightweightWay &src) {
+    
+    map<string, string> tags = src.getTagSet();
+    return OsmWay( src.id, 
+                   src.version, 
+                   vector<OsmGeoPosition>( src.vertices, src.vertices + src.numVertices),
+                   vector<OsmKeyValuePair>( tags.begin(), tags.end()));
+}
+
+
+OsmLightweightWay toLightweightWay( const OsmWay &other)
+{
+    OsmLightweightWay res;
+    res.id = other.id;
+    res.version = other.version;
+    res.isDataMapped = false;
+    res.numVertices = other.refs.size();
+    res.vertices = new OsmGeoPosition[res.numVertices];
+    for (int i = 0; i < res.numVertices; i++)
+        res.vertices[i] = other.refs[i];
+        
+    res.numTags = other.tags.size();
+    res.numTagBytes = 0;
+    for (uint64_t i = 0; i < other.tags.size(); i++)
+    {
+        res.numTagBytes += other.tags[i].first.size() + 1;    //  key string length including termination
+        res.numTagBytes += other.tags[i].second.size() + 1;   //value string length including termination
+    }
+    
+    res.tagBytes = new uint8_t[res.numTagBytes];
+    char *pos = (char*)res.tagBytes;
+    for (uint64_t i = 0; i < other.tags.size(); i++)
+    {
+        strcpy(pos, other.tags[i].first.c_str());
+        pos += strlen( pos ) + 1;
+        
+        strcpy(pos, other.tags[i].second.c_str());
+        pos += strlen( pos ) + 1;
+    }
+    assert( (uint8_t*)pos == res.tagBytes + res.numTagBytes);
+    return res;    
+}
+
 
 static uint64_t frequencies[] = {0,0,0,0,0,0};
 
@@ -172,7 +216,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
 {
     //create a non-mapped copy. This is necessary because the mapped OsmLightweightWay 
     //cannot easily be changed in size
-    OsmWay way = wayIn.toOsmWay();
+    OsmWay way = getEditableCopy(wayIn);
 
     int keep =  0;
     
@@ -256,7 +300,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
     if (!keep)
         way.id = 0;
     
-    return way;
+    return toLightweightWay(way);
 }
 
 int parseArguments(int argc, char** argv)
@@ -311,9 +355,6 @@ int main(int argc, char** argv)
     if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
         destinationDirectory += "/";
 
-    LightweightWayStore wayStore( (storageDirectory + "ways.idx").c_str(),
-                                  (storageDirectory + "ways.data").c_str());
-
     ensureDirectoryExists(destinationDirectory);
     FileBackedTile storage( (destinationDirectory + "node").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
     //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
@@ -325,7 +366,27 @@ int main(int argc, char** argv)
     uint64_t numTagBytes = 0;
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
          << (MAX_META_NODE_SIZE/1000000) << "MB." << endl;
-    for (OsmLightweightWay way: wayStore)
+
+    FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
+    MUST(f, "cannot open file");
+    
+    int ch;
+    while ( (ch = fgetc(f)) != EOF)
+    {
+        ungetc(ch, f);
+        OpaqueOnDiskGeometry geom(f);
+        storage.add( geom, geom.getBounds());
+
+        if (++pos % 10000 == 0)
+            cout << (pos/1000) << "k multipolygons read" << endl;
+        
+    }
+    
+    fclose(f); 
+
+
+    pos = 0;
+    for (OsmLightweightWay way: LightweightWayStore(storageDirectory + "ways", true))
     {
         pos += 1;
         if (pos % 1000000 == 0)
@@ -349,6 +410,8 @@ int main(int argc, char** argv)
         storageLod12.add(way, way.getBounds());
         numLod12Ways += 1;*/
     }
+    
+    
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
          << (MAX_NODE_SIZE/1000000) << "MB." << endl;
 //    exit(0);

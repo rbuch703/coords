@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "config.h"
 /* The BucketFileSet stores a (potentially huge) set of key-value pairs on disk.
    The keys have to be of type uint64_t, while the values can be of arbitrary type.
    A BucketFileSet does not store all data in a single file, but rather partitions

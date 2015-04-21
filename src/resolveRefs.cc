@@ -10,6 +10,8 @@
 #include "osm/osmMappedTypes.h"
 #include "containers/reverseIndex.h"
 #include "containers/bucketFileSet.h"
+#include "containers/osmWayStore.h"
+#include "containers/osmRelationStore.h"
 
 using namespace std;
 

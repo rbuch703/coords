@@ -16,14 +16,16 @@
 #include <geos/geom/CoordinateSequence.h>
 #include <geos/geom/CoordinateSequenceFactory.h>
 
-#include "osm/osmMappedTypes.h"
 #include "containers/bucketFileSet.h"
+#include "containers/osmRelationStore.h"
+
+#include "osm/osmMappedTypes.h"
 #include "geom/ringSegment.h"
 #include "geom/ring.h"
 #include "geom/ringAssembler.h"
+#include "geom/genericGeometry.h"
 #include "escapeSequences.h"
 #include "config.h"
-#include "geom/genericGeometry.h"
 
 using namespace std;
 

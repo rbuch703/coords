@@ -14,7 +14,7 @@ int main()
         ungetc(ch, f);
         OpaqueOnDiskGeometry geom(f);
                   
-        Envelope env = geom.getBounds();
+        //Envelope env = geom.getBounds();
         if (geom.numBytes > 1000000)
             std::cout << geom.getEntityType() << " " << geom.getEntityId()
                       << " has " << (geom.numBytes/1000000.0) << "MB" << std::endl;

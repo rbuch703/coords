@@ -256,13 +256,6 @@ ostream& operator<<(ostream &out, const OsmNode &node)
     return out;
 }
 
-
-bool operator==(const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat == b.lat && a.lng == b.lng; }
-bool operator!=(const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat != b.lat || a.lng != b.lng; }
-bool operator< (const OsmGeoPosition &a, const OsmGeoPosition &b) { return a.lat < b.lat || (a.lat == b.lat && a.lng < b.lng);}
-
-
-
 OsmWay::OsmWay( uint64_t id, uint32_t version, 
             std::vector<uint64_t> way_refs, std::vector<OsmKeyValuePair> tags):
         id(id), version(version), tags(tags)  
@@ -389,7 +382,6 @@ ostream& operator<<(ostream &out, const OsmWay &way)
 
 
 //==================================
-//OsmRelation::OsmRelation( uint64_t relation_id): id(relation_id) {}
 
 OsmRelation::OsmRelation( uint64_t id, uint32_t version, vector<OsmRelationMember> members, vector<OsmKeyValuePair> tags): id(id), version(version), members(members), tags(tags) {}
 
@@ -404,9 +396,6 @@ OsmRelation::OsmRelation( const uint8_t* data_ptr)
     uint32_t num_members = *(uint32_t*)data_ptr;
     data_ptr+=sizeof(uint32_t);
 
-    //uint32_t members_data_size = *(uint32_t)data_ptr; //don't need these, but their are still present in the data file
-    //data_ptr+=4;
-    
     while (num_members--)
     {
         OSM_ENTITY_TYPE type = *(OSM_ENTITY_TYPE*)data_ptr;
@@ -461,31 +450,6 @@ void OsmRelation::initFromFile(FILE* src)
     tags = deserializeTags(src);
 
 }
-
-#if 0
-OsmRelation::OsmRelation( FILE* src, uint64_t rel_id): id(rel_id)
-{
-    this->initFromFile(src);
-}
-
-
-OsmRelation::OsmRelation( FILE* idx, FILE* data, uint64_t relation_id): id(relation_id)
-{
-    fseek(idx, relation_id*sizeof(uint64_t), SEEK_SET);
-    uint64_t pos;
-    int nRead = fread( &pos, sizeof(uint64_t), 1, idx);
-    /*there is only a magic byte at file position 0. Pos == 0 is the marker representing that no relation 
-      with that id exists */
-    if ((nRead != 1) || (pos == 0))
-    {
-        id = -1;
-        return;
-    }
-
-    fseek(data, pos, SEEK_SET);
-    this->initFromFile(data);
-}
-#endif
 
 void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
 {
