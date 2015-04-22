@@ -21,6 +21,7 @@ Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds)
 {
     MUST(geosPolygon->getNumInteriorRing() == 0, "Not a simple polygon/ring");
     area = this->geosPolygon->getArea();
+    MUST( area > 0, "ring without area");
     
 }
 
@@ -33,7 +34,11 @@ void toSimplePolygons( geos::geom::Polygon *poly, std::vector<geos::geom::Polygo
 {
     if (poly->getNumInteriorRing() == 0)
     {
-        polysOut.push_back(poly);
+        if (poly->getExteriorRing()->getNumPoints() >= 4) //only add non-degenerate polygons
+            polysOut.push_back(poly);
+        else
+            delete poly;
+            
         return;
     }
     
@@ -43,9 +48,12 @@ void toSimplePolygons( geos::geom::Polygon *poly, std::vector<geos::geom::Polygo
     
     for (uint64_t i = 0; i < poly->getNumInteriorRing(); i++)
     {
+        const geos::geom::LineString *line = poly->getInteriorRingN(i);
+        if (line->getNumPoints() < 4) // degenerate case, not a ring
+            continue;
+            
         polysOut.push_back( Ring::factory.createPolygon( 
-            Ring::factory.createLinearRing( 
-                poly->getInteriorRingN(i)->getCoordinates() ), nullptr));
+            Ring::factory.createLinearRing(line->getCoordinates() ), nullptr));
 
     }
     
@@ -73,6 +81,7 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
     if (healed->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
     {
         std::vector<geos::geom::Polygon*> res;
+        //toSimplePolygons() takes ownership of 'healed'
         toSimplePolygons(dynamic_cast<geos::geom::Polygon*>(healed), res);
         return res;
     }
@@ -103,6 +112,7 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
             break;
     }    
     
+    delete healed;
     return res;
 }
 
@@ -197,6 +207,7 @@ void Ring::serialize(FILE* fOut, bool reverseVertexOrder) const
     const std::vector<geos::geom::Coordinate>& coords = *boundary->getCoordinatesRO()->toVector();
     
     uint32_t numVertices = coords.size();
+    MUST(numVertices >= 4, "ring has less than four vertices");
     MUST( fwrite(&numVertices, sizeof(uint32_t), 1, fOut) == 1, "write error");
     
     if (!reverseVertexOrder)

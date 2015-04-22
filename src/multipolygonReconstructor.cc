@@ -840,7 +840,7 @@ for (Ring* ring : roots)
             ways.insert(make_pair( way.id, way));
         }
 
-        //for( uint64_t relId = 82181; relId == 82181; relId++)
+        //for( uint64_t relId = 37436; relId == 37436; relId++)
         for (uint64_t relId =  bucketId   * WAYS_OF_RELATIONS_BUCKET_SIZE;
                       relId < (bucketId+1)* WAYS_OF_RELATIONS_BUCKET_SIZE;
                       relId++)
@@ -936,5 +936,7 @@ for (Ring* ring : roots)
                 deleteRecursive(ring);
         }
     }
+    fclose(fOut);
+    
     return EXIT_SUCCESS;
 }

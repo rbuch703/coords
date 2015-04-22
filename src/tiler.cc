@@ -376,7 +376,10 @@ int main(int argc, char** argv)
     {
         ungetc(ch, f);
         OpaqueOnDiskGeometry geom(f);
-        storage.add( geom, geom.getBounds());
+        Envelope bounds = geom.getBounds();
+        if (bounds.latMin == INVALID_LAT_LNG)
+            continue;
+        storage.add( geom, bounds);
 
         if (++pos % 10000 == 0)
             cout << (pos/1000) << "k multipolygons read" << endl;
