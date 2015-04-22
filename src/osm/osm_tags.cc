@@ -2,21 +2,22 @@
 #include "osm/osm_tags.h"
 
 const char * ignore_key_prefixes[]={
-    "note:",    // localized notes
-    "CLC:",     // data source ID from Corine Land Cover
-    "source:",  // various import information
-    "VRS:",     // annotations of a single local German public transport system
     "AND_",     // annotations from a Netherlands database
     "AND:",
     "bag:",
     "b5m:",
     "bak:", 
     "building:ruian:",
-    "cladr:",   //annotations from Russian CLADR database
     "canvec:", //"Canadian database by Natural Resources Canada."
+    "cladr:",  //annotations from Russian CLADR database
+    "CLC:",    // data source ID from Corine Land Cover
+    "comment:", //localized comments
     "dcgis:", 
+    "description:",
     "educamadrid:",
     "ewmapa:",
+    "fixme:",
+    "FIXME:",
     "geobase:",
     "GeoBaseNHN:",
     "gns_",
@@ -31,7 +32,7 @@ const char * ignore_key_prefixes[]={
     "KSJ2:", //annotations from import from Japanese KSJ2 database
     "lbcs:",
     "LINZ:",
-    "maaamet:"
+    "maaamet:",
     "massgis:",      // annotations from MassGIS (Massachusetts, US)
     "mvdgis:",
     "naptan:", // annotations from import from UK NaPTAN database
@@ -42,7 +43,7 @@ const char * ignore_key_prefixes[]={
     "nhd_",
     "nhd-",
     "nhd:", 
-    "note:",   
+    "note:",    // localized notes
     "openGeoDB:",
     "opengeodb:",
     "osak:",    //Danish OSAK database
@@ -53,11 +54,14 @@ const char * ignore_key_prefixes[]={
     "semnav:",
     "siruta:",
     "surrey:",
-    "teryt:", // annotations from Polish TERYT database
+    "source:",              // various import information
+    "source_ref:",
+    "teryt:",               // from Polish TERYT database
     "tiger:",
     "TIGER:",
-    "TMC:cid_58:",   //data source from German TMC system
+    "TMC:cid_58:",          //data source from German TMC system
     "USGS-LULC:",      //US geological survey?
+    "VRS:",     // annotations of a single local German public transport system
     "WroclawGIS:",
     "yh:"
 };
@@ -87,6 +91,7 @@ const char * ignore_keys[]={
     "cxx:code",
     "cxx:id",
     "de:amtlicher_gemeindeschluessel",
+    "description",
     "dcgis",
     "dibavod:id",
     "educamadrid",
@@ -123,6 +128,7 @@ const char * ignore_keys[]={
     "SK53_bulk:load",
     "source_ref",   //generic name of the data source
     "statscan:rbuid",
+//    "start_date",
     "tiger 2010:way_id", // annotations from the US census bureau TIGER road database
     "tiger.source:tlid",
     "tiger name",

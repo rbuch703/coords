@@ -1,6 +1,8 @@
 
 #include "tiles.h"
 #include "geom/envelope.h"
+#include "geom/geomSerializers.h"
+
 #include <unistd.h> //for ftruncate()
 #include <sys/mman.h>
 using std::cout;
@@ -45,7 +47,7 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
         uint64_t posBefore = ftell(fData);
 #endif*/
         
-        serializeWay(way, false, fData);
+        serializeWayAsGeometry(way, false, fData);
         this->size = ftell(fData);
         //way.serialize(fData);
         //assert( ftell(fData) - posBefore == way.size());

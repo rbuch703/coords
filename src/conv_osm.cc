@@ -38,7 +38,7 @@ int parseArguments(int argc, char** argv)
     return optind;
 }
 
-void deleteFileIfExists(string filename)
+void deleteFileIfExists(std::string filename)
 {
     int res = unlink(filename.c_str());
     MUST(res == 0 || errno == ENOENT, "cannot access file");
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
     
     if (destinationDirectory == "")
     {
-        std::cerr << "error: missing required argument '--dest'" << endl;
+        std::cerr << "error: missing required argument '--dest'" << std::endl;
         std::cerr << usageLine << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -69,9 +69,9 @@ int main(int argc, char** argv)
     {
         switch (errno)
         {
-            case EACCES: std::cerr << "error: insufficient permissions to access destination '" + destinationDirectory << "'." << endl; break;
-            case ENOENT: std::cerr << "error: destination directory '" << destinationDirectory << "' does not exist." << endl; break;
-            default:     std::cerr << "error: cannot access destination directory'" << destinationDirectory << "'." << endl; break;
+            case EACCES: std::cerr << "error: insufficient permissions to access destination '" + destinationDirectory << "'." << std::endl; break;
+            case ENOENT: std::cerr << "error: destination directory '" << destinationDirectory << "' does not exist." << std::endl; break;
+            default:     std::cerr << "error: cannot access destination directory'" << destinationDirectory << "'." << std::endl; break;
         }
         exit(EXIT_FAILURE);
     }
@@ -107,7 +107,7 @@ int main(int argc, char** argv)
     FILE* f = fopen( argv[nextArgumentIndex], "rb");
     if (!f)
     {
-        std::cerr << "error: cannot open file '" << argv[nextArgumentIndex] << "'" << endl;
+        std::cerr << "error: cannot open file '" << argv[nextArgumentIndex] << "'" << std::endl;
         exit(EXIT_FAILURE);
     }
 

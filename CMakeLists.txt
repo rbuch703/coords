@@ -63,6 +63,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/geom/ring.cc
+               src/geom/geomSerializers.cc
                src/containers/chunkedFile.cc
                src/containers/osmWayStore.cc
                )
@@ -73,10 +74,11 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/geom/ring.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
-               src/mem_map.cc
+               src/geom/geomSerializers.cc
                src/osm/osmBaseTypes.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc
+               src/mem_map.cc
                src/containers/chunkedFile.cc               
                src/containers/osmRelationStore.cc
                )
@@ -85,11 +87,11 @@ ADD_EXECUTABLE(geomReader
                src/geomReader.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
-               src/geom/ring.cc
+#               src/geom/ring.cc
 #               src/mem_map.cc
 #               src/osm/osmTypes.cc 
 #               src/osm/osmBaseTypes.cc 
-               src/osm/osmMappedTypes.cc
+#               src/osm/osmMappedTypes.cc
 #               src/containers/chunkedFile.cc               
                )
 

@@ -13,8 +13,10 @@
 #include <geos/geom/IntersectionMatrix.h>
 
 //only to support debugging code
-#include <geos/geom/CoordinateSequence.h>
-#include <geos/geom/CoordinateSequenceFactory.h>
+/*#include <geos/geom/CoordinateSequence.h>
+#include <geos/geom/CoordinateSequenceFactory.h>*/
+
+#include "config.h"
 
 #include "containers/bucketFileSet.h"
 #include "containers/osmRelationStore.h"
@@ -24,8 +26,8 @@
 #include "geom/ring.h"
 #include "geom/ringAssembler.h"
 #include "geom/genericGeometry.h"
+#include "geom/geomSerializers.h"
 #include "escapeSequences.h"
-#include "config.h"
 
 using namespace std;
 

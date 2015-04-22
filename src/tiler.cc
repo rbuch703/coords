@@ -9,6 +9,7 @@
 #include <iostream>
 
 #include "tiles.h"
+#include "osm/osmTypes.h"
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
 #include "containers/osmWayStore.h"

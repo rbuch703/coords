@@ -7,7 +7,7 @@ NodeStore::NodeStore(const char* indexFileName, const char* dataFileName) {
     mapData  = init_mmap(dataFileName, true, true);
 }
 
-NodeStore::NodeStore(string baseName): 
+NodeStore::NodeStore(std::string baseName): 
     NodeStore( (baseName + ".idx").c_str(), (baseName + ".data").c_str())
 { }
 

@@ -23,9 +23,6 @@
    
 */
 
-
-using namespace std;
-
 template<typename t>
 class RadixTreeNode {
 public:
@@ -109,7 +106,7 @@ void insert(const char* keyName, const t& value)
     *(pos->value) = value;
 }
 
-void traverse(RadixTreeNode<t> *pos, vector<char> &path, int depth = 0)
+void traverse(RadixTreeNode<t> *pos, std::vector<char> &path, int depth = 0)
 {
     for (int i = 0; i < 256; i++)
         if (pos->children[i])
@@ -118,8 +115,8 @@ void traverse(RadixTreeNode<t> *pos, vector<char> &path, int depth = 0)
         if (pos->children[i]->value)
         {
             for (char ch : path)
-                cout << ch;
-            cout << " -> " << (*pos->children[i]->value) << endl;
+                std::cout << ch;
+            std::cout << " -> " << (*pos->children[i]->value) << std::endl;
         }
         
         traverse(pos->children[i], path, depth+1);
