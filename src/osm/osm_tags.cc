@@ -14,6 +14,7 @@ const char * ignore_key_prefixes[]={
     "comment:", //localized comments
     "dcgis:", 
     "description:",
+    "dibavod:",
     "educamadrid:",
     "ewmapa:",
     "fixme:",
@@ -28,10 +29,14 @@ const char * ignore_key_prefixes[]={
     "gst:",
     "ideewfs:",
     "it:fvg:",
+    "it:lo:",
+    "it:pv:",
     "kms:",
     "KSJ2:", //annotations from import from Japanese KSJ2 database
     "lbcs:",
     "LINZ:",
+    "LINZ2OSM:",
+    "linz:",
     "maaamet:",
     "massgis:",      // annotations from MassGIS (Massachusetts, US)
     "mvdgis:",
@@ -76,6 +81,7 @@ const char * ignore_keys[]={
     "source",      // generic data source
     "FIXME",
     "fixme",
+    
     "AND",      // annotations from a Netherlands database
     "attribution",
     "addr:city:simc",
@@ -95,6 +101,7 @@ const char * ignore_keys[]={
     "dcgis",
     "dibavod:id",
     "educamadrid",
+    "FLATE",
     "fresno_APN",       //Fresno_County_GIS 
     "fresno_lot_width",
     "fresno_lot_depth",
@@ -111,6 +118,7 @@ const char * ignore_keys[]={
     "import",
     "import_uuid",
     "koatuu",        //???
+    "linz2osm:objectid",
     "lot_description",  
     "lojic:bgnum",
     "mvdgis:padron",

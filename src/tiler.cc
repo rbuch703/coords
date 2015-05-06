@@ -357,8 +357,13 @@ int main(int argc, char** argv)
         destinationDirectory += "/";
 
     ensureDirectoryExists(destinationDirectory);
-    FileBackedTile storage( (destinationDirectory + "node").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
-    //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), Envelope::getWorldBounds(), MAX_META_NODE_SIZE);
+    
+    Envelope worldBounds = (Envelope){
+        .latMin = -900000000, .latMax = 900000000, 
+        .lngMin = -1800000000,.lngMin = 1800000000};
+    
+    FileBackedTile storage( (destinationDirectory + "node").c_str(), worldBounds, MAX_META_NODE_SIZE);
+    //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), worldBounds, MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
     //uint64_t numLod12Ways = 0;
