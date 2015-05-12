@@ -40,6 +40,11 @@ bool Envelope::overlapsWith(const Envelope &other) const
            (max( latMin, other.latMin) <= min( latMax, other.latMax));
 }
 
+bool Envelope::isValid() const
+{
+    return (latMin <= latMax && lngMin <= lngMax);
+}
+
 std::ostream& operator<<(std::ostream &os, const Envelope &aabb)
 {
     os << "( lat: " << aabb.latMin << " -> " << aabb.latMax 

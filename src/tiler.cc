@@ -7,6 +7,7 @@
 #include <vector>
 #include <list>
 #include <iostream>
+#include <set>
 
 #include "tiles.h"
 #include "osm/osmTypes.h"
@@ -337,6 +338,33 @@ int parseArguments(int argc, char** argv)
 }
 
 
+static const std::set<std::string> areaIndicatorTags { 
+    "building", "landuse", "natural", "water", "amenity", "leisure", "area"};
+
+template <typename T>
+bool hasAreaTag( const T &tags )
+{
+    for (const Tag &tag : tags)
+        if ( areaIndicatorTags.count(tag.first))
+            return true;
+            
+    return false;
+}
+
+static const std::set<std::string> lineIndicatorTags { 
+    "highway", "waterway", "boundary", "power", "barrier", "railway" };
+
+template <typename T>
+bool hasLineTag( const T &tags)
+{
+    for (const Tag &tag : tags)
+        if ( lineIndicatorTags.count(tag.first))
+            return true;
+            
+    return false;
+}
+
+
 int main(int argc, char** argv)
 {
     usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
@@ -358,11 +386,12 @@ int main(int argc, char** argv)
 
     ensureDirectoryExists(destinationDirectory);
     
-    Envelope worldBounds = (Envelope){
-        .latMin = -900000000, .latMax = 900000000, 
-        .lngMin = -1800000000,.lngMin = 1800000000};
+    Envelope worldBounds = { .latMin = -900000000, .latMax = 900000000, 
+                             .lngMin = -1800000000,.lngMin = 1800000000};
     
-    FileBackedTile storage( (destinationDirectory + "node").c_str(), worldBounds, MAX_META_NODE_SIZE);
+    FileBackedTile areaStorage( (destinationDirectory + "area").c_str(), worldBounds, MAX_META_NODE_SIZE);
+    
+    FileBackedTile lineStorage( (destinationDirectory + "line").c_str(), worldBounds, MAX_META_NODE_SIZE);
     //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), worldBounds, MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
@@ -380,11 +409,21 @@ int main(int argc, char** argv)
     while ( (ch = fgetc(f)) != EOF)
     {
         ungetc(ch, f);
-        OpaqueOnDiskGeometry geom(f);
+        GenericGeometry geom(f);
         Envelope bounds = geom.getBounds();
-        if (bounds.latMin == INVALID_LAT_LNG)
+        if (! bounds.isValid())
             continue;
-        storage.add( geom, bounds);
+        
+        vector<Tag> tags = geom.getTags();
+        
+        // all multipolygons are by definition areas and not lines
+        /*if (hasLineTag( tags ))
+            lineStorage.add( geom, bounds);*/
+            
+        if (hasAreaTag(tags))
+            areaStorage.add(geom, bounds);
+        else
+            cerr << "[WARN] multipolygon " << geom.getEntityId() << " has no tag that indicates it should be treated as an area. Skipping." << endl;
 
         if (++pos % 10000 == 0)
             cout << (pos/1000) << "k multipolygons read" << endl;
@@ -401,16 +440,24 @@ int main(int argc, char** argv)
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
 
-        storage.add(way, way.getBounds() );
+        Tags tags = way.getTags();
+        if ( hasAreaTag( tags))
+            areaStorage.add(way, way.getBounds());
+            
+        if ( hasLineTag( tags))
+            lineStorage.add(way, way.getBounds());
+        
         numWays += 1;
 
         numVertices += way.numVertices;
             
-        for (OsmKeyValuePair kv: way.getTags())
+        for (Tag kv: way.getTags())
         {
             //cout << kv.first << " = " << kv.second << endl;
             numTagBytes += 2 + kv.first.size() + kv.second.size();
         }
+        
+            
 
         /*way = getLod12Version(way);
         if (!way.id)    //has been invalidated by getLod12Version() --> should not be stored
@@ -429,8 +476,11 @@ int main(int argc, char** argv)
        concurrently may easily exceed that limit. But in stage 2, we only need to keep
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
-    storage.closeFiles();
-    storage.subdivide(MAX_NODE_SIZE);
+    lineStorage.closeFiles();
+    areaStorage.closeFiles();
+    
+    lineStorage.subdivide(MAX_NODE_SIZE);
+    areaStorage.subdivide(MAX_NODE_SIZE);
  
     /*storageLod12.closeFiles();
     storageLod12.subdivide(MAX_NODE_SIZE, true);*/

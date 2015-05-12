@@ -95,6 +95,11 @@ ADD_EXECUTABLE(geomReader
 #               src/containers/chunkedFile.cc               
                )
 
+ADD_EXECUTABLE(unmapId
+               src/unmapId.cc
+               )
+
+
 TARGET_LINK_LIBRARIES( geomReader -lgeos )
 TARGET_LINK_LIBRARIES( coordsCreateTiles -lgeos)
 

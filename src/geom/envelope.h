@@ -15,7 +15,7 @@ public:
 
     void add (int32_t lat, int32_t lng);
     bool overlapsWith(const Envelope &other) const;
-    
+    bool isValid() const;    
 public:
     int32_t latMin, latMax;
     int32_t lngMin, lngMax;

@@ -37,6 +37,8 @@ coordsCreateStorage
 coordsCreateTiles
 coordsResolveLocations
 multipolygonReconstructor
+geomReader
+unmapId
 
 *.1
 *.data

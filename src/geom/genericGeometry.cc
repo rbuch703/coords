@@ -1,33 +1,133 @@
 
+#include "config.h"
 #include "genericGeometry.h"
 
+#include <string.h>
 
+/* ON-DISK LAYOUT FOR GEOMETRY
+:
+    uint32_t size in bytes (not counting the size field itself)
+    uint8_t  type ( 0 --> POINT, 1 --> LINE, 2 --> POLYGON)
+    uint64_t id ( POINT--> nodeId; LINE--> wayId;
+                  POLYGON:  MSB set --> wayId; MSB unset --> relationId)
+    <tags>
+    <type-specific data>:
+    
+   1. type == POINT
+        int32_t lat;
+        int32_t lng;
+        
+   2. type == LINE
+        uint32_t numPoints;
+        'numPoints' times:
+            int32_t lat;
+            int32_t lng;
+    
+   3. type == POLYGON
+        uint32_t numRings;
+        'numRings' times:
+            uint32_t numPoints;
+            'numPoints' times:
+                int32_t lat;
+                int32_t lng;
+    
+*/
 
-OpaqueOnDiskGeometry::OpaqueOnDiskGeometry(FILE* f) 
+std::vector<Tag> GenericGeometry::getTags() const
 {
-    MUST(fread( &this->numBytes, sizeof(uint32_t), 1, f) == 1, "feature read error");
-    /* there should be no OSM geometry bigger than 100MiB; these are likely
-     * invalid reads */
-    MUST( this->numBytes < 100*1000*1000, "geometry read error");
+    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
+/* ON-DISK LAYOUT FOR TAGS:
+    uint32_t numBytes
+    uint16_t numTags (one tag = two names (key + value)
+    uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
     
-    this->bytes = new uint8_t[this->numBytes];
-    MUST(fread( this->bytes, this->numBytes, 1, f) == 1, "feature read error");
+    for each name:
+    1. if is symbolic --> one uint8_t index into symbolicNames
+    2. if is not symbolic --> zero-terminated string
+*/
+    uint32_t numTagBytes = *(uint32_t*)tagsStart;
+    //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
+    tagsStart += sizeof(uint32_t);
+    MUST( tagsStart + numTagBytes < this->bytes + this->numBytes, "overflow" );
+    uint8_t *pos = tagsStart;
     
+    uint16_t numTags = *(uint16_t*)pos;
+    pos += sizeof(uint16_t);
+    
+    //std::cout << "geometry has " << numTags << " tags" << std::endl;
+    uint64_t numNames = numTags * 2;
+    uint64_t numSymbolicNameBytes = (numNames + 7) / 8;
+    while (numSymbolicNameBytes--)
+    {
+        MUST( *pos == 0, "symbolic tag storage not implemented");
+        pos += 1;
+    }
+    
+    std::vector<Tag> tags;
+    while (numTags--)
+    {
+        MUST( pos < (tagsStart + numTagBytes), "overflow");
+        std::string key = (char*)pos;
+        pos += (key.length() + 1);
+        
+        std::string value=(char*)pos;
+        pos += (value.length() + 1);
+        
+        tags.push_back( make_pair(key, value));
+    }
+    
+    return tags;
 }
 
-OpaqueOnDiskGeometry::~OpaqueOnDiskGeometry()
+
+const uint8_t* GenericGeometry::getGeometryPtr() const
+{
+    const uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
+    
+    uint32_t numTagBytes = *(uint32_t*)tagsStart;
+    tagsStart += sizeof(uint32_t);
+    
+    const uint8_t* geomStart =tagsStart + numTagBytes;
+    MUST( geomStart < this->bytes + this->numBytes, "overflow");
+    return geomStart;
+}
+
+
+GenericGeometry::GenericGeometry(FILE* f)
+{
+    MUST(fread( &this->numBytes, sizeof(uint32_t), 1, f) == 1, "feature read error");
+    /* there should be no OSM geometry bigger than 50MiB; 
+       such results are likely just invalid reads */
+    MUST( this->numBytes < 50*1000*1000, "geometry read error");
+    
+    this->bytes = new uint8_t[this->numBytes];
+    MUST(fread( this->bytes, this->numBytes, 1, f) == 1, "feature read error");    
+}
+
+GenericGeometry::GenericGeometry(const GenericGeometry &other)
+{
+    if (this == &other)
+        return;
+        
+    this->numBytes = other.numBytes;
+    this->bytes = new uint8_t[this->numBytes];
+    memcpy( this->bytes, other.bytes, this->numBytes);
+}
+
+
+GenericGeometry::~GenericGeometry()
 {
     delete [] this->bytes;
 }
 
 
-FEATURE_TYPE OpaqueOnDiskGeometry::getFeatureType() const 
+FEATURE_TYPE GenericGeometry::getFeatureType() const 
 {
     MUST( numBytes > 0, "corrupted on-disk geometry");
     return (FEATURE_TYPE)bytes[0];
 }
 
-OSM_ENTITY_TYPE OpaqueOnDiskGeometry::getEntityType() const 
+OSM_ENTITY_TYPE GenericGeometry::getEntityType() const 
 {
     MUST( numBytes >= 9, "corrupted on-disk geometry");
     uint64_t id = *((uint64_t*)bytes+1);
@@ -45,14 +145,14 @@ OSM_ENTITY_TYPE OpaqueOnDiskGeometry::getEntityType() const
     }
 }
 
-uint64_t OpaqueOnDiskGeometry::getEntityId() const 
+uint64_t GenericGeometry::getEntityId() const 
 {
     MUST( numBytes >= 9, "corrupted on-disk geometry");
     uint64_t id = *((uint64_t*)(bytes+1));
     return id & ~IS_WAY_REFERENCE;
 }
 
-Envelope OpaqueOnDiskGeometry::getBounds() const 
+Envelope GenericGeometry::getBounds() const 
 {
     const int32_t *pos = (const int32_t*)(bytes + sizeof(uint8_t) + sizeof(uint64_t));
     switch (getFeatureType())
@@ -64,7 +164,7 @@ Envelope OpaqueOnDiskGeometry::getBounds() const
     }
 }
 
-Envelope OpaqueOnDiskGeometry::getLineBounds() const {
+Envelope GenericGeometry::getLineBounds() const {
     uint8_t *beyond = bytes + numBytes;
     
     //skipping beyond 'type' and 'id'
@@ -85,7 +185,7 @@ Envelope OpaqueOnDiskGeometry::getLineBounds() const {
     return env;
 }
 
-Envelope OpaqueOnDiskGeometry::getPolygonBounds() const 
+Envelope GenericGeometry::getPolygonBounds() const 
 {
     uint8_t *beyond = bytes + numBytes;
     

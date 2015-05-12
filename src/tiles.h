@@ -14,7 +14,7 @@ public:
     FileBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize);
     ~FileBackedTile();
     void add(OsmLightweightWay &way, const Envelope &wayBounds);
-    void add(OpaqueOnDiskGeometry &geom, const Envelope &wayBounds);
+    void add(GenericGeometry &geom, const Envelope &wayBounds);
     void closeFiles();
     void subdivide(uint64_t maxSubdivisionNodeSize);
 private:

@@ -67,7 +67,7 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
     
 }
 
-void FileBackedTile::add(OpaqueOnDiskGeometry &geom, const Envelope &bounds)
+void FileBackedTile::add(GenericGeometry &geom, const Envelope &bounds)
 {
     if (fData)
     {
@@ -176,7 +176,7 @@ void FileBackedTile::subdivide()
     {
         ungetc( ch, fData);
         
-        OpaqueOnDiskGeometry geom(fData);
+        GenericGeometry geom(fData);
         //OsmLightweightWay way(fData);
         static uint64_t cntr = 0;
         cntr++;

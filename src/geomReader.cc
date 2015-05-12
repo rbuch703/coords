@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <iostream>
 #include "geom/genericGeometry.h"
-
+#include "osm/osmBaseTypes.h"
+#include "config.h"
 
 int main()
 {
@@ -12,10 +13,10 @@ int main()
     while ( (ch = fgetc(f)) != EOF)
     {
         ungetc(ch, f);
-        OpaqueOnDiskGeometry geom(f);
+        GenericGeometry geom(f);
                   
         //Envelope env = geom.getBounds();
-        if (geom.numBytes > 1000000)
+        if (geom.numBytes > 500000)
             std::cout << geom.getEntityType() << " " << geom.getEntityId()
                       << " has " << (geom.numBytes/1000000.0) << "MB" << std::endl;
                   

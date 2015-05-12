@@ -65,8 +65,8 @@ public:
  class ConstTagIterator;
  
  
- ConstTagIterator begin() { return ConstTagIterator(src, numTags);}
- ConstTagIterator end()   { return ConstTagIterator(src, 0); }
+ ConstTagIterator begin() const { return ConstTagIterator(src, numTags);}
+ ConstTagIterator end()   const { return ConstTagIterator(src, 0); }
  
     class ConstTagIterator {
 
