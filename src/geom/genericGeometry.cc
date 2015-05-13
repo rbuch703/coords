@@ -80,14 +80,14 @@ std::vector<Tag> GenericGeometry::getTags() const
 }
 
 
-const uint8_t* GenericGeometry::getGeometryPtr() const
+uint8_t* GenericGeometry::getGeometryPtr()
 {
-    const uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
+    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
     
     uint32_t numTagBytes = *(uint32_t*)tagsStart;
     tagsStart += sizeof(uint32_t);
     
-    const uint8_t* geomStart =tagsStart + numTagBytes;
+    uint8_t* geomStart =tagsStart + numTagBytes;
     MUST( geomStart < this->bytes + this->numBytes, "overflow");
     return geomStart;
 }

@@ -34,6 +34,12 @@ public:
     bool hasKey(const char* key) const;
     std::string getValue(const char* key) const;
     Envelope getBounds() const;
+    
+    /* convert 'vertices' and 'tagBytes' to owned arrays from memory-mapped ranges. 
+       After this call, changes to either one of these arrays no longer cause changes
+       to the underlying file.
+    */
+    void unmap();
 
 
     ArrayIterator<OsmGeoPosition> getVertices() { return ArrayIterator<OsmGeoPosition>(vertices, vertices + numVertices);}    

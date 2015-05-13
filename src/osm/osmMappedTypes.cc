@@ -132,6 +132,28 @@ Envelope OsmLightweightWay::getBounds() const
     return aabb;
 }
 
+void OsmLightweightWay::unmap()
+{
+    if (!isDataMapped)
+        return;
+        
+    OsmGeoPosition* verts = new OsmGeoPosition[this->numVertices];
+    for (uint64_t i = 0; i < this->numVertices; i++)
+        verts[i] = this->vertices[i];
+    
+    //don't have to delete() 'vertices', as they are memory-mapped and not manually allocated
+    this->vertices = verts;
+    
+    uint8_t *tagData = new uint8_t[numTagBytes];
+    for (uint64_t i = 0; i < this->numTagBytes; i++)
+        tagData[i] = this->tagBytes[i];
+
+    this->tagBytes = tagData;
+
+    isDataMapped = false;    
+    
+    
+}
 
 
 void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const

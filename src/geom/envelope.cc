@@ -6,49 +6,49 @@ static inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b;}
 static inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b;}
 
 
-Envelope::Envelope() : latMin(1), latMax(-1),
-                       lngMin(1), lngMax(-1)
+Envelope::Envelope() : xMin(1), xMax(-1),
+                       yMin(1), yMax(-1)
 { }
 
 
-Envelope::Envelope( int32_t lat, int32_t lng): latMin(lat), latMax(lat), lngMin(lng), lngMax(lng) {};
+Envelope::Envelope( int32_t x, int32_t y): xMin(x), xMax(x), yMin(y), yMax(y) {};
 
-Envelope::Envelope( int32_t latMin, int32_t latMax, int32_t lngMin, int32_t lngMax): 
-    latMin(latMin), latMax(latMax), lngMin(lngMin), lngMax(lngMax) {};
+Envelope::Envelope( int32_t xMin, int32_t xMax, int32_t yMin, int32_t yMax): 
+    xMin(xMin), xMax(xMax), yMin(yMin), yMax(yMax) {};
 
 
-void Envelope::add (int32_t lat, int32_t lng)
+void Envelope::add (int32_t x, int32_t y)
 {
-    if (latMin > latMax || lngMin > lngMax) //invalid --> not yet initialized
+    if (xMin > xMax || yMin > yMax) //invalid --> not yet initialized
     {
-        latMax = latMin = lat;
-        lngMax = lngMin = lng;
+        xMax = xMin = x;
+        yMax = yMin = y;
     }
-    if (lat > latMax) latMax = lat;
-    if (lat < latMin) latMin = lat;
-    if (lng > lngMax) lngMax = lng;
-    if (lng < lngMin) lngMin = lng;
+    if (x > xMax) xMax = x;
+    if (x < xMin) xMin = x;
+    if (y > yMax) yMax = y;
+    if (y < yMin) yMin = y;
 }
 
 
 bool Envelope::overlapsWith(const Envelope &other) const
 {   
-    if (latMin > latMax || lngMin > lngMax) //invalid --> not yet initialized
+    if (xMin > xMax || yMin > yMax) //invalid --> not yet initialized
         return false;
 
-    return (max( lngMin, other.lngMin) <= min( lngMax, other.lngMax)) && 
-           (max( latMin, other.latMin) <= min( latMax, other.latMax));
+    return (max( yMin, other.yMin) <= min( yMax, other.yMax)) && 
+           (max( xMin, other.xMin) <= min( xMax, other.xMax));
 }
 
 bool Envelope::isValid() const
 {
-    return (latMin <= latMax && lngMin <= lngMax);
+    return (xMin <= xMax && yMin <= yMax);
 }
 
 std::ostream& operator<<(std::ostream &os, const Envelope &aabb)
 {
-    os << "( lat: " << aabb.latMin << " -> " << aabb.latMax 
-       << "; lng: " << aabb.lngMin << " -> " << aabb.lngMax << ")";
+    os << "( x: " << aabb.xMin << " -> " << aabb.xMax 
+       << "; y: " << aabb.yMin << " -> " << aabb.yMax << ")";
          
     return os;
 }

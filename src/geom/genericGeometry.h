@@ -28,7 +28,7 @@ public:
     uint64_t getEntityId() const;
     Envelope getBounds() const;    
     std::vector<Tag> getTags() const;
-    const uint8_t* getGeometryPtr() const;
+    uint8_t* getGeometryPtr();
 private:
     Envelope getLineBounds() const;
     Envelope getPolygonBounds() const;

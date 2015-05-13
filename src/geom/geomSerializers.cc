@@ -1,6 +1,7 @@
 
 #include "geomSerializers.h"
 #include "genericGeometry.h"
+#include "math.h"
 
 uint64_t getSerializedSize(const TagSet &tagSet)
 {

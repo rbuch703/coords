@@ -94,7 +94,6 @@ void FileBackedTile::add(GenericGeometry &geom, const Envelope &bounds)
         if (bounds.overlapsWith(bottomLeftChild->bounds)) bottomLeftChild->add(geom, bounds);
         if (bounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(geom, bounds);
     }
-    
 }
 
 
@@ -156,13 +155,13 @@ void FileBackedTile::subdivide()
 {
     cout << "subdividing node '" << fileName << "' ... " << endl;
 
-    int32_t latMid = (((int64_t)bounds.latMax) + bounds.latMin) / 2;    //would overflow in int32_t
-    int32_t lngMid = (((int64_t)bounds.lngMax) + bounds.lngMin) / 2;
+    int32_t xMid = (((int64_t)bounds.xMax) + bounds.xMin) / 2;    //would overflow in int32_t
+    int32_t yMid = (((int64_t)bounds.yMax) + bounds.yMin) / 2;
     assert(fData && !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-    Envelope aabbTopLeft(            latMid, bounds.latMax, bounds.lngMin, lngMid       );
-    Envelope aabbTopRight(           latMid, bounds.latMax,        lngMid, bounds.lngMax);
-    Envelope aabbBottomLeft(  bounds.latMin,        latMid, bounds.lngMin, lngMid       );
-    Envelope aabbBottomRight( bounds.latMin,        latMid,        lngMid, bounds.lngMax);
+    Envelope aabbTopLeft(     bounds.xMin,        xMid, yMid,        bounds.yMax);
+    Envelope aabbTopRight(           xMid, bounds.xMax, yMid,        bounds.yMax);
+    Envelope aabbBottomLeft(  bounds.xMin,        xMid, bounds.yMin,        yMid);
+    Envelope aabbBottomRight(        xMid, bounds.xMax, bounds.yMin,        yMid);
 
     topLeftChild =    new FileBackedTile( (fileName+"0").c_str(), aabbTopLeft,     maxNodeSize);
     topRightChild=    new FileBackedTile( (fileName+"1").c_str(), aabbTopRight,    maxNodeSize);

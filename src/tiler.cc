@@ -3,6 +3,7 @@
 #include <getopt.h> //for getopt_long()
 //#include <unistd.h> // for unlink()
 #include <sys/stat.h> //for stat()
+#include <math.h>
 
 #include <vector>
 #include <list>
@@ -213,7 +214,7 @@ OsmLightweightWay toLightweightWay( const OsmWay &other)
 
 
 static uint64_t frequencies[] = {0,0,0,0,0,0};
-
+#if 0
 OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
 {
     //create a non-mapped copy. This is necessary because the mapped OsmLightweightWay 
@@ -304,6 +305,7 @@ OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
     
     return toLightweightWay(way);
 }
+#endif
 
 int parseArguments(int argc, char** argv)
 {
@@ -364,6 +366,52 @@ bool hasLineTag( const T &tags)
     return false;
 }
 
+static const double INT_TO_LAT_LNG = 1/10000000.0;
+static const double INT_TO_MERCATOR_METERS = 1/100.0;
+
+static const double HALF_EARTH_CIRCUMFERENCE = 20037508.34; // ~ 20037km
+static const double PI = 3.141592653589793;
+
+static inline void convertWsg84ToWebMercator( int32_t &lat, int32_t &lng)
+{
+    static const int MAX_MERCATOR_VALUE = HALF_EARTH_CIRCUMFERENCE / INT_TO_MERCATOR_METERS;
+
+    int32_t x =  (lng * INT_TO_LAT_LNG) / 180 * MAX_MERCATOR_VALUE;
+    MUST( x >= -MAX_MERCATOR_VALUE && x <= MAX_MERCATOR_VALUE, "projection overflow");
+    
+    int32_t y =  log(tan((90 + lat * INT_TO_LAT_LNG) * PI / 360)) / PI
+    * MAX_MERCATOR_VALUE;
+    MUST( y >= -MAX_MERCATOR_VALUE && y <= MAX_MERCATOR_VALUE, "projection overflow");
+        
+    lat = x;
+    lng = y;
+}
+
+
+void convertWsg84ToWebMercator( OsmLightweightWay &way)
+{
+    for (uint64_t i = 0; i < way.numVertices; i++)
+        convertWsg84ToWebMercator( way.vertices[i].lat, way.vertices[i].lng);
+}
+
+void convertWsg84ToWebMercator( GenericGeometry &geom)
+{
+    MUST( geom.getFeatureType() == FEATURE_TYPE::POLYGON, "not implemented");
+
+    int32_t* geoPtr = (int32_t*)geom.getGeometryPtr();
+    
+    uint32_t numRings =  *(geoPtr++);
+            
+    while (numRings--)
+    {
+        int32_t numPoints = *(geoPtr++);
+        assert(numPoints >= 0 && numPoints < 10000000 && "overflow");
+        geoPtr += 1;
+        
+        for (int32_t i = 0; i < numPoints; i++, geoPtr+=2 )
+            convertWsg84ToWebMercator( geoPtr[0], geoPtr[1]);
+    }
+}
 
 int main(int argc, char** argv)
 {
@@ -386,12 +434,15 @@ int main(int argc, char** argv)
 
     ensureDirectoryExists(destinationDirectory);
     
-    Envelope worldBounds = { .latMin = -900000000, .latMax = 900000000, 
-                             .lngMin = -1800000000,.lngMin = 1800000000};
+    /*Envelope worldBounds = { .latMin = -900000000, .latMax = 900000000, 
+                             .lngMin = -1800000000,.lngMin = 1800000000};*/
+               
+    Envelope webMercatorWorldBounds = { .xMin = -2003750834, .xMax = 2003750834, 
+                                        .yMin = -2003750834, .yMax = 2003750834}; 
     
-    FileBackedTile areaStorage( (destinationDirectory + "area").c_str(), worldBounds, MAX_META_NODE_SIZE);
+    FileBackedTile areaStorage( (destinationDirectory + "area").c_str(), webMercatorWorldBounds, MAX_META_NODE_SIZE);
     
-    FileBackedTile lineStorage( (destinationDirectory + "line").c_str(), worldBounds, MAX_META_NODE_SIZE);
+    FileBackedTile lineStorage( (destinationDirectory + "line").c_str(), webMercatorWorldBounds, MAX_META_NODE_SIZE);
     //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), worldBounds, MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
@@ -410,7 +461,10 @@ int main(int argc, char** argv)
     {
         ungetc(ch, f);
         GenericGeometry geom(f);
+        convertWsg84ToWebMercator(geom);
+
         Envelope bounds = geom.getBounds();
+        
         if (! bounds.isValid())
             continue;
         
@@ -422,8 +476,8 @@ int main(int argc, char** argv)
             
         if (hasAreaTag(tags))
             areaStorage.add(geom, bounds);
-        else
-            cerr << "[WARN] multipolygon " << geom.getEntityId() << " has no tag that indicates it should be treated as an area. Skipping." << endl;
+/*        else
+            cerr << "[WARN] multipolygon " << geom.getEntityId() << " has no tag that indicates it should be treated as an area. Skipping." << endl;*/
 
         if (++pos % 10000 == 0)
             cout << (pos/1000) << "k multipolygons read" << endl;
@@ -432,10 +486,12 @@ int main(int argc, char** argv)
     
     fclose(f); 
 
-
     pos = 0;
     for (OsmLightweightWay way: LightweightWayStore(storageDirectory + "ways", true))
     {
+        way.unmap();
+        convertWsg84ToWebMercator(way);
+        
         pos += 1;
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
