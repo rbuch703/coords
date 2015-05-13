@@ -116,6 +116,15 @@ std::vector<geos::geom::Polygon*> Ring::createSimplePolygons(const std::vector<O
     return res;
 }
 
+void Ring::deleteRecursive(Ring* ring)
+{
+    for (Ring *child : ring->children)
+        Ring::deleteRecursive(child);
+        
+    delete ring;
+}
+
+
 /* takes a polygon that potentially has holes, and converts it to a vector of polygon rings */
 std::vector<geos::geom::Polygon*> Ring::createRings(const geos::geom::Polygon *poly, uint64_t /*relId*/)
 {
@@ -240,4 +249,8 @@ uint64_t Ring::getSerializedSize() const
     
 }
 
+const geos::geom::Polygon* Ring::getPolygon() const 
+{ 
+    return this->geosPolygon; 
+}
 

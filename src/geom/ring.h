@@ -45,7 +45,7 @@ public:
 
     void serialize(FILE* fOut, bool reverseVertexOrder) const;
     uint64_t getSerializedSize() const;
-    const geos::geom::Polygon* getPolygon() { return this->geosPolygon; }
+    const geos::geom::Polygon* getPolygon() const;
     
     //const std::vector<uint64_t> & getWayIds() const { return wayIds;}
 //private:
@@ -61,6 +61,8 @@ private:
 
 public:
 static std::vector<geos::geom::Polygon*> createSimplePolygons(const std::vector<OsmGeoPosition> &vertices, uint64_t relId);
+
+static void deleteRecursive(Ring* ring);
 
 /* takes a polygon that potentially has holes, and converts it to a vector of polygon rings */
 static std::vector<geos::geom::Polygon*> createRings(const geos::geom::Polygon *poly, uint64_t relId);

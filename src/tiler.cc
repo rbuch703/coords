@@ -406,7 +406,6 @@ void convertWsg84ToWebMercator( GenericGeometry &geom)
     {
         int32_t numPoints = *(geoPtr++);
         assert(numPoints >= 0 && numPoints < 10000000 && "overflow");
-        geoPtr += 1;
         
         for (int32_t i = 0; i < numPoints; i++, geoPtr+=2 )
             convertWsg84ToWebMercator( geoPtr[0], geoPtr[1]);
