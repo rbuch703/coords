@@ -12,6 +12,7 @@
 #include <geos/geom/IntersectionMatrix.h>
 
 #include "ring.h"
+#include "escapeSequences.h"
 
 
 geos::geom::GeometryFactory Ring::factory;  
@@ -252,5 +253,176 @@ uint64_t Ring::getSerializedSize() const
 const geos::geom::Polygon* Ring::getPolygon() const 
 { 
     return this->geosPolygon; 
+}
+
+static std::ostream& operator<<( std::ostream &os, const std::vector<uint64_t> &nums)
+{
+    for (uint64_t i = 0; i < nums.size(); i++)
+    {
+        if (i > 0)
+            os << ", ";
+        os << nums[i];
+    }
+
+    return os;
+}
+
+static std::vector<Ring*> getRings( geos::geom::Geometry* geometry, 
+                                    std::vector<uint64_t> wayIds, 
+                                    uint64_t relId)
+{
+    std::vector<Ring*> rings;
+    //cerr << "#" << relId << " - " << geometry->getGeometryType() << endl;
+    MUST( geometry->getGeometryTypeId() == geos::geom::GEOS_POLYGON ||
+          geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON,
+          "geometric join failed");
+          
+    if (geometry->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
+    {
+        for (geos::geom::Polygon *poly : 
+                Ring::createRings( dynamic_cast<geos::geom::Polygon*>(geometry), relId))
+            rings.push_back( new Ring(poly, wayIds));
+    } else
+    {
+        MUST(geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON, 
+             "logic error");
+
+        auto collection = dynamic_cast<geos::geom::GeometryCollection*>(geometry);
+        for (uint64_t i = 0; i < collection->getNumGeometries(); i++)
+        {
+            MUST( collection->getGeometryN(i)->getGeometryTypeId() ==
+                  geos::geom::GEOS_POLYGON, "geometric difference failed")
+            
+            auto poly = dynamic_cast<const geos::geom::Polygon*>(collection->getGeometryN(i));
+
+            for (geos::geom::Polygon *pRing : Ring::createRings( poly, relId))
+                rings.push_back( new Ring(pRing, wayIds));
+        }
+         
+    }
+    
+    return rings;
+    
+}
+
+std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2, 
+                          const geos::geom::IntersectionMatrix *mat, uint64_t relId)
+{
+    
+    std::cerr << ESC_FG_GRAY << "[INFO] merging rings "
+         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
+         << " in relation " << relId << " as ";
+            
+    geos::geom::Geometry* joined;           
+    if (mat->isWithin())    
+    {
+        std::cerr << ESC_FG_YELLOW << "'difference B-A'" << ESC_FG_RESET << std::endl;
+        /* if 'ring' lies completely within 'ring2', but they share an outer edge.
+         * 'ring' is likely to be supposed to be subtracted */
+        joined = ring2->getPolygon()->difference(ring1->getPolygon());
+    } else if (mat->isContains()) // 'ring
+        /* same with 'ring2' being inside 'ring' */
+    {
+        std::cerr << ESC_FG_YELLOW << "'difference A-B'" << ESC_FG_RESET << std::endl;
+        joined = ring1->getPolygon()->difference(ring2->getPolygon());
+    } else
+        /* generic overlap: either both rings only share an edge (but no interior),
+           or both rings overlap partially, with no ring being completely inside 
+           the other.
+           In this case, the supposed geometric interpretation is likely a union.*/
+    {
+        if (mat->isOverlaps(2,2))
+            std::cerr << ESC_FG_YELLOW << "'union of overlaps'" << ESC_FG_RESET  << std::endl;
+        else
+            std::cerr << "'union'"  << ESC_FG_RESET << std::endl;
+
+        joined = ring1->getPolygon()->Union(ring2->getPolygon());
+        MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
+              "geometric join failed");
+    }
+
+    std::vector<uint64_t> wayIds = ring1->wayIds;
+    wayIds.insert(wayIds.end(), ring2->wayIds.begin(), ring2->wayIds.end());
+
+    std::vector<Ring*> mergeResult = getRings(joined, wayIds, relId);
+    delete joined;    
+    
+    return mergeResult;
+}
+
+void Ring::flattenHierarchyToPolygons(std::vector<Ring*> &roots)
+{
+    
+    for (uint64_t i = 0; i < roots.size(); i++)
+    {
+        Ring *outer = roots[i];
+        
+        for (Ring* inner : outer->children)
+        {
+            roots.insert(roots.end(), inner->children.begin(), inner->children.end());
+            inner->children.clear();
+        }
+    }
+}
+
+void Ring::insertIntoHierarchy( std::vector<Ring*> &hierarchyRoot, uint64_t relId)
+{
+    for (uint64_t i = 0; i< hierarchyRoot.size(); i++)
+    {
+        Ring* root = hierarchyRoot[i];
+        
+        /* note: contains() only means that no part of 'ring' lies outside of 'root'.
+                 This is less strict than that the OGC multipolygon requirements (which
+                 demand - among others - that the inner ring touches the outer one 
+                 at most at a finite number of points, while contains() allows touching
+                 edges). But contains() is good enough for now to establish a hierarchy.
+                 The edge cases (like touching edges) need to be removed in a later 
+                 post-processing step (e.g. through CSG subtraction).*/
+        if ( root->contains(*this) )
+            return this->insertIntoHierarchy( root->children, relId);
+
+        if ( root->interiorIntersectsWith(*this))
+        {
+            std::cerr << ESC_FG_YELLOW << "[WARN] overlapping rings found in relation " 
+                      << relId << ", merging them." << ESC_FG_RESET << std::endl;
+            std::cerr << "\tRing 1: ways " << root->wayIds << std::endl;
+            std::cerr << "\tRing 2: ways " << this->wayIds << std::endl;
+
+            std::vector<uint64_t> wayIds( root->wayIds.begin(), root->wayIds.end());
+            wayIds.insert( wayIds.end(), this->wayIds.begin(), this->wayIds.end() );
+
+            std::cerr << ESC_FG_RED << "Merging overlapping rings in relation " << relId 
+                      << ESC_FG_RESET << std::endl;
+            geos::geom::Geometry *merged = root->getPolygon()->Union(this->getPolygon());
+            MUST( merged->getGeometryTypeId() == geos::geom::GEOS_POLYGON, "merge error");
+
+            /* unions cannot reduce the area, and a reduction would void this algorithm, as
+             * it assumes that rings are inserted sorted descending by area. We still allow
+             * for a very small relative reduction to account for numerical inaccuracies */
+            double relativeArea = merged->getArea() / root->getArea();
+            MUST( relativeArea >= 0.99999999999999 , "union reduced area");
+
+            Ring *mergedRing = new Ring( dynamic_cast<geos::geom::Polygon*>(merged), wayIds);
+            MUST( this->children.size() == 0, "simple ring cannot have children");
+            mergedRing->children = root->children;
+
+            /* These assertions should be true geometrically, but can fail in GEOS due to
+             * numerical inaccuracies */
+            /*MUST( merged->covers(root->geosPolygon), "merge error");
+            MUST( merged->covers(ring->geosPolygon), "merge error");*/
+            
+            hierarchyRoot[i] = mergedRing;
+
+            delete root;
+            delete this;
+            
+            return;
+        }
+    }
+
+    //no overlap found --> add ring at this level
+    hierarchyRoot.push_back(this);
+   
+
 }
 

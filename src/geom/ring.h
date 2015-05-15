@@ -42,6 +42,7 @@ public:
     /* returns true iff 'this' and 'other' have at least one point in common
        that does not lie on the boundary or either ring. */
     bool interiorIntersectsWith(const Ring &other) const;
+    void insertIntoHierarchy( std::vector<Ring*> &hierarchyRoot, uint64_t relId);
 
     void serialize(FILE* fOut, bool reverseVertexOrder) const;
     uint64_t getSerializedSize() const;
@@ -66,6 +67,20 @@ static void deleteRecursive(Ring* ring);
 
 /* takes a polygon that potentially has holes, and converts it to a vector of polygon rings */
 static std::vector<geos::geom::Polygon*> createRings(const geos::geom::Polygon *poly, uint64_t relId);
+
+static std::vector<Ring*> merge( const Ring* ring1, const Ring* ring2, 
+                          const geos::geom::IntersectionMatrix *mat, uint64_t relId);
+
+/* flattens an arbitrarily deep hierarchy of nested outer/inner rings
+ * to a hierarchy of depth at most 2, i.e. to a list of outer rings where each outer ring
+ * can contain an arbitrary number of inner rings (but contain no further nesting).
+ *
+ * This method does no geometric processing. It simply moves anything that is the child of an
+ * inner ring to the top-level of outer rings. The input ring hierarchy is assumed to be 
+ * topologically correct and overlap-free.
+ */
+static void flattenHierarchyToPolygons(std::vector<Ring*> &roots);
+
 
 public:
 /* the geometric factory has to have a life time at least as long as

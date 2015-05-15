@@ -72,6 +72,7 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/multipolygonReconstructor.cc
                src/geom/ringSegment.cc
                src/geom/ring.cc
+               src/geom/ringAssembler.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/geom/geomSerializers.cc

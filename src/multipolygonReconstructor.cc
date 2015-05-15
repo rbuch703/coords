@@ -8,8 +8,8 @@
 #include <algorithm> //for sort()
 #include <set>
 #include <geos/geom/Polygon.h>
-#include <geos/geom/LineString.h>
-#include <geos/geom/LinearRing.h>
+//#include <geos/geom/LineString.h>
+//#include <geos/geom/LinearRing.h>
 #include <geos/geom/IntersectionMatrix.h>
 
 //only to support debugging code
@@ -207,6 +207,7 @@ static void flattenRingSegmentHierarchy(const RingSegment &closedRing, map<uint6
 bool hasBiggerArea ( Ring* a, Ring* b) { return a->getArea() > b->getArea(); }
 bool hasSmallerArea( Ring* a, Ring* b) { return a->getArea() < b->getArea(); }
 
+#if 0
 void printPolygon(const geos::geom::Geometry *geo)
 {
     assert(geo->getGeometryTypeId() == geos::geom::GEOS_POLYGON);
@@ -229,89 +230,23 @@ void printPolygon(const geos::geom::Geometry *geo)
         for (uint64_t i = 0; i < coords->getSize(); i++)
             cerr << ((*coords)[i].x - xOffset) << ", " << ((*coords)[i].y - yOffset) << endl;
         delete coords;
-}
-    
-}
-
-void addToRingHierarchyRecursive( Ring* ring, vector<Ring*> &rootContainer, uint64_t relId)
-{
-    for (uint64_t i = 0; i< rootContainer.size(); i++)
-    {
-        Ring* root = rootContainer[i];
-        
-        /* note: contains() only means that no part of 'ring' lies outside of 'root'.
-                 This is less strict than that the OGC multipolygon requirements (which
-                 demand - among others - that the inner ring touches the outer one 
-                 at most at a finite number of points, while contains() allows touching
-                 edges). But contains() is good enough for now to establish a hierarchy.
-                 The edge cases (like touching edges) need to be removed in a later 
-                 post-processing step (e.g. through CSG subtraction).*/
-        if ( root->contains(*ring) )
-            return addToRingHierarchyRecursive( ring, root->children, relId);
-
-        if ( root->interiorIntersectsWith(*ring))
-        {
-            cerr << ESC_FG_YELLOW << "[WARN] overlapping rings found in relation " << relId << ", merging them." << ESC_FG_RESET << endl;
-            cerr << "\tRing 1: ways ";
-            for (uint64_t wayId : root->wayIds)
-                cerr << wayId << ", ";
-            cerr << endl;
-
-            cerr << "\tRing 2: ways ";
-            for (uint64_t wayId : ring->wayIds)
-                cerr << wayId << ", ";
-            cerr << endl;
-
-            vector<uint64_t> wayIds( root->wayIds.begin(), root->wayIds.end());
-            wayIds.insert( wayIds.end(), ring->wayIds.begin(), ring->wayIds.end() );
-
-            cerr << ESC_FG_RED << "Merging overlapping rings in relation " << relId 
-                 << ESC_FG_RESET << endl;
-            geos::geom::Geometry *merged = root->getPolygon()->Union(ring->getPolygon());
-            MUST( merged->getGeometryTypeId() == geos::geom::GEOS_POLYGON, "merge error");
-
-            /* unions cannot reduce the area, and a reduction would void this algorithm, as
-             * it assumes that rings are inserted sorted descending by area. We still allow
-             * for a very small relative reduction to account for numerical inaccuracies */
-            double relativeArea = merged->getArea() / root->getArea();
-            MUST( relativeArea >= 0.99999999999999 , "union reduced area");
-
-            Ring *mergedRing = new Ring( dynamic_cast<geos::geom::Polygon*>(merged), wayIds);
-            MUST( ring->children.size() == 0, "simple ring cannot have children");
-            mergedRing->children = root->children;
-
-            /* These assertions should be true geometrically, but can fail in GEOS due to
-             * numerical inaccuracies */
-            /*MUST( merged->covers(root->geosPolygon), "merge error");
-            MUST( merged->covers(ring->geosPolygon), "merge error");*/
-            
-
-            delete root;
-            delete ring;
-            
-            rootContainer[i] = mergedRing;
-            return;
-        }
     }
-
-    //no overlap found --> add ring at this level
-    rootContainer.push_back(ring);
-   
-
 }
+#endif
 
-vector<Ring*> buildRingHierarchy( vector<Ring*> &sortedRings, uint64_t relId)
+vector<Ring*> buildRingHierarchy( vector<Ring*> &rings, uint64_t relId)
 {
-    assert( is_sorted(sortedRings.begin(), sortedRings.end(), hasBiggerArea));
+    std::sort( rings.begin(), rings.end(), hasBiggerArea);
+
     vector<Ring*> roots;
     
-    for ( Ring *ring : sortedRings)
-        addToRingHierarchyRecursive( ring, roots, relId);
+    for ( Ring *ring : rings)
+        ring->insertIntoHierarchy( roots, relId);
     
-    /*  addToRingHierarchyRecursive() takes ownership of all rings passed to it:
+    /*  insertIntoHierarchy() takes ownership of all rings passed to it:
         they are either incorporated into the hierarchy, or deleted. So at this point, 
-        sortedRings is just an array of stale pointers, and can (and should!) be cleared. */
-    sortedRings.clear();
+        rings is just an array of stale pointers, and can (and should!) be cleared. */
+    rings.clear();
     return roots;
 }
 
@@ -322,35 +257,6 @@ template <typename T> T removeAt(vector<T> &v, uint64_t pos)
     v[pos] = v[v.size()-1];
     v.pop_back();
     return res;
-}
-
-bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const map<uint64_t, OsmLightweightWay> &ways)
-{
-    if (mbr.type != OSM_ENTITY_TYPE::WAY)
-    {
-        cerr << ESC_FG_GRAY << "[INFO]" << " ref to id=" << mbr.ref << " of invalid type '"
-             << (mbr.type == OSM_ENTITY_TYPE::NODE ? "node" : 
-                 mbr.type == OSM_ENTITY_TYPE::RELATION ? "relation" : "<unknown>"
-                )
-             << "' in multipolygon relation " << relationId << ESC_FG_RESET << endl;
-        return false;
-    }
-    
-    if (! ways.count(mbr.ref))
-    {
-        cerr << "[WARN] relation " << relationId << " references way " << mbr.ref 
-             << ", which is not part of the data set" << endl;
-        return false;
-    }
-    
-
-    if (ways.at(mbr.ref).numVertices < 1)
-    {
-        cerr << "[WARN] way " << mbr.ref << " has no member nodes; ignoring it" << endl;
-        return false;
-    }
-    
-    return true;
 }
 
 std::ostream& operator<<( std::ostream &os, const std::vector<uint64_t> &nums)
@@ -372,86 +278,6 @@ std::ostream& operator<<( std::ostream &os, const std::vector<Ring*> &rings)
     return os;
 }
 
-vector<Ring*> getRings( geos::geom::Geometry* geometry, std::vector<uint64_t> wayIds, uint64_t relId)
-{
-    vector<Ring*> rings;
-    //cerr << "#" << relId << " - " << geometry->getGeometryType() << endl;
-    MUST( geometry->getGeometryTypeId() == geos::geom::GEOS_POLYGON ||
-          geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON,
-          "geometric join failed");
-          
-    if (geometry->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
-    {
-        for (geos::geom::Polygon *poly : 
-                Ring::createRings( dynamic_cast<geos::geom::Polygon*>(geometry), relId))
-            rings.push_back( new Ring(poly, wayIds));
-    } else
-    {
-        MUST(geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON, 
-             "logic error");
-
-        auto collection = dynamic_cast<geos::geom::GeometryCollection*>(geometry);
-        for (uint64_t i = 0; i < collection->getNumGeometries(); i++)
-        {
-            MUST( collection->getGeometryN(i)->getGeometryTypeId() ==
-                  geos::geom::GEOS_POLYGON, "geometric difference failed")
-            
-            auto poly = dynamic_cast<const geos::geom::Polygon*>(collection->getGeometryN(i));
-
-            for (geos::geom::Polygon *pRing : Ring::createRings( poly, relId))
-                rings.push_back( new Ring(pRing, wayIds));
-        }
-         
-    }
-    
-    return rings;
-    
-}
-
-vector<Ring*> mergeRings( const Ring* ring1, const Ring* ring2, 
-                          const geos::geom::IntersectionMatrix *mat, uint64_t relId)
-{
-    
-    cerr << ESC_FG_GRAY << "[INFO] merging rings "
-         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
-         << " in relation " << relId << " as ";
-            
-    geos::geom::Geometry* joined;           
-    if (mat->isWithin())    
-    {
-        cerr << ESC_FG_YELLOW << "'difference B-A'" << ESC_FG_RESET << endl;
-        /* if 'ring' lies completely within 'ring2', but they share an outer edge.
-         * 'ring' is likely to be supposed to be subtracted */
-        joined = ring2->getPolygon()->difference(ring1->getPolygon());
-    } else if (mat->isContains()) // 'ring
-        /* same with 'ring2' being inside 'ring' */
-    {
-        cerr << ESC_FG_YELLOW << "'difference A-B'" << ESC_FG_RESET << endl;
-        joined = ring1->getPolygon()->difference(ring2->getPolygon());
-    } else
-        /* generic overlap: either both rings only share an edge (but no interior),
-           or both rings overlap partially, with no ring being completely inside 
-           the other.
-           In this case, the supposed geometric interpretation is likely a union.*/
-    {
-        if (mat->isOverlaps(2,2))
-            cerr << ESC_FG_YELLOW << "'union of overlaps'" << ESC_FG_RESET  << endl;
-        else
-            cerr << "'union'"  << ESC_FG_RESET << endl;
-
-        joined = ring1->getPolygon()->Union(ring2->getPolygon());
-        MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
-              "geometric join failed");
-    }
-
-    std::vector<uint64_t> wayIds = ring1->wayIds;
-    wayIds.insert(wayIds.end(), ring2->wayIds.begin(), ring2->wayIds.end());
-
-    vector<Ring*> mergeResult = getRings(joined, wayIds, relId);
-    delete joined;    
-    
-    return mergeResult;
-}
 
 
 void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
@@ -523,7 +349,7 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
             Ring* ring2 = removeAt(rings, pos2);
             Ring* ring = removeAt(rings, pos);
             
-            for (Ring* mergedRing: mergeRings(ring, ring2, mat, relId))
+            for (Ring* mergedRing: Ring::merge(ring, ring2, mat, relId))
                 rings.push_back(mergedRing);
                 
             delete mat;
@@ -537,31 +363,6 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
             pos++;
     }
 }
-
-/* flattens the hierarchy from an arbitrarily deep hierarchy of nested outer/inner rings
- * to a hierarchy of depth at most 2, i.e. to a list of outer rings where each outer ring
- * can contain an arbitrary number of inner rings (but no further nesting).
- *
- * This method does no geometric processing. It simply moves anything that is the child of an
- * inner ring to the top-level of outer rings. The input ring hierarchy is assumed to be 
- * topologically correct and overlap-free.
- */
-void flattenHierarchyToPolygons(vector<Ring*> &roots)
-{
-    
-    for (uint64_t i = 0; i < roots.size(); i++)
-    {
-        Ring *outer = roots[i];
-        
-        for (Ring* inner : outer->children)
-        {
-            roots.insert(roots.end(), inner->children.begin(), inner->children.end());
-            inner->children.clear();
-        }
-    }
-}
-
-
 
 /* This method heuristically adds tags to multipolygons based on the tags of its outer ways.
    Theoretically, all multipolgons should be tagged directly at their MultiPolygon relation.
@@ -578,7 +379,8 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
         
     MUST(tags.count("type") && tags.at("type") == "multipolygon", "not a multipolygon");
     MUST(ring->wayIds.size() > 0, "not a multipolygon");
-    tags.erase("type");
+    
+    tags.erase("type"); // type=multipolygon is implicit for all multipolygons
     
     /* the "valid" case: the relation itself is tagged --> just use those tags*/
     if (tags.size() > 0)
@@ -655,42 +457,6 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
     return tags;
 }
 
-RingAssembler getRingsFromRelation( OsmRelation &rel, 
-                                    const map<uint64_t, OsmLightweightWay> &ways,
-                                    TagSet &outerTagsOut)
-{
-    RingAssembler ringAssembler;
-    
-    set<uint64_t> waysAdded;
-    uint64_t numOuterWays = 0;
-
-    for ( const OsmRelationMember &mbr : rel.members)
-        if (isValidWay( mbr, rel.id, ways))
-        {
-            if (waysAdded.count(mbr.ref))
-            {
-                cerr << ESC_FG_YELLOW << "[WARN] relation " << rel.id << " contains way "
-                     << mbr.ref << " multiple times. Skipping all but the first "
-                     << "occurrence." << ESC_FG_RESET << endl;
-                continue;
-            }
-            
-            OsmLightweightWay way = ways.at(mbr.ref);
-            if (mbr.role == "outer")
-            {
-                outerTagsOut = way.getTagSet();
-                numOuterWays += 1;
-            }
-            ringAssembler.addWay(way);
-            waysAdded.insert(mbr.ref);
-        }
-
-    if (numOuterWays > 1)
-        outerTagsOut.clear(); // no unique outer way
-        
-    return ringAssembler;
-}
-
 int main()
 {
     FILE* fOut = fopen("intermediate/multipolygons.bin", "wb");
@@ -731,8 +497,7 @@ int main()
                 continue;
             
             TagSet outerTags;
-            RingAssembler ringAssembler = getRingsFromRelation(rel, ways, outerTags);
-
+            RingAssembler ringAssembler = RingAssembler::fromRelation(rel, ways, outerTags);
             ringAssembler.warnUnconnectedNodes(rel.id);
             
             if (ringAssembler.hasOpenRingSegments())
@@ -773,10 +538,9 @@ int main()
             //for (Ring* r: multipolygonRings)
             //    delete r;
             //cout << "processing relation " << rel.id << endl;
-            std::sort( multipolygonRings.begin(), multipolygonRings.end(), hasBiggerArea);
             
             vector<Ring*> roots = buildRingHierarchy( multipolygonRings, rel.id );
-            flattenHierarchyToPolygons(roots);
+            Ring::flattenHierarchyToPolygons(roots);
             
             for (Ring* poly: roots)
             {
