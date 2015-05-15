@@ -461,6 +461,10 @@ int main()
 {
     FILE* fOut = fopen("intermediate/multipolygons.bin", "wb");
     MUST( fOut, "cannot open output file");
+    
+    FILE* fOuterWayIds = fopen("intermediate/outerWayIds.bin", "wb");
+    MUST( fOuterWayIds, "cannot open output file");
+
     RelationStore relStore("intermediate"/*"/multipolygon_world"*/"/relations");
     
     BucketFileSet<int> relationWaysBuckets("intermediate"/*"/multipolygon_world"*/"/referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
@@ -546,6 +550,9 @@ int main()
             {
                 TagSet tags = getMultipolygonTags(poly, rel, ways, outerTags);
                 serializePolygon(*poly, tags, rel.id, fOut);
+                
+                for (uint64_t wayId : poly->wayIds)
+                    MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, "write error");
             }
             //removeBoundaryOverlaps(roots, rel.id);
             for (Ring* ring : roots)
@@ -553,6 +560,7 @@ int main()
         }
     }
     fclose(fOut);
-    
+    fclose(fOuterWayIds);
+   
     return EXIT_SUCCESS;
 }

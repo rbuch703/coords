@@ -309,21 +309,23 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
                           const geos::geom::IntersectionMatrix *mat, uint64_t relId)
 {
     
-    std::cerr << ESC_FG_GRAY << "[INFO] merging rings "
-         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
-         << " in relation " << relId << " as ";
+    //std::cerr << ;
             
     geos::geom::Geometry* joined;           
     if (mat->isWithin())    
     {
-        std::cerr << ESC_FG_YELLOW << "'difference B-A'" << ESC_FG_RESET << std::endl;
+        std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId << ": merging rings "
+         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
+         << " as 'difference B-A'" << ESC_FG_RESET << std::endl;
         /* if 'ring' lies completely within 'ring2', but they share an outer edge.
          * 'ring' is likely to be supposed to be subtracted */
         joined = ring2->getPolygon()->difference(ring1->getPolygon());
     } else if (mat->isContains()) // 'ring
         /* same with 'ring2' being inside 'ring' */
     {
-        std::cerr << ESC_FG_YELLOW << "'difference A-B'" << ESC_FG_RESET << std::endl;
+        std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId << ": merging rings "
+         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
+         << " as 'difference A-B'" << ESC_FG_RESET << std::endl;
         joined = ring1->getPolygon()->difference(ring2->getPolygon());
     } else
         /* generic overlap: either both rings only share an edge (but no interior),
@@ -332,9 +334,13 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
            In this case, the supposed geometric interpretation is likely a union.*/
     {
         if (mat->isOverlaps(2,2))
-            std::cerr << ESC_FG_YELLOW << "'union of overlaps'" << ESC_FG_RESET  << std::endl;
-        else
-            std::cerr << "'union'"  << ESC_FG_RESET << std::endl;
+            std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId << ": merging rings "
+         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
+         << " as 'union of overlaps'" << ESC_FG_RESET  << std::endl;
+         
+        // non-overlapping adjacent (inner) rings are allowed by the OSM multipolygon spec
+        //else
+        //    std::cerr << "'union'"  << ESC_FG_RESET << std::endl;
 
         joined = ring1->getPolygon()->Union(ring2->getPolygon());
         MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 

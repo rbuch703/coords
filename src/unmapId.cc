@@ -27,7 +27,8 @@ int main(int argc, const char** argv)
         case 'r' : filename = "intermediate/mapRelations.idx";break;
     }
     
-    cout << "opening file " << filename << endl;
+    static const char* baseUrl = "http://www.openstreetmap.org/";
+    //cout << "opening file " << filename << endl;
     FILE* f = fopen( filename.c_str(), "rb");
     uint64_t numItems;
     fread(&numItems, sizeof(numItems), 1, f);
@@ -38,7 +39,14 @@ int main(int argc, const char** argv)
         //cout << tpl.oldId << ", " << tpl.newId << endl;
         if (tpl.newId == relId)
         {
-            cout << tpl.oldId << " -> " << tpl.newId << endl;
+            cout << tpl.oldId << " - ";
+            switch (ch)
+            {
+                case 'n': cout << baseUrl << "node/" << tpl.oldId << endl; break;
+                case 'w': cout << baseUrl << "way/" << tpl.oldId << endl; break;
+                case 'r': cout << baseUrl << "relation/" << tpl.oldId << endl; break;
+            }
+            //cout << tpl.oldId << " -> " << tpl.newId << endl;
             return EXIT_SUCCESS;
         }
     }

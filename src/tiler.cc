@@ -412,6 +412,19 @@ void convertWsg84ToWebMercator( GenericGeometry &geom)
     }
 }
 
+template <typename T>
+std::set<T> getSetFromFileEntries(std::string filename)
+{
+    std::set<T> res;
+    
+    FILE* f = fopen( filename.c_str(), "rb");
+    T entry;
+    while (fread( &entry, sizeof(entry), 1, f))
+        res.insert(entry);
+
+    fclose(f);
+    return res;
+}
 int main(int argc, char** argv)
 {
     usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
@@ -484,6 +497,10 @@ int main(int argc, char** argv)
     }
     
     fclose(f); 
+    
+    // the IDs of ways that serve as outer ways of multipolygons.
+    std::set<uint64_t> outerWayIds = getSetFromFileEntries<uint64_t>(storageDirectory + "outerWayIds.bin");
+    std::cout << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      
 
     pos = 0;
     for (OsmLightweightWay way: LightweightWayStore(storageDirectory + "ways", true))
@@ -496,9 +513,18 @@ int main(int argc, char** argv)
             cout << (pos / 1000000) << "M ways read" << endl;
 
         Tags tags = way.getTags();
-        if ( hasAreaTag( tags))
-            areaStorage.add(way, way.getBounds());
-            
+        if ( hasAreaTag( tags) )
+        {
+            /* Area tags on multipolygons' outer ways are pointless, as is the multipolygon
+             * that forms the area and not the way that is part of it. Mostly these area
+             * tags are leftovers from an old tagging schema where multipolygons had only a
+             * single outer way and that way was tagged instead of the multipolygon. But in any
+             * case, the way should not be rendered as an area, as the multipolygon already is.
+             */
+            if (!(outerWayIds.count(way.id)))
+                areaStorage.add(way, way.getBounds());
+        }   
+        
         if ( hasLineTag( tags))
             lineStorage.add(way, way.getBounds());
         
