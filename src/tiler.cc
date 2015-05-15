@@ -11,6 +11,7 @@
 #include <set>
 
 #include "tiles.h"
+#include "escapeSequences.h"
 #include "osm/osmTypes.h"
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
@@ -339,16 +340,35 @@ int parseArguments(int argc, char** argv)
     return optind;
 }
 
-
-static const std::set<std::string> areaIndicatorTags { 
-    "building", "landuse", "natural", "water", "amenity", "leisure", "area"};
-
 template <typename T>
-bool hasAreaTag( const T &tags )
+bool isArea( const T &tags, bool geometryIsClosedArea )
 {
     for (const Tag &tag : tags)
-        if ( areaIndicatorTags.count(tag.first))
-            return true;
+    {
+        if (tag.first == "building" && (tag.second != "wall" && tag.second != "bridge")) return true;
+        if (tag.first == "landuse") return true;
+        if (tag.first == "natural")
+        {
+            if (tag.second != "coastline" && 
+                tag.second != "cliff" &&
+                tag.second != "hedge" &&
+                tag.second != "tree" &&
+                tag.second != "ridge" &&
+                tag.second != "tree_row")
+                return true;
+                
+            //cliffs in OSM can be linear or areas
+            if (tag.second == "cliff" && geometryIsClosedArea) return true;
+        }
+        if (tag.first == "water" && tag.second == "riverbank") return true;
+        if (tag.first == "amenity" && geometryIsClosedArea) return true;
+        if (tag.first == "leisure") 
+        {
+            if (tag.second != "slipway" && 
+                tag.second != "track") return true;
+        }
+        if (tag.first == "area" && tag.second != "no") return true;
+    }
             
     return false;
 }
@@ -486,7 +506,7 @@ int main(int argc, char** argv)
         /*if (hasLineTag( tags ))
             lineStorage.add( geom, bounds);*/
             
-        if (hasAreaTag(tags))
+        if (isArea(tags, true))
             areaStorage.add(geom, bounds);
 /*        else
             cerr << "[WARN] multipolygon " << geom.getEntityId() << " has no tag that indicates it should be treated as an area. Skipping." << endl;*/
@@ -513,7 +533,7 @@ int main(int argc, char** argv)
             cout << (pos / 1000000) << "M ways read" << endl;
 
         Tags tags = way.getTags();
-        if ( hasAreaTag( tags) )
+        if ( isArea( tags, way.vertices[0] == way.vertices[way.numVertices-1]) )
         {
             /* Area tags on multipolygons' outer ways are pointless, as is the multipolygon
              * that forms the area and not the way that is part of it. Mostly these area
@@ -522,7 +542,13 @@ int main(int argc, char** argv)
              * case, the way should not be rendered as an area, as the multipolygon already is.
              */
             if (!(outerWayIds.count(way.id)))
-                areaStorage.add(way, way.getBounds());
+            {
+                if (way.vertices[0] != way.vertices[way.numVertices-1])
+                    cerr << ESC_FG_YELLOW << "[WARN] way " << way.id << " has area tags, but is "
+                         << "not a closed area. Skipping it." << ESC_FG_RESET << endl;
+                else
+                    areaStorage.add(way, way.getBounds());
+            }
         }   
         
         if ( hasLineTag( tags))
