@@ -400,15 +400,19 @@ static const double PI = 3.141592653589793;
 
 static inline void convertWsg84ToWebMercator( int32_t &lat, int32_t &lng)
 {
+    MUST( lat >=  -900000000 && lat <=  900000000, "latitude out of range");
+    MUST( lng >= -1800000000 && lng <= 1800000000, "longitude out of range");
+
     static const int MAX_MERCATOR_VALUE = HALF_EARTH_CIRCUMFERENCE / INT_TO_MERCATOR_METERS;
 
     int32_t x =  (lng * INT_TO_LAT_LNG) / 180 * MAX_MERCATOR_VALUE;
     MUST( x >= -MAX_MERCATOR_VALUE && x <= MAX_MERCATOR_VALUE, "projection overflow");
     
-    int32_t y =  log(tan((90 + lat * INT_TO_LAT_LNG) * PI / 360)) / PI
-    * MAX_MERCATOR_VALUE;
-    MUST( y >= -MAX_MERCATOR_VALUE && y <= MAX_MERCATOR_VALUE, "projection overflow");
-        
+    int32_t y =  log(tan((90 + lat * INT_TO_LAT_LNG) * PI / 360)) / PI * MAX_MERCATOR_VALUE;
+    if (y < -MAX_MERCATOR_VALUE) y = -MAX_MERCATOR_VALUE;
+    if (y <  MAX_MERCATOR_VALUE) y =  MAX_MERCATOR_VALUE;
+    
+       
     lat = x;
     lng = y;
 }
@@ -523,7 +527,7 @@ int main(int argc, char** argv)
     }
     
     fclose(f); 
-    
+
     // the IDs of ways that serve as outer ways of multipolygons.
     std::set<uint64_t> outerWayIds = getSetFromFileEntries<uint64_t>(storageDirectory + "outerWayIds.bin");
     std::cout << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      

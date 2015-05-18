@@ -1,7 +1,9 @@
 
+#include <math.h>
+
 #include "geomSerializers.h"
 #include "genericGeometry.h"
-#include "math.h"
+#include "misc/symbolicNames.h"
 
 uint64_t getSerializedSize(const TagSet &tagSet)
 {
@@ -11,7 +13,10 @@ uint64_t getSerializedSize(const TagSet &tagSet)
     
     uint64_t numTagBytes = 0;
     for (OsmKeyValuePair kv : tagSet)
-        numTagBytes += (kv.first.length() + 1) + (kv.second.length() + 1);
+    {
+        numTagBytes += symbolicNameId.count(kv.first)  ? 1 : kv.first.length()  + 1;
+        numTagBytes += symbolicNameId.count(kv.second) ? 1 : kv.second.length() + 1;
+    }
     
     return sizeof(uint16_t) + 
            bitfieldSize * sizeof(uint8_t) +
@@ -33,19 +38,49 @@ void serializeTagSet(const TagSet & tagSet, FILE* fOut)
 
     uint64_t numNames = numTags * 2;    //one key, one value
     uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
-    while (bitfieldSize--)
-    {
-        uint8_t bf = 0;
-        MUST(fwrite( &bf, sizeof(bf), 1, fOut) == 1, "write error");
-    }
-
+    uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
+    memset(isSymbolicName, 0, bitfieldSize);
+    
+    int idx = 0;
     for (OsmKeyValuePair kv : tagSet)
     {
-        const char* key = kv.first.c_str();
-        MUST( fwrite( key, strlen(key)+1, 1, fOut) == 1, "write error");
+        int byteIdx = idx / 8;
+        int bitIdx  = 7 - (idx % 8);
+        if (symbolicNameId.count(kv.first))
+            isSymbolicName[byteIdx] |= (1 << bitIdx);
+        
+        MUST( bitIdx > 0, "logic error");
+        bitIdx -= 1;
 
-        const char* val = kv.second.c_str();
-        MUST( fwrite( val, strlen(val)+1, 1, fOut) == 1, "write error");
+        if (symbolicNameId.count(kv.second))
+            isSymbolicName[byteIdx] |= (1 << bitIdx);
+        
+        idx += 2;
+    }
+    
+    MUST( fwrite( isSymbolicName, bitfieldSize, 1, fOut) == 1, "write error");
+    
+    for (OsmKeyValuePair kv : tagSet)
+    {
+        if (symbolicNameId.count(kv.first))
+        {
+            uint8_t symbolicId = symbolicNameId.at(kv.first);
+            MUST( fwrite( &symbolicId, sizeof(symbolicId), 1, fOut) == 1, "write error");
+        } else
+        {
+            const char* key = kv.first.c_str();
+            MUST( fwrite( key, strlen(key)+1, 1, fOut) == 1, "write error");
+        }
+        
+        if (symbolicNameId.count(kv.second))
+        {
+            uint8_t symbolicId = symbolicNameId.at(kv.second);
+            MUST( fwrite( &symbolicId, sizeof(symbolicId), 1, fOut) == 1, "write error");
+        } else
+        {
+            const char* val = kv.second.c_str();
+            MUST( fwrite( val, strlen(val)+1, 1, fOut) == 1, "write error");
+        }
     }
     
     MUST( ftell(fOut)- numBytes == filePos, "tag set size mismatch");

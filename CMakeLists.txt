@@ -78,6 +78,7 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/geom/geomSerializers.cc
+               src/misc/symbolicNames.cc
                src/osm/osmBaseTypes.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc
