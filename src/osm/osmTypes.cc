@@ -15,8 +15,10 @@
 
 #include <iostream>
 
-
-using namespace std;
+using std::vector;
+using std::ostream;
+using std::string;
+//using namespace std;
 
 uint64_t getSerializedSize(const std::vector<OsmKeyValuePair> &tags)
 {

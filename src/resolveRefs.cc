@@ -4,6 +4,8 @@
 
 #include <iostream>
 #include <vector>
+#include <set>
+#include <map>
 #include <algorithm> //for sort()
 
 #include "mem_map.h"
@@ -13,8 +15,14 @@
 #include "containers/osmWayStore.h"
 #include "containers/osmRelationStore.h"
 
-using namespace std;
-
+//using namespace std;
+using std::string;
+using std::cout;
+using std::endl;
+using std::vector;
+using std::set;
+using std::pair;
+using std::map;
 
 template<typename T>
 bool comparePairsByFirst(const T &a, const T &b) 
@@ -31,9 +39,10 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
     MUST(vertex_mmap.size % (2*sizeof(int32_t)) == 0, "vertex storage corruption");
     uint64_t numVertices = vertex_mmap.size / (2*sizeof(int32_t));
 
-    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved",
-                                                      NODES_OF_WAYS_BUCKET_SIZE, false);
-    BucketFileSet<uint64_t>       nodeBuckets(        storageDirectory +"nodeRefs", BUCKET_SIZE, true);
+    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(
+        storageDirectory +"nodeRefsResolved", NODES_OF_WAYS_BUCKET_SIZE, false);
+    BucketFileSet<uint64_t>       nodeBuckets(        
+        storageDirectory +"nodeRefs", BUCKET_SIZE, true);
 
     for (uint64_t bucketId = 0; bucketId < nodeBuckets.getNumBuckets(); bucketId++)
     {
@@ -81,10 +90,10 @@ map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > buildReferencesMap(
         uint64_t nodeId= tuple.second.id;
 
         if (! refs.count(wayId))
-            refs.insert( make_pair(wayId, map<uint64_t, pair<int32_t, int32_t> >()));
+            refs.insert( std::make_pair(wayId, map<uint64_t, pair<int32_t, int32_t> >()));
             
         if (! refs[wayId].count(nodeId))
-            refs[wayId].insert( make_pair(nodeId, make_pair( tuple.second.lat, tuple.second.lng)));
+            refs[wayId].insert( std::make_pair(nodeId, std::make_pair( tuple.second.lat, tuple.second.lng)));
         else 
             assert( refs[wayId][nodeId].first  == tuple.second.lat  && 
                     refs[wayId][nodeId].second == tuple.second.lng);
@@ -112,7 +121,8 @@ void resolveNodeLocations(OsmLightweightWay &way, const map<uint64_t, pair<int32
 
 }
 
-void resolveWayNodeRefs(const string storageDirectory)
+void resolveWayNodeRefsAndCreateRelationBuckets(const string storageDirectory, 
+                        const set<uint64_t> &rendereableRelationIds)
 {
     ReverseIndex reverseWayIndex(storageDirectory +"wayReverse");
     LightweightWayStore wayStore( storageDirectory + "ways", true);
@@ -140,7 +150,8 @@ void resolveWayNodeRefs(const string storageDirectory)
             resolveNodeLocations(way, refs[wayId]);
             
             for (uint64_t relId : reverseWayIndex.getReferencingRelations(wayId))
-                way.serialize( waysReferencedByRelationsBuckets.getFile(relId));
+                if (rendereableRelationIds.count(relId))
+                    way.serialize( waysReferencedByRelationsBuckets.getFile(relId));
         }
         
         //clear bucket contents to save disk space
@@ -151,46 +162,45 @@ void resolveWayNodeRefs(const string storageDirectory)
 
 }
 
-void resolveRefsFromRelations(string storageDirectory) {
+void registerWayRefsFromRelations(string storageDirectory) 
+{
+    ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", false);
+    BucketFileSet<uint64_t> relationWayRefs(storageDirectory+"wayRefs", BUCKET_SIZE, true);
+    
+    for (uint64_t i = 0; i < relationWayRefs.getNumBuckets(); i++)
+    {
+        vector< pair<uint64_t, uint64_t> > refs = relationWayRefs.getContents(i);
+        sort( refs.begin(), refs.end(), comparePairsByFirst< pair<uint64_t, uint64_t> >);
+        
+        for ( pair<uint64_t, uint64_t> kv : refs)
+        {
+            MUST(!( kv.second & IS_WAY_REFERENCE), "invalid way referencing another way");
+            reverseWayIndex.addReferenceFromRelation(kv.first, kv.second);
+        }
+    }
+    
+    relationWayRefs.clear();
+}
 
-    {
-        ReverseIndex reverseWayIndex(storageDirectory + "wayReverse", false);
-        BucketFileSet<uint64_t> relationWayRefs(storageDirectory+"wayRefs", BUCKET_SIZE, true);
-        
-        for (uint64_t i = 0; i < relationWayRefs.getNumBuckets(); i++)
-        {
-            vector< pair<uint64_t, uint64_t> > refs = relationWayRefs.getContents(i);
-            sort( refs.begin(), refs.end(), comparePairsByFirst< pair<uint64_t, uint64_t> >);
-            
-            for ( pair<uint64_t, uint64_t> kv : refs)
-            {
-                MUST(!( kv.second & IS_WAY_REFERENCE), "invalid way referencing another way");
-                reverseWayIndex.addReferenceFromRelation(kv.first, kv.second);
-            }
-        }
-        
-        relationWayRefs.clear();
-    }
-   
+void registerRelationRefsFromRelations(string storageDirectory) 
+{
     //register references from relations referencing other relations
+    ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", false);
+    BucketFileSet<uint64_t> relationRelationRefs(storageDirectory+"relationRefs", BUCKET_SIZE, true);
+    
+    for (uint64_t i = 0; i < relationRelationRefs.getNumBuckets(); i++)
     {
-        ReverseIndex reverseRelationIndex(storageDirectory +"relationReverse", false);
-        BucketFileSet<uint64_t> relationRelationRefs(storageDirectory+"relationRefs", BUCKET_SIZE, true);
+        vector< pair<uint64_t, uint64_t> > refs = relationRelationRefs.getContents(i);
+        sort( refs.begin(), refs.end(), comparePairsByFirst< pair<uint64_t, uint64_t> >);
         
-        for (uint64_t i = 0; i < relationRelationRefs.getNumBuckets(); i++)
+        for ( pair<uint64_t, uint64_t> kv : refs)
         {
-            vector< pair<uint64_t, uint64_t> > refs = relationRelationRefs.getContents(i);
-            sort( refs.begin(), refs.end(), comparePairsByFirst< pair<uint64_t, uint64_t> >);
-            
-            for ( pair<uint64_t, uint64_t> kv : refs)
-            {
-                MUST(!( kv.second & IS_WAY_REFERENCE), "invalid way referencing another way");
-                reverseRelationIndex.addReferenceFromRelation(kv.first, kv.second);
-            }
+            MUST(!( kv.second & IS_WAY_REFERENCE), "invalid way referencing another way");
+            reverseRelationIndex.addReferenceFromRelation(kv.first, kv.second);
         }
-        
-        relationRelationRefs.clear();
     }
+    
+    relationRelationRefs.clear();
 }
 
 
@@ -211,6 +221,7 @@ void addRelationDependenciesToBucketFiles(string storageDirectory)
     
     for (const OsmRelation & rel : relStore)
     {
+           
         for (const OsmRelationMember &member : rel.members)
         {
             switch (member.type)
@@ -230,25 +241,70 @@ void addRelationDependenciesToBucketFiles(string storageDirectory)
     }    
 }
 
+std::set<uint64_t> getRenderableRelationIds(const string &storageDirectory)
+{
+    std::set<uint64_t> res;
+    
+    for (const OsmRelation & rel : RelationStore( storageDirectory + "relations"))
+    {
+        // the only relation types that affect rendering are multipolygons and boundaries
+        if (rel.hasKey("type") && (rel["type"] == "multipolygon" || rel["type"] != "boundary"))
+            res.insert(rel.id);
+    }
+    return res; 
+}
+
 int main(int /*argc*/, char** /*argv*/)
 {
+    //622MB
     string storageDirectory = "intermediate/";
     
     if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
         storageDirectory += "/";
+    
+    cout << "Stage 1: determining set of multipolygon and boundary relations" << endl;
+    /* Input: all relations
+     * Output: set of relation IDs for relations that are either multipolygons or boundaries
+     *         (and thus which may affect rendering)
+     */
+    std::set<uint64_t> renderableRelations = getRenderableRelationIds(storageDirectory);
 
-    cout << "Stage 0: adding dependencies from relations to bucket files" << endl;
+    cout << "Stage 2: adding dependencies from relations to bucket files" << endl;
+    /* Input:  all relations
+     * Output: updated dependency bucket files, now containing also an entry for each 
+     *         node, way and relation that each relation refers to. (coordsCreateStorage
+     *         only added entries for each node referred to by each way.
+     *
+    */
     addRelationDependenciesToBucketFiles(storageDirectory);
 
-    cout << "Stage 0a: Registering reverse dependencies for all relations" << endl;
-    resolveRefsFromRelations(storageDirectory);
+    cout << "Stage 3: Registering reverse dependencies for all relations" << endl;
+    /* Input:  - "relation->way" and "relation->relation" bucket files.
+     * Output: - reverse dependency files for ways and relations 
+     *         - the input files are destroyed */
+    registerWayRefsFromRelations(storageDirectory);
+    registerRelationRefsFromRelations(storageDirectory);
     
-    cout << "Stage 1: Registering reverse dependencies" << endl;
+    cout << "Stage 4: Registering reverse dependencies" << endl;
     cout << "         and creating bucket files for resolved node locations." << endl;
+    /* Input: - vertex data file 
+     *        - node buckets ( (nodeId, wayId) tuples, bucketed by *nodeId*)
+     * Output: - reverse dependency file for nodes (which ways and relations refer to each node)
+     *         - resolved node buckets (nodeId, nodePos, wayId) tuples, bucketed by *wayId*)
+     *         - the input node buckets are destroyed */
     buildReverseIndexAndResolvedNodeBuckets(storageDirectory);
     
-    cout << "Stage 2: Resolving node references for all ways" << endl;
-    resolveWayNodeRefs(storageDirectory);
+    cout << "Stage 5: Resolving node references for all ways" << endl;
+    /* Input: - resolved node buckets
+     *        - all ways
+     * Output: - updated ways files where the each node ref in each way has been
+     *           augmented by the actual node lat/lng position
+     *         - "referencedWays" bucket files: for each way referenced by a multipolygon or 
+     *           boundary relation an entry containing the full serialized way, bucketed by
+     *           relation id (used later for multipolygon reconstruction)
+     *         - the input resolved node buckets are destroyed
+     */
+    resolveWayNodeRefsAndCreateRelationBuckets(storageDirectory, renderableRelations);
 
 }
 
