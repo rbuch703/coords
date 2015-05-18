@@ -360,6 +360,12 @@ bool isArea( const T &tags, bool geometryIsClosedArea )
             //cliffs in OSM can be linear or areas
             if (tag.second == "cliff" && geometryIsClosedArea) return true;
         }
+        
+        if (tag.first == "place")
+        {
+            if (geometryIsClosedArea) return true;
+        }
+        
         if (tag.first == "water" && tag.second == "riverbank") return true;
         if (tag.first == "amenity" && geometryIsClosedArea) return true;
         if (tag.first == "leisure") 
