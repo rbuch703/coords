@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <string.h> //for memcpy
 
-#include "mem_map.h"
+#include "misc/mem_map.h"
 #include "config.h"
 
 /* The class "ChunkedFile" represents a file containing data chunks of variable sizes that can 

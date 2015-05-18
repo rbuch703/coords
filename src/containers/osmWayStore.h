@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string>
 #include "osm/osmMappedTypes.h"
+#include "misc/mem_map.h"
 
 class LightweightWayStore {
 

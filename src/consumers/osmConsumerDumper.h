@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "mem_map.h"
+#include "misc/mem_map.h"
 #include "consumers/osmConsumer.h"
 #include "containers/radixTree.h"
 #include "containers/chunkedFile.h"

@@ -6,7 +6,6 @@
 */
 
 #include <assert.h>
-#include "mem_map.h"
 //#include "containers/chunkedFile.h"
 #include "config.h"
 #include "osm/osmBaseTypes.h"

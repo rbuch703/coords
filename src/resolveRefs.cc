@@ -8,7 +8,7 @@
 #include <map>
 #include <algorithm> //for sort()
 
-#include "mem_map.h"
+#include "misc/mem_map.h"
 #include "osm/osmMappedTypes.h"
 #include "containers/reverseIndex.h"
 #include "containers/bucketFileSet.h"

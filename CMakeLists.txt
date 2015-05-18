@@ -18,7 +18,7 @@ PROTOBUF_GENERATE_CPP(ProtoSources ProtoHeaders proto/osmformat.proto proto/file
 
 ADD_EXECUTABLE(coordsCreateStorage 
     src/conv_osm.cc 
-    src/mem_map.cc 
+    src/misc/mem_map.cc 
     src/osm/osmTypes.cc 
 #    src/osm/osmMappedTypes.cc 
     src/osm/osmBaseTypes.cc
@@ -42,7 +42,7 @@ SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
 
 ADD_EXECUTABLE(coordsResolveStorage
                src/resolveRefs.cc 
-               src/mem_map.cc
+               src/misc/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmBaseTypes.cc 
                src/osm/osmMappedTypes.cc 
@@ -56,7 +56,7 @@ ADD_EXECUTABLE(coordsResolveStorage
 ADD_EXECUTABLE(coordsCreateTiles
                src/tiler.cc 
                src/tiles.cc 
-               src/mem_map.cc
+               src/misc/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc 
                src/osm/osmBaseTypes.cc
@@ -66,6 +66,8 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/geomSerializers.cc
                src/containers/chunkedFile.cc
                src/containers/osmWayStore.cc
+               src/misc/symbolicNames.cc
+               src/misc/rawTags.cc
                )
 
 ADD_EXECUTABLE(multipolygonReconstructor
@@ -79,7 +81,7 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/osm/osmBaseTypes.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc
-               src/mem_map.cc
+               src/misc/mem_map.cc
                src/containers/chunkedFile.cc               
                src/containers/osmRelationStore.cc
                )

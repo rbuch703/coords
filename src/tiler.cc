@@ -500,7 +500,7 @@ int main(int argc, char** argv)
         if (! bounds.isValid())
             continue;
         
-        vector<Tag> tags = geom.getTags();
+        RawTags tags = geom.getTags();
         
         // all multipolygons are by definition areas and not lines
         /*if (hasLineTag( tags ))

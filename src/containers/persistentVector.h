@@ -2,7 +2,7 @@
 #ifndef PERSISTENT_VECTOR_H
 #define PERSISTENT_VECTOR_H
 
-#include "mem_map.h"
+#include "misc/mem_map.h"
 #include <assert.h>
 /* The template class PersistentVector represents an vector that is
  * backed by a memory-mapped file. It acts mostly like the std::vector,

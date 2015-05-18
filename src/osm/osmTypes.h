@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "osmBaseTypes.h"
-#include "mem_map.h"
+#include "misc/mem_map.h"
 #include "containers/chunkedFile.h"
 
 

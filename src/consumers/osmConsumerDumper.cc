@@ -15,7 +15,6 @@
 #include <map>
 #include <list>
 
-#include "mem_map.h"
 #include "osm/osmParserXml.h"
 #include "consumers/osmConsumerDumper.h"
 #include "osm/osmTypes.h"

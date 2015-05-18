@@ -4,6 +4,7 @@
 
 #include "geom/envelope.h"
 #include "osm/osmBaseTypes.h"
+#include "misc/rawTags.h"
 
 #include <iostream>
 #include <string>
@@ -23,17 +24,21 @@ public:
     GenericGeometry(const GenericGeometry &other);
     ~GenericGeometry();
     
+    void init(FILE *F, bool avoidRealloc);
+    
     FEATURE_TYPE getFeatureType() const;    //POINT/LINE/POLYGON
     OSM_ENTITY_TYPE getEntityType() const;  //NODE/WAY/RELATION
     uint64_t getEntityId() const;
     Envelope getBounds() const;    
-    std::vector<Tag> getTags() const;
+    //std::vector<Tag> getTags() const;
+    RawTags getTags() const;
     uint8_t* getGeometryPtr();
 private:
     Envelope getLineBounds() const;
     Envelope getPolygonBounds() const;
 public:
     uint32_t numBytes;
+    uint32_t numBytesAllocated;
     uint8_t *bytes;
     
         
