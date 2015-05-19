@@ -87,7 +87,7 @@ public:
             return (*this);
         }
         
-        std::pair<std::string, std::string> operator *() {
+        std::pair<const char*, const char*> operator *() {
             const char* key = src;
             const char* value = key + strlen(src) + 1; //including zero-termination
             return std::make_pair(key, value);

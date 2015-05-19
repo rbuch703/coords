@@ -4,26 +4,16 @@
 
 #include "osm/osmMappedTypes.h"
 #include "geom/ring.h"
+#include "misc/rawTags.h"
 
 #include <string>
 #include <map>
 
-typedef std::map<std::string, std::string> TagSet;
-void     serializeTagSet(  const TagSet &tagSet, FILE* fOut);
 
-void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE* fOut);
+void serializePolygon(const Ring &poly, const TTags &tags, uint64_t relId, FILE* fOut);
 void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* fOut);
 
 
-/* ON-DISK LAYOUT FOR TAGS:
-    uint32_t numBytes
-    uint16_t numTags (one tag = two names (key + value)
-    uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
-    
-    for each name:
-    1. if is symbolic --> one uint8_t index into symbolicNames
-    2. if is not symbolic --> zero-terminated string
-*/
 
 
 /* ON-DISK LAYOUT FOR GEOMETRY

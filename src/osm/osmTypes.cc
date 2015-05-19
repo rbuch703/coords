@@ -176,6 +176,7 @@ OsmNode::OsmNode( const uint8_t* data_ptr)
     lon = *(int32_t*)data_ptr;
     data_ptr+=4;
 
+    
     tags = deserializeTags(data_ptr);
 }
 

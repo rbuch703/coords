@@ -31,6 +31,8 @@
 
 using namespace std;
 
+typedef map<string, string> TagSet;
+
 /* The high-level algorithm to create multipolygons from a multipolygon relation is as follows:
  *     1. ignore all non-way members
  *     2. build geometric rings (node sequences that start and end with the same node) by
@@ -549,7 +551,7 @@ int main()
             for (Ring* poly: roots)
             {
                 TagSet tags = getMultipolygonTags(poly, rel, ways, outerTags);
-                serializePolygon(*poly, tags, rel.id, fOut);
+                serializePolygon(*poly, TTags(tags.begin(), tags.end()), rel.id, fOut);
                 
                 for (uint64_t wayId : poly->wayIds)
                     MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, "write error");

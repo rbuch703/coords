@@ -78,10 +78,11 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/geom/geomSerializers.cc
-               src/misc/symbolicNames.cc
                src/osm/osmBaseTypes.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc
+               src/misc/rawTags.cc
+               src/misc/symbolicNames.cc
                src/misc/mem_map.cc
                src/containers/chunkedFile.cc               
                src/containers/osmRelationStore.cc
@@ -91,6 +92,8 @@ ADD_EXECUTABLE(geomReader
                src/geomReader.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
+               src/misc/rawTags.cc
+               src/misc/symbolicNames.cc
 #               src/geom/ring.cc
 #               src/mem_map.cc
 #               src/osm/osmTypes.cc 

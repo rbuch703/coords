@@ -36,80 +36,8 @@
 RawTags GenericGeometry::getTags() const
 {
     uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
-/* ON-DISK LAYOUT FOR TAGS:
-    uint32_t numBytes
-    uint16_t numTags (one tag = two names (key + value)
-    uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
-    
-    for each name:
-    1. if is symbolic --> one uint8_t index into symbolicNames
-    2. if is not symbolic --> zero-terminated string
-*/
-    uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
-    tagsStart += sizeof(uint32_t);
-    MUST( tagsStart + numTagBytes < this->bytes + this->numBytes, "overflow" );
-    uint8_t *pos = tagsStart;
-    
-    uint16_t numTags = *(uint16_t*)pos;
-    pos += sizeof(uint16_t);
-    
-    //uint8_t *symbolicNameBytes = pos;
-    uint64_t numNames = numTags * 2; // key and value per tag
-    uint64_t numSymbolicNameBytes = (numNames + 7) / 8;
-
-        
-    return RawTags(numTags, numTagBytes - numSymbolicNameBytes - sizeof(uint16_t), pos, pos + numSymbolicNameBytes);
+    return RawTags(tagsStart);
 }
-
-#if 0
-std::vector<Tag> GenericGeometry::getTags() const
-{
-    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
-/* ON-DISK LAYOUT FOR TAGS:
-    uint32_t numBytes
-    uint16_t numTags (one tag = two names (key + value)
-    uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
-    
-    for each name:
-    1. if is symbolic --> one uint8_t index into symbolicNames
-    2. if is not symbolic --> zero-terminated string
-*/
-    uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
-    tagsStart += sizeof(uint32_t);
-    MUST( tagsStart + numTagBytes < this->bytes + this->numBytes, "overflow" );
-    uint8_t *pos = tagsStart;
-    
-    uint16_t numTags = *(uint16_t*)pos;
-    pos += sizeof(uint16_t);
-    
-    //std::cout << "geometry has " << numTags << " tags" << std::endl;
-    uint64_t numNames = numTags * 2;
-    uint64_t numSymbolicNameBytes = (numNames + 7) / 8;
-    while (numSymbolicNameBytes--)
-    {
-        MUST( *pos == 0, "symbolic tag storage not implemented");
-        pos += 1;
-    }
-    
-    std::vector<Tag> tags;
-    while (numTags--)
-    {
-        MUST( pos < (tagsStart + numTagBytes), "overflow");
-        std::string key = (char*)pos;
-        pos += (key.length() + 1);
-        
-        std::string value=(char*)pos;
-        pos += (value.length() + 1);
-        
-        tags.push_back( make_pair(key, value));
-    }
-    
-    return tags;
-}
-#endif
-
 
 uint8_t* GenericGeometry::getGeometryPtr()
 {

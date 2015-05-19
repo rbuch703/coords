@@ -5,98 +5,17 @@
 #include "genericGeometry.h"
 #include "misc/symbolicNames.h"
 
-uint64_t getSerializedSize(const TagSet &tagSet)
-{
-    uint64_t numTags = tagSet.size();
-    uint64_t numNames = numTags * 2;    //one key, one value
-    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
-    
-    uint64_t numTagBytes = 0;
-    for (OsmKeyValuePair kv : tagSet)
-    {
-        numTagBytes += symbolicNameId.count(kv.first)  ? 1 : kv.first.length()  + 1;
-        numTagBytes += symbolicNameId.count(kv.second) ? 1 : kv.second.length() + 1;
-    }
-    
-    return sizeof(uint16_t) + 
-           bitfieldSize * sizeof(uint8_t) +
-           numTagBytes;
-
-}
-
-void serializeTagSet(const TagSet & tagSet, FILE* fOut)
-{
-    uint64_t tmp = getSerializedSize(tagSet);
-    MUST(tmp < (1ull)<<32, "tag set size overflow");
-    uint32_t numBytes = tmp;
-    MUST(fwrite( &numBytes, sizeof(numBytes), 1, fOut) == 1, "write error");
-    int64_t filePos = ftell(fOut);
-
-    MUST( tagSet.size() < 1<<16, "attribute count overflow");
-    uint16_t numTags = tagSet.size();
-    MUST(fwrite( &numTags,  sizeof(numTags),  1, fOut) == 1, "write error");
-
-    uint64_t numNames = numTags * 2;    //one key, one value
-    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
-    uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
-    memset(isSymbolicName, 0, bitfieldSize);
-    
-    int idx = 0;
-    for (OsmKeyValuePair kv : tagSet)
-    {
-        int byteIdx = idx / 8;
-        int bitIdx  = 7 - (idx % 8);
-        if (symbolicNameId.count(kv.first))
-            isSymbolicName[byteIdx] |= (1 << bitIdx);
-        
-        MUST( bitIdx > 0, "logic error");
-        bitIdx -= 1;
-
-        if (symbolicNameId.count(kv.second))
-            isSymbolicName[byteIdx] |= (1 << bitIdx);
-        
-        idx += 2;
-    }
-    
-    MUST( fwrite( isSymbolicName, bitfieldSize, 1, fOut) == 1, "write error");
-    
-    for (OsmKeyValuePair kv : tagSet)
-    {
-        if (symbolicNameId.count(kv.first))
-        {
-            uint8_t symbolicId = symbolicNameId.at(kv.first);
-            MUST( fwrite( &symbolicId, sizeof(symbolicId), 1, fOut) == 1, "write error");
-        } else
-        {
-            const char* key = kv.first.c_str();
-            MUST( fwrite( key, strlen(key)+1, 1, fOut) == 1, "write error");
-        }
-        
-        if (symbolicNameId.count(kv.second))
-        {
-            uint8_t symbolicId = symbolicNameId.at(kv.second);
-            MUST( fwrite( &symbolicId, sizeof(symbolicId), 1, fOut) == 1, "write error");
-        } else
-        {
-            const char* val = kv.second.c_str();
-            MUST( fwrite( val, strlen(val)+1, 1, fOut) == 1, "write error");
-        }
-    }
-    
-    MUST( ftell(fOut)- numBytes == filePos, "tag set size mismatch");
-    //cout << "tag set size calculated: " << numBytes << ", actual: " << (ftell(fOut) - filePos) << endl;
-    
-}
 
 
-void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE* fOut)
+
+void serializePolygon(const Ring &poly, const TTags &tags, uint64_t relId, FILE* fOut)
 {
     //cerr << "serializing relation " << relId << endl;
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
                     sizeof(uint64_t) + // 'id' field
                     sizeof(uint32_t) + // 'numTagBytes'
-                    getSerializedSize(tags) + //tags size
+                    RawTags::getSerializedSize(tags) + //tags size
                     sizeof(uint32_t) +   // 'numRings' field
                     poly.getSerializedSize(); // outer ring size
 
@@ -112,7 +31,7 @@ void serializePolygon(const Ring &poly, const TagSet &tags, uint64_t relId, FILE
     MUST(fwrite( &et,    sizeof(et),    1, fOut) == 1, "write error");
     MUST(fwrite( &relId, sizeof(relId), 1, fOut) == 1, "write error");
     
-    serializeTagSet(tags, fOut);
+    RawTags::serialize(tags, fOut);
     
     uint32_t numRings = 1 + poly.children.size(); // 1 outer, plus the inner rings
     MUST(fwrite( &numRings, sizeof(uint32_t), 1, fOut) == 1, "write error");
@@ -137,12 +56,16 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
         MUST( v0.lat == vn.lat && v0.lng == vn.lng, "not a ring");
         
     //cerr << "serializing relation " << relId << endl;
-    TagSet tags(way.getTagSet());
+    //Tags tags(way.);
+    TTags tags;
+
+    for (std::pair<const char*, const char*> kv : way.getTags())
+        tags.push_back( std::make_pair( kv.first, kv.second));
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
                     sizeof(uint64_t) + // 'id' field
                     sizeof(uint32_t) + // 'numTagBytes'
-                    getSerializedSize(tags) + //tags size
+                    RawTags::getSerializedSize(tags) + //tags size
                     sizeof(uint32_t) +   // numPoints
                     sizeof(int32_t)*2* way.numVertices;
                     
@@ -158,7 +81,7 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
     MUST(fwrite( &ft,    sizeof(ft),    1, fOut) == 1, "write error");
     MUST(fwrite( &way.id, sizeof(way.id), 1, fOut) == 1, "write error");
     
-    serializeTagSet(tags, fOut);
+    RawTags::serialize(tags, fOut);
 
     if (asPolygon)
     {    
