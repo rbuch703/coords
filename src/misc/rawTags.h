@@ -7,8 +7,9 @@
 #include <string>
 
 #include "misc/symbolicNames.h"
+#include "containers/chunkedFile.h"
 
-typedef std::vector< std::pair<std::string, std::string> > TTags;
+typedef std::vector< std::pair<std::string, std::string> > Tags;
 
 class RawTags 
 {
@@ -18,8 +19,13 @@ public:
             
     RawTags(const uint8_t* src);
 
-    static void     serialize( const TTags &tags, FILE* fOut);
-    static uint64_t getSerializedSize( const TTags &tags);
+    
+    static void     serialize( const Tags &tags, FILE* fOut);
+    static void     serialize( const Tags &tags, Chunk &chunk);
+    static uint64_t getSerializedSize( const Tags &tags);
+    
+    uint64_t getSerializedSize() const;
+    std::map< std::string, std::string> asDictionary() const;
 
     class RawTagIterator {
     public:

@@ -5,7 +5,7 @@
 #include <string.h> //for strlen
 
 /* ON-DISK LAYOUT FOR TAGS:
-    uint32_t numBytes
+    uint32_t numBytes, including this field itself
     uint16_t numTags (one tag = two names (key + value)
     uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
     
@@ -35,12 +35,12 @@ RawTags::RawTags(const uint8_t* src)
     uint64_t numNames = numTags * 2; // key and value per tag
     uint64_t numSymbolicNameBytes = (numNames + 7) / 8;
     
-    numTagBytes = totalNumBytes - numSymbolicNameBytes - sizeof(uint16_t);
+    numTagBytes = totalNumBytes - numSymbolicNameBytes - sizeof(uint32_t) - sizeof(uint16_t);
     symbolicNameBits = src;
     tagsStart = src + numSymbolicNameBytes;
 }
 
-uint64_t RawTags::getSerializedSize(const TTags &tags)
+uint64_t RawTags::getSerializedSize(const Tags &tags)
 {
     uint64_t numTags = tags.size();
     uint64_t numNames = numTags * 2;    //one key, one value
@@ -53,19 +53,43 @@ uint64_t RawTags::getSerializedSize(const TTags &tags)
         numTagBytes += symbolicNameId.count(kv.second) ? 1 : kv.second.length() + 1;
     }
     
-    return sizeof(uint16_t) + 
+    return sizeof(uint32_t) + // numBytes field
+           sizeof(uint16_t) + // numTags field
            bitfieldSize * sizeof(uint8_t) +
            numTagBytes;
 
 }
 
-void RawTags::serialize(const TTags &tags, FILE* fOut)
+uint64_t RawTags::getSerializedSize() const
 {
+    uint64_t numNames = numTags * 2;    //one key, one value
+    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
+    
+    return sizeof(uint32_t) + // numBytes field
+           sizeof(uint16_t) + // numTags field
+           bitfieldSize * sizeof(uint8_t) +
+           numTagBytes;
+}
+
+
+std::map< std::string, std::string> RawTags::asDictionary() const
+{
+    std::map< std::string, std::string> res;
+    
+    for (const std::pair<const char*, const char*> &kv : *this)
+        res.insert( std::make_pair(kv.first, kv.second));
+        
+    return res;
+}
+
+
+void RawTags::serialize(const Tags &tags, FILE* fOut)
+{
+    int64_t filePos = ftell(fOut);
     uint64_t tmp = getSerializedSize(tags);
     MUST(tmp < (1ull)<<32, "tag set size overflow");
     uint32_t numBytes = tmp;
     MUST(fwrite( &numBytes, sizeof(numBytes), 1, fOut) == 1, "write error");
-    int64_t filePos = ftell(fOut);
 
     MUST( tags.size() < 1<<16, "attribute count overflow");
     uint16_t numTags = tags.size();
@@ -124,6 +148,66 @@ void RawTags::serialize(const TTags &tags, FILE* fOut)
     MUST( ftell(fOut)- numBytes == filePos, "tag set size mismatch");
 
 }
+
+void RawTags::serialize(const Tags &tags, Chunk& chunk)
+{
+    uint64_t tmp = getSerializedSize(tags);
+    MUST(tmp < (1ull)<<32, "tag set size overflow");
+    chunk.put<uint32_t>(tmp);
+
+    MUST( tags.size() < 1<<16, "attribute count overflow");
+    chunk.put<uint16_t>(tags.size());
+
+    uint64_t numNames = tags.size() * 2;    //one key, one value
+    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
+    uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
+    memset(isSymbolicName, 0, bitfieldSize);
+    
+    int idx = 0;
+    for ( const std::pair<std::string, std::string> &kv : tags)
+    {
+        int byteIdx = idx / 8;
+        int bitIdx  = 7 - (idx % 8);
+        if (symbolicNameId.count(kv.first))
+            isSymbolicName[byteIdx] |= (1 << bitIdx);
+        
+        MUST( bitIdx > 0, "logic error");
+        bitIdx -= 1;
+
+        if (symbolicNameId.count(kv.second))
+            isSymbolicName[byteIdx] |= (1 << bitIdx);
+        
+        idx += 2;
+    }
+    
+    if (bitfieldSize)
+        chunk.put(isSymbolicName, bitfieldSize);
+    
+    delete [] isSymbolicName;
+    
+    for (const std::pair<std::string, std::string> &kv : tags)
+    {
+        if (symbolicNameId.count(kv.first))
+        {
+            chunk.put<uint8_t>( symbolicNameId.at(kv.first) );
+        } else
+        {
+            const char* key = kv.first.c_str();
+            chunk.put( key, strlen(key)+1 );
+        }
+        
+        if (symbolicNameId.count(kv.second))
+        {
+            chunk.put<uint8_t>( symbolicNameId.at(kv.second) );
+        } else
+        {
+            const char* val = kv.second.c_str();
+            chunk.put( val, strlen(val)+1);
+        }
+    }
+}
+
+
 
 RawTags::RawTagIterator::RawTagIterator(const uint8_t* symbolicNameBits, 
                                         const uint8_t *tagsAtPos, uint64_t pos):

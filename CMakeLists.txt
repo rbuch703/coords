@@ -26,6 +26,8 @@ ADD_EXECUTABLE(coordsCreateStorage
     src/osm/osmParserXml.cc
     src/osm/osmParserPbf.cc 
     src/geom/envelope.cc
+    src/misc/rawTags.cc
+    src/misc/symbolicNames.cc
     src/consumers/osmConsumer.cc 
     src/consumers/osmConsumerCounter.cc
     src/consumers/osmConsumerDumper.cc 
@@ -46,6 +48,8 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/osm/osmTypes.cc 
                src/osm/osmBaseTypes.cc 
                src/osm/osmMappedTypes.cc 
+               src/misc/rawTags.cc
+               src/misc/symbolicNames.cc
                src/geom/envelope.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 

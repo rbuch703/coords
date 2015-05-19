@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "osmTypes.h"
+#include "misc/rawTags.h"
 //#include "symbolic_tags.h"
 
 #include <iostream>
@@ -19,134 +20,6 @@ using std::vector;
 using std::ostream;
 using std::string;
 //using namespace std;
-
-uint64_t getSerializedSize(const std::vector<OsmKeyValuePair> &tags)
-{
-    uint64_t size = sizeof(uint16_t) + //uint16_t numTags
-                    sizeof(uint32_t) + //uint32_t numTagBytes
-                    2 * tags.size();   //zero-termination for each key and value
-
-    for (const OsmKeyValuePair & kv : tags)
-        size += (kv.first.length() + kv.second.length());
-
-    return size;
-}
-
-
-void serializeTags( const vector<OsmKeyValuePair> &tags, FILE* file)
-{
-    assert(tags.size() < (1<<16));
-    uint16_t num_tags = tags.size();
-    MUST( fwrite(&num_tags, sizeof(num_tags), 1, file) == 1, "write error");
-
-    uint32_t numTagBytes = 0;
-    for (const OsmKeyValuePair &tag : tags)
-    {
-        numTagBytes += strlen(tag.first.c_str()) + 1;
-        numTagBytes += strlen(tag.second.c_str()) + 1;
-    }
-    //storing this total size is redundant, but makes reading the tags back from file much faster 
-    MUST( fwrite(&numTagBytes, sizeof(numTagBytes), 1, file) == 1, "write error");
-
-    for (const OsmKeyValuePair &tag : tags)
-    {
-        //both including their null-termination
-        fwrite( tag.first.c_str(),  strlen(tag.first.c_str()) + 1, 1, file);
-        fwrite( tag.second.c_str(), strlen(tag.second.c_str())+ 1, 1, file);
-    }
-
-}
-
-void serializeTags( const vector<OsmKeyValuePair> &tags, Chunk &chunk)
-{
-    assert(tags.size() < (1<<16));
-    chunk.put<uint16_t>(tags.size());              //numTags
-    //storing this total size is redundant, but makes reading the tags back from file much faster 
-    //numTagBytes = serialized size minus 'numTags' and 'numTagBytes' themselves
-    chunk.put<uint32_t>(getSerializedSize(tags) - sizeof(uint32_t) - sizeof(uint16_t)); 
-
-    for (const OsmKeyValuePair &tag : tags)
-    {
-        //"+1" : both including their null-termination
-        chunk.put( tag.first.c_str(),  strlen(tag.first.c_str())  + 1);
-        chunk.put( tag.second.c_str(), strlen(tag.second.c_str()) + 1);
-    }
-}
-
-vector<OsmKeyValuePair> deserializeTags(const uint8_t* &data_ptr)
-{
-    vector<OsmKeyValuePair> tags;
-    
-    uint16_t num_tags  = *((const uint16_t*)data_ptr);
-    data_ptr+=2;
-    
-    /* just skip over numTagBytes without actually reading it.
-     * We don't need this value for memory mapped input. It is stored only to 
-       speed up reading back tags from files using the FILE* API*/
-    //uint32_t numTagBytes = *((const uint32_t*)data_ptr);
-    data_ptr +=4; 
-    if (num_tags == 0) {return tags; }
-    
-    tags.reserve(num_tags);
-    //const char* str = (const char*)data_ptr;
-    while (num_tags--)
-    {
-        /* NOTE: using the pointers into pata_ptr as string/char* would not be
-         *       safe beyond the scopof this method: the data pointer is not
-         *       guaranteed to stay valid. It may be deallocated, munmap'ed or
-         *       mremap'ed, invalidating the strings/char* along with it.
-         *       This loop is safe, because OsmKeyValuePair stores std::strings
-         *       and not the raw char*, and creating the strings from the char*
-         *       also creates a copy of the string data being pointed to.
-        */ 
-        const char* key = (const char*)data_ptr;
-        data_ptr += strlen( (const char*)data_ptr)+1;
-        tags.push_back( OsmKeyValuePair( key, (const char*)data_ptr));
-        data_ptr += strlen( (const char*)data_ptr)+1;
-    }
-    
-    return tags;
-    
-}
-
-vector<OsmKeyValuePair> deserializeTags(FILE* src)
-{
-    vector<OsmKeyValuePair> tags;
-    
-    uint16_t num_tags;
-    MUST( fread( &num_tags, sizeof(num_tags), 1, src) == 1, "read error");
-    tags.reserve(num_tags);
-    
-    uint32_t numTagBytes;
-    MUST( fread( &numTagBytes, sizeof(numTagBytes), 1, src) == 1, "read error");
-    char* tagBytes = new char[numTagBytes];
-#ifndef NDEBUG 
-    char* beyondTagBytes = tagBytes + numTagBytes;
-#endif
-
-    while (num_tags--)
-    {
-        /* NOTE: using the pointers into pata_ptr as string/char* would not be
-         *       safe beyond the scopof this method: the data pointer is not
-         *       guaranteed to stay valid. It may be deallocated, munmap'ed or
-         *       mremap'ed, invalidating the strings/char* along with it.
-         *       This loop is safe, because OsmKeyValuePair stores std::strings
-         *       and not the raw char*, and creating the strings from the char*
-         *       also creates a copy of the string data being pointed to.
-        */ 
-        const char* key = (const char*)tagBytes;
-        tagBytes += strlen( (const char*)tagBytes)+1;
-        assert(tagBytes < beyondTagBytes);
-        
-        tags.push_back( OsmKeyValuePair( key, (const char*)tagBytes));
-        tagBytes += strlen( (const char*)tagBytes)+1;
-        assert(tagBytes < beyondTagBytes);
-    }
-    
-    return tags;
-    
-}
-
 
 ostream& operator<<(ostream &out, const vector<OsmKeyValuePair> &tags)
 {
@@ -176,13 +49,17 @@ OsmNode::OsmNode( const uint8_t* data_ptr)
     lon = *(int32_t*)data_ptr;
     data_ptr+=4;
 
+    RawTags rawTags(data_ptr);
     
-    tags = deserializeTags(data_ptr);
+    //data_ptr += rawTags.getSerializedSize();
+    
+    for (std::pair<const char*, const char*> kv : rawTags)
+        tags.push_back( std::make_pair(kv.first, kv.second));
 }
 
 uint64_t OsmNode::getSerializedSize() const
 {
-    return sizeof(id) + sizeof(version) + sizeof(lat) + sizeof(lon) + ::getSerializedSize(tags);
+    return sizeof(id) + sizeof(version) + sizeof(lat) + sizeof(lon) + RawTags::getSerializedSize(tags);
 }
 
 OsmNode::OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
@@ -200,7 +77,7 @@ void OsmNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
     fwrite( &lat,     sizeof(lat),     1, dataFile);
     fwrite( &lon,     sizeof(lon),     1, dataFile);
 
-    serializeTags( tags, dataFile );
+    RawTags::serialize(tags, dataFile);
 
     //std::cout << id << endl;    
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
@@ -221,7 +98,7 @@ void OsmNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map
     chunk.put(lat);
     chunk.put(lon);
 
-    serializeTags( tags, chunk );
+    RawTags::serialize( tags, chunk );
 
     //std::cout << id << endl;    
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
@@ -291,7 +168,12 @@ OsmWay::OsmWay( const uint8_t* data_ptr)
                                           .lng = ((int32_t*)data_ptr)[3]} );
         data_ptr+= (sizeof(uint64_t) + 2* sizeof(int32_t));
     }
-    tags = deserializeTags(data_ptr);
+    
+    RawTags rawTags(data_ptr);
+    
+    for ( const std::pair< const char*, const char*> &kv : rawTags)
+        tags.push_back( std::make_pair(kv.first, kv.second));
+        
 }
 
 uint64_t OsmWay::getSerializedSize() const
@@ -300,7 +182,7 @@ uint64_t OsmWay::getSerializedSize() const
            sizeof(uint32_t) + //version
            sizeof(uint16_t) + // numRefs
            sizeof(OsmGeoPosition) * refs.size() + //node refs
-           ::getSerializedSize(tags);
+           RawTags::getSerializedSize(tags);
 }
 
         
@@ -324,7 +206,7 @@ void OsmWay::serialize( FILE* data_file, mmap_t *index_map) const
     for (OsmGeoPosition pos : refs)
         fwrite(&pos, sizeof(pos), 1, data_file);
     
-    serializeTags(tags, data_file);
+    RawTags::serialize(tags, data_file);
 
     if (index_map)
     {
@@ -344,7 +226,7 @@ void OsmWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
     for (const OsmGeoPosition &pos: this->refs)
         chunk.put(&pos, sizeof(OsmGeoPosition));
 
-    serializeTags(this->tags, chunk);
+    RawTags::serialize(this->tags, chunk);
     if (index_map)
     {
         ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
@@ -410,7 +292,10 @@ OsmRelation::OsmRelation( const uint8_t* data_ptr)
         members.push_back( OsmRelationMember(type, ref, role));
     }
    
-    tags = deserializeTags(data_ptr);
+    RawTags rawTags(data_ptr);
+    
+    for ( const std::pair< const char*, const char*> &kv : rawTags)
+        tags.push_back( std::make_pair(kv.first, kv.second));
 }
 
 uint64_t OsmRelation::getSerializedSize() const
@@ -420,38 +305,12 @@ uint64_t OsmRelation::getSerializedSize() const
                     sizeof(uint32_t) + //numMembers
                     // type, ref and role null-termination for each member (roles string lengths are added later)
                     (sizeof(OSM_ENTITY_TYPE)+sizeof(uint64_t) + 1) * members.size() +
-                    ::getSerializedSize(this->tags);
+                    RawTags::getSerializedSize(this->tags);
                     
     for (const OsmRelationMember& mbr : members)
         size += mbr.role.length();
         
     return size;
-}
-
-
-void OsmRelation::initFromFile(FILE* src)
-{
-    uint32_t num_members;
-    if (1 != fread(&num_members, sizeof(num_members), 1, src)) return;
-    
-    while (num_members--)
-    {
-        OSM_ENTITY_TYPE type;
-        if (1 != fread (&type, sizeof(OSM_ENTITY_TYPE), 1, src)) return;
-        
-        uint64_t ref;
-        if (1 != fread (&ref, sizeof(ref), 1, src)) return;
-        
-        int i;
-        string s;
-        while ( (i = fgetc(src)) != EOF  && i != '\0')
-            s+=i;
-        //data_ptr+=strlen(role)+1;  //including zero termination
-        members.push_back( OsmRelationMember(type, ref, s));
-    }
-   
-    tags = deserializeTags(src);
-
 }
 
 void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) const
@@ -473,7 +332,7 @@ void OsmRelation::serializeWithIndexUpdate( FILE* data_file, mmap_t *index_map) 
         fwrite(str, strlen(str)+1, 1, data_file);
     }
 
-    serializeTags(tags, data_file);
+    RawTags::serialize(tags, data_file);
 
     if (index_map)
     {        
@@ -500,7 +359,7 @@ void OsmRelation::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index
         chunk.put(str, strlen(str)+1);
     }    
     
-    serializeTags(tags, chunk);
+    RawTags::serialize(tags, chunk);
 
     if (index_map)
     {        

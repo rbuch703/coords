@@ -8,13 +8,12 @@
 
 
 
-void serializePolygon(const Ring &poly, const TTags &tags, uint64_t relId, FILE* fOut)
+void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut)
 {
     //cerr << "serializing relation " << relId << endl;
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
                     sizeof(uint64_t) + // 'id' field
-                    sizeof(uint32_t) + // 'numTagBytes'
                     RawTags::getSerializedSize(tags) + //tags size
                     sizeof(uint32_t) +   // 'numRings' field
                     poly.getSerializedSize(); // outer ring size
@@ -57,14 +56,13 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
         
     //cerr << "serializing relation " << relId << endl;
     //Tags tags(way.);
-    TTags tags;
+    Tags tags;
 
     for (std::pair<const char*, const char*> kv : way.getTags())
         tags.push_back( std::make_pair( kv.first, kv.second));
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
                     sizeof(uint64_t) + // 'id' field
-                    sizeof(uint32_t) + // 'numTagBytes'
                     RawTags::getSerializedSize(tags) + //tags size
                     sizeof(uint32_t) +   // numPoints
                     sizeof(int32_t)*2* way.numVertices;

@@ -90,7 +90,6 @@ struct OsmRelation
     bool hasKey(std::string key) const;
     const std::string& getValue(std::string key) const;
     const std::string& operator[](std::string key) const {return getValue(key);}
-    void initFromFile(FILE* src);
     uint64_t id;
     uint32_t version;
     std::vector<OsmRelationMember> members;

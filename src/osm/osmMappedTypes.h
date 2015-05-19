@@ -9,6 +9,7 @@
 //#include "containers/chunkedFile.h"
 #include "config.h"
 #include "osm/osmBaseTypes.h"
+#include "misc/rawTags.h"
 #include "geom/envelope.h"
 
 
@@ -27,8 +28,8 @@ public:
     void     serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     uint8_t* serialize( uint8_t* dest) const;
 
-    std::map<std::string, std::string> getTagSet() const;
-    Tags getTags() const { return Tags( (char*)tagBytes, numTags);}
+    //std::map<std::string, std::string> getTagSet() const;
+    RawTags getTags() const { return RawTags(tagBytes);}
     uint64_t size() const;
     bool hasKey(const char* key) const;
     std::string getValue(const char* key) const;
@@ -56,7 +57,6 @@ public:
 
     uint8_t *tagBytes;
     uint32_t numTagBytes;
-    uint16_t numTags;
     
     uint64_t id;
     uint32_t version;

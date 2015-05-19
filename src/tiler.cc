@@ -172,14 +172,15 @@ bool simplifyStroke(vector<OsmGeoPosition> &segment, double allowedDeviation)
 
 OsmWay getEditableCopy(OsmLightweightWay &src) {
     
-    map<string, string> tags = src.getTagSet();
+    map<string, string> tags = src.getTags().asDictionary();
+
     return OsmWay( src.id, 
                    src.version, 
                    vector<OsmGeoPosition>( src.vertices, src.vertices + src.numVertices),
                    vector<OsmKeyValuePair>( tags.begin(), tags.end()));
 }
 
-
+/*
 OsmLightweightWay toLightweightWay( const OsmWay &other)
 {
     OsmLightweightWay res;
@@ -212,7 +213,7 @@ OsmLightweightWay toLightweightWay( const OsmWay &other)
     assert( (uint8_t*)pos == res.tagBytes + res.numTagBytes);
     return res;    
 }
-
+*/
 
 static uint64_t frequencies[] = {0,0,0,0,0,0};
 #if 0
@@ -410,7 +411,7 @@ static inline void convertWsg84ToWebMercator( int32_t &lat, int32_t &lng)
     
     int32_t y =  log(tan((90 + lat * INT_TO_LAT_LNG) * PI / 360)) / PI * MAX_MERCATOR_VALUE;
     if (y < -MAX_MERCATOR_VALUE) y = -MAX_MERCATOR_VALUE;
-    if (y <  MAX_MERCATOR_VALUE) y =  MAX_MERCATOR_VALUE;
+    if (y >  MAX_MERCATOR_VALUE) y =  MAX_MERCATOR_VALUE;
     
        
     lat = x;
@@ -542,7 +543,7 @@ int main(int argc, char** argv)
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
 
-        Tags tags = way.getTags();
+        RawTags tags = way.getTags();
         if ( isArea( tags, way.vertices[0] == way.vertices[way.numVertices-1]) )
         {
             /* Area tags on multipolygons' outer ways are pointless, as is the multipolygon

@@ -551,7 +551,7 @@ int main()
             for (Ring* poly: roots)
             {
                 TagSet tags = getMultipolygonTags(poly, rel, ways, outerTags);
-                serializePolygon(*poly, TTags(tags.begin(), tags.end()), rel.id, fOut);
+                serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, fOut);
                 
                 for (uint64_t wayId : poly->wayIds)
                     MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, "write error");

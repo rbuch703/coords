@@ -44,8 +44,6 @@ uint8_t* GenericGeometry::getGeometryPtr()
     uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
     
     uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    tagsStart += sizeof(uint32_t);
-    
     uint8_t* geomStart =tagsStart + numTagBytes;
     MUST( geomStart < this->bytes + this->numBytes, "overflow");
     return geomStart;
@@ -142,7 +140,7 @@ Envelope GenericGeometry::getLineBounds() const {
     //skipping beyond 'type' and 'id'
     uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
     uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    uint32_t *lineStart = (uint32_t*)(tagsStart + sizeof(uint32_t) + numTagBytes);
+    uint32_t *lineStart = (uint32_t*)(tagsStart + numTagBytes);
     uint32_t numPoints = *lineStart;
     
     Envelope env;
@@ -165,7 +163,7 @@ Envelope GenericGeometry::getPolygonBounds() const
     uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
     uint32_t numTagBytes = *(uint32_t*)tagsStart;
 
-    uint32_t *ringStart = (uint32_t*)(tagsStart + sizeof(uint32_t) + numTagBytes);
+    uint32_t *ringStart = (uint32_t*)(tagsStart + numTagBytes);
   
     uint32_t numRings = *ringStart;
     ringStart +=1;

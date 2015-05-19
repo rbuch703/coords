@@ -11,7 +11,7 @@
 using namespace std;
 
 
-OsmLightweightWay::OsmLightweightWay() : isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), numTags(0), id(0), version(0)
+OsmLightweightWay::OsmLightweightWay() : isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), id(0), version(0)
 {    
 }
 
@@ -28,15 +28,19 @@ OsmLightweightWay::OsmLightweightWay( FILE* src):
         MUST( 1 == fread(this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, src), "read failure");
     }
     
-    //lightweight ways don't need the numTags themselves, but they are required to re-serialize the way 
-    MUST( 1 == fread(&this->numTags,    sizeof(uint16_t), 1, src), "read failure");
+    
     MUST( 1 == fread(&this->numTagBytes, sizeof(uint32_t), 1, src), "read failure");
     assert(this->numTagBytes <= 1<<17);
+    assert(this->numTagBytes >= 4); // contains the uint32_t 'numTagBytes' field itself
     
-    if (this->numTagBytes)
+    this->tagBytes = new uint8_t[this->numTagBytes];
+    *((uint32_t*)this->tagBytes) = this->numTagBytes;
+    
+    
+    if (this->numTagBytes-4 > 0)
     {
-        this->tagBytes = new uint8_t[this->numTagBytes];
-        MUST( 1 == fread(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, src), "read failure");
+        
+        MUST( 1 == fread( &this->tagBytes[4], sizeof(uint8_t) * this->numTagBytes-4, 1, src), "read failure");
     }
 }
 
@@ -50,16 +54,17 @@ OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr):
     dataPtr += sizeof( uint32_t);
     
     this->numVertices = *( (uint16_t*)(dataPtr));
-    this->vertices = (OsmGeoPosition*)(dataPtr + 2);
-    dataPtr += (2 + sizeof(OsmGeoPosition) * this->numVertices);
+    dataPtr += sizeof(uint16_t);
+    
+    this->vertices = (OsmGeoPosition*)(dataPtr);
+    dataPtr +=  (sizeof(OsmGeoPosition) * this->numVertices);
 
-    this->numTags = *((uint16_t*)dataPtr);
-    this->numTagBytes  = *((uint32_t*) (dataPtr + 2));
-    this->tagBytes = (dataPtr + 6); 
+    this->numTagBytes  = *(uint32_t*)dataPtr;
+    this->tagBytes = dataPtr; 
 }
 
 
-OsmLightweightWay::OsmLightweightWay( const OsmLightweightWay &other): isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), numTags(0), id(0), version(0)
+OsmLightweightWay::OsmLightweightWay( const OsmLightweightWay &other): isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), id(0), version(0)
 {
     if (this == &other) return;
     
@@ -94,7 +99,6 @@ OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
     this->id = other.id;
     this->version = other.version;
     this->numVertices = other.numVertices;
-    this->numTags = other.numTags;
     this->numTagBytes = other.numTagBytes;
     this->isDataMapped= other.isDataMapped;
     
@@ -118,7 +122,7 @@ uint64_t OsmLightweightWay::size() const {
     return   sizeof(id)
            + sizeof(version)
            + sizeof(numVertices) + numVertices* sizeof(OsmGeoPosition) 
-           + sizeof(numTags) + sizeof(numTagBytes) + numTagBytes;
+           + RawTags(this->tagBytes).getSerializedSize();
 }
 
 Envelope OsmLightweightWay::getBounds() const
@@ -171,12 +175,14 @@ void OsmLightweightWay::serialize( FILE* dest/*, mmap_t *index_map*/) const
     if(this->numVertices > 0)
         MUST(1 == fwrite( this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, dest), "write error");
 
-    assert(this->numTagBytes <= 1<<17);
+    assert(this->numTagBytes < 1000000);
+    MUST( 1 == fwrite( this->tagBytes, this->numTagBytes, 1, dest), "write error");
+    /*assert(this->numTagBytes <= 1<<17);
     MUST( 1 == fwrite(&this->numTags,     sizeof(uint16_t), 1, dest), "write error");
     MUST( 1 == fwrite(&this->numTagBytes, sizeof(uint32_t), 1, dest), "write error");
     
     if (this->numTagBytes > 0)
-        MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");
+        MUST( 1 == fwrite(this->tagBytes, sizeof(uint8_t) * this->numTagBytes, 1, dest), "read failure");*/
 }
 
 uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
@@ -203,22 +209,15 @@ uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
     }
 
     assert(this->numTagBytes <= 1<<17);
-    
-    *((uint16_t*)dest) = this->numTags;
-    dest += sizeof(uint16_t);
-    
-    *((uint32_t*)dest) = this->numTagBytes;
-    dest += sizeof( uint32_t);
-    
-    if (this->numTagBytes > 0)
-    {
-        memcpy( dest, this->tagBytes, sizeof(uint8_t) * this->numTagBytes);
-        dest                       += sizeof(uint8_t) * this->numTagBytes;
-    }
+    assert(this->numTagBytes >= 4); //contains the 4 byte numTagBytes field itself
+   
+    memcpy( dest, this->tagBytes, sizeof(uint8_t) * this->numTagBytes);
+    dest += this->numTagBytes;
+
     return dest;
 }
 
-
+/*
 std::map<std::string, std::string> OsmLightweightWay::getTagSet() const
 {
     map<string, string> tags;
@@ -235,7 +234,7 @@ std::map<std::string, std::string> OsmLightweightWay::getTagSet() const
     
     assert(tags.size() == this->numTags);
     return tags;
-}
+}*/
 
 bool OsmLightweightWay::hasKey( const char* key) const
 {

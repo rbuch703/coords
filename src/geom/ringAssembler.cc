@@ -265,7 +265,7 @@ RingAssembler RingAssembler::fromRelation( OsmRelation &rel,
             OsmLightweightWay way = ways.at(mbr.ref);
             if (mbr.role == "outer")
             {
-                outerTagsOut = way.getTagSet();
+                outerTagsOut = way.getTags().asDictionary();
                 numOuterWays += 1;
             }
             ringAssembler.addWay(way);

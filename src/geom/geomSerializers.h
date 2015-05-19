@@ -10,7 +10,7 @@
 #include <map>
 
 
-void serializePolygon(const Ring &poly, const TTags &tags, uint64_t relId, FILE* fOut);
+void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut);
 void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* fOut);
 
 
