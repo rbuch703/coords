@@ -1,8 +1,9 @@
 
+#include <string.h>
+
 #include "config.h"
 #include "genericGeometry.h"
 
-#include <string.h>
 
 /* ON-DISK LAYOUT FOR GEOMETRY
 :
@@ -39,7 +40,7 @@ RawTags GenericGeometry::getTags() const
     return RawTags(tagsStart);
 }
 
-uint8_t* GenericGeometry::getGeometryPtr()
+const uint8_t* GenericGeometry::getGeometryPtr() const
 {
     uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
     
@@ -54,6 +55,13 @@ GenericGeometry::GenericGeometry(FILE* f): numBytes(0), numBytesAllocated(0), by
 {
     init(f, false);
 }
+
+#ifdef COORDS_MAPNIK_PLUGIN
+GenericGeometry::GenericGeometry(): numBytes(0), numBytesAllocated(0), bytes(nullptr)
+{
+}
+#endif
+
 
 void GenericGeometry::init(FILE* f, bool avoidRealloc)
 {

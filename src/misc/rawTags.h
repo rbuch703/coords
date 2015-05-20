@@ -6,8 +6,12 @@
 #include <vector>
 #include <string>
 
-#include "misc/symbolicNames.h"
-#include "containers/chunkedFile.h"
+#ifndef COORDS_MAPNIK_PLUGIN
+    #include "misc/symbolicNames.h"
+    #include "containers/chunkedFile.h"
+#else
+    #include "symbolicNames.h"
+#endif
 
 typedef std::vector< std::pair<std::string, std::string> > Tags;
 
@@ -21,7 +25,9 @@ public:
 
     
     static void     serialize( const Tags &tags, FILE* fOut);
+#ifndef COORDS_MAPNIK_PLUGIN
     static void     serialize( const Tags &tags, Chunk &chunk);
+#endif
     static uint64_t getSerializedSize( const Tags &tags);
     
     uint64_t getSerializedSize() const;

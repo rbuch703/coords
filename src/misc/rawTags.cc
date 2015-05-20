@@ -95,6 +95,8 @@ void RawTags::serialize(const Tags &tags, FILE* fOut)
     uint16_t numTags = tags.size();
     MUST(fwrite( &numTags,  sizeof(numTags),  1, fOut) == 1, "write error");
 
+    if ( numTags == 0)
+        return;
     uint64_t numNames = numTags * 2;    //one key, one value
     uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
     uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
@@ -149,6 +151,7 @@ void RawTags::serialize(const Tags &tags, FILE* fOut)
 
 }
 
+#ifndef COORDS_MAPNIK_PLUGIN
 void RawTags::serialize(const Tags &tags, Chunk& chunk)
 {
     uint64_t tmp = getSerializedSize(tags);
@@ -206,7 +209,7 @@ void RawTags::serialize(const Tags &tags, Chunk& chunk)
         }
     }
 }
-
+#endif
 
 
 RawTags::RawTagIterator::RawTagIterator(const uint8_t* symbolicNameBits, 
