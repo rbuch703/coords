@@ -28,6 +28,7 @@ ADD_EXECUTABLE(coordsCreateStorage
     src/geom/envelope.cc
     src/misc/rawTags.cc
     src/misc/symbolicNames.cc
+    src/misc/varInt.cc
     src/consumers/osmConsumer.cc 
     src/consumers/osmConsumerCounter.cc
     src/consumers/osmConsumerDumper.cc 
@@ -50,6 +51,7 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/osm/osmMappedTypes.cc 
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
+               src/misc/varInt.cc
                src/geom/envelope.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
@@ -72,6 +74,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/containers/osmWayStore.cc
                src/misc/symbolicNames.cc
                src/misc/rawTags.cc
+               src/misc/varInt.cc
                )
 
 ADD_EXECUTABLE(multipolygonReconstructor
@@ -88,6 +91,7 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/mem_map.cc
+               src/misc/varInt.cc
                src/containers/chunkedFile.cc               
                src/containers/osmRelationStore.cc
                )
@@ -97,6 +101,7 @@ ADD_EXECUTABLE(geomReader
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
                src/misc/rawTags.cc
+               src/misc/varInt.cc
                src/misc/symbolicNames.cc
 #               src/geom/ring.cc
 #               src/mem_map.cc

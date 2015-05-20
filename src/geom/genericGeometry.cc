@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "genericGeometry.h"
+#include "misc/varInt.h"
 
 
 /* ON-DISK LAYOUT FOR GEOMETRY
@@ -44,8 +45,9 @@ const uint8_t* GenericGeometry::getGeometryPtr() const
 {
     uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
     
-    uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    uint8_t* geomStart =tagsStart + numTagBytes;
+    int nRead = 0;
+    uint32_t numTagBytes = varUintFromBytes(tagsStart, &nRead);
+    uint8_t* geomStart = tagsStart + nRead + numTagBytes;
     MUST( geomStart < this->bytes + this->numBytes, "overflow");
     return geomStart;
 }
@@ -145,10 +147,7 @@ Envelope GenericGeometry::getBounds() const
 Envelope GenericGeometry::getLineBounds() const {
     uint8_t *beyond = bytes + numBytes;
     
-    //skipping beyond 'type' and 'id'
-    uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
-    uint32_t numTagBytes = *(uint32_t*)tagsStart;
-    uint32_t *lineStart = (uint32_t*)(tagsStart + numTagBytes);
+    uint32_t *lineStart = (uint32_t*)getGeometryPtr();
     uint32_t numPoints = *lineStart;
     
     Envelope env;
@@ -166,12 +165,7 @@ Envelope GenericGeometry::getLineBounds() const {
 Envelope GenericGeometry::getPolygonBounds() const 
 {
     uint8_t *beyond = bytes + numBytes;
-    
-    //skipping beyond 'type' and 'id'
-    uint8_t* tagsStart = bytes + sizeof(uint8_t) + sizeof(uint64_t);
-    uint32_t numTagBytes = *(uint32_t*)tagsStart;
-
-    uint32_t *ringStart = (uint32_t*)(tagsStart + numTagBytes);
+    uint32_t *ringStart = (uint32_t*)(getGeometryPtr());
   
     uint32_t numRings = *ringStart;
     ringStart +=1;

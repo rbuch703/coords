@@ -1,12 +1,13 @@
 
 
 #include "rawTags.h"
+#include "varInt.h"
 #include "config.h"
 #include <string.h> //for strlen
 
 /* ON-DISK LAYOUT FOR TAGS:
-    uint32_t numBytes, including this field itself
-    uint16_t numTags (one tag = two names (key + value)
+    varUInt numBytes, *NOT* including this field itself
+    varUInt numTags (one tag = two names (key + value)
     uint8_t  isSymbolicName[ceil( (numTags*2)/8)] (bit array)
     
     for each name:
@@ -24,18 +25,20 @@ RawTags::RawTags(uint64_t numTags, uint64_t numTagBytes,
 
 RawTags::RawTags(const uint8_t* src)
 {
-    uint32_t totalNumBytes = *(uint32_t*)src;
-    //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
-    src += sizeof(uint32_t);
+    int nRead = 0;
     
-    uint16_t numTags = *(uint16_t*)src;
-    src += sizeof(uint16_t);
+    uint32_t totalNumBytes = varUintFromBytes(src, &nRead);
+    //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
+    src += nRead;
+    
+    uint16_t numTags = varUintFromBytes(src, &nRead);
+    src += nRead;
     
     //uint8_t *symbolicNameBytes = pos;
     uint64_t numNames = numTags * 2; // key and value per tag
     uint64_t numSymbolicNameBytes = (numNames + 7) / 8;
     
-    numTagBytes = totalNumBytes - numSymbolicNameBytes - sizeof(uint32_t) - sizeof(uint16_t);
+    numTagBytes = totalNumBytes - numSymbolicNameBytes - varUintNumBytes(numTags);
     symbolicNameBits = src;
     tagsStart = src + numSymbolicNameBytes;
 }
@@ -53,22 +56,24 @@ uint64_t RawTags::getSerializedSize(const Tags &tags)
         numTagBytes += symbolicNameId.count(kv.second) ? 1 : kv.second.length() + 1;
     }
     
-    return sizeof(uint32_t) + // numBytes field
-           sizeof(uint16_t) + // numTags field
-           bitfieldSize * sizeof(uint8_t) +
-           numTagBytes;
+    uint64_t numBytes = varUintNumBytes(numTags) +
+                        bitfieldSize * sizeof(uint8_t) +
+                        numTagBytes;
+                        
+    return numBytes;
 
 }
 
 uint64_t RawTags::getSerializedSize() const
 {
     uint64_t numNames = numTags * 2;    //one key, one value
-    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
+    uint64_t bitfieldSize = (numNames + 7) / 8; //one bit per name --> have to round up
+
+    uint64_t numBytes = varUintNumBytes(this->numTags) + 
+                        bitfieldSize * sizeof(uint8_t) +
+                        numTagBytes;
     
-    return sizeof(uint32_t) + // numBytes field
-           sizeof(uint16_t) + // numTags field
-           bitfieldSize * sizeof(uint8_t) +
-           numTagBytes;
+    return numBytes;
 }
 
 
@@ -85,20 +90,21 @@ std::map< std::string, std::string> RawTags::asDictionary() const
 
 void RawTags::serialize(const Tags &tags, FILE* fOut)
 {
+    uint8_t conv[10];
+    uint64_t numBytes = getSerializedSize(tags);
+    int nBytes = varUintToBytes(numBytes, conv);
+    MUST(fwrite( conv, nBytes, 1, fOut) == 1, "write error");
+
     int64_t filePos = ftell(fOut);
-    uint64_t tmp = getSerializedSize(tags);
-    MUST(tmp < (1ull)<<32, "tag set size overflow");
-    uint32_t numBytes = tmp;
-    MUST(fwrite( &numBytes, sizeof(numBytes), 1, fOut) == 1, "write error");
 
-    MUST( tags.size() < 1<<16, "attribute count overflow");
-    uint16_t numTags = tags.size();
-    MUST(fwrite( &numTags,  sizeof(numTags),  1, fOut) == 1, "write error");
+    nBytes = varUintToBytes(tags.size(), conv);
+    MUST(fwrite( conv,  nBytes,  1, fOut) == 1, "write error");
 
-    if ( numTags == 0)
+    if ( tags.size() == 0)
         return;
-    uint64_t numNames = numTags * 2;    //one key, one value
-    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
+        
+    uint64_t numNames = tags.size() * 2;    //one key, one value
+    uint64_t bitfieldSize = (numNames + 7) / 8; //one bit per name --> have to round up
     uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
     memset(isSymbolicName, 0, bitfieldSize);
     
@@ -124,6 +130,8 @@ void RawTags::serialize(const Tags &tags, FILE* fOut)
         MUST( fwrite( isSymbolicName, bitfieldSize, 1, fOut) == 1, "write error");
     }
     
+    delete [] isSymbolicName;
+    
     for (const std::pair<std::string, std::string> &kv : tags)
     {
         if (symbolicNameId.count(kv.first))
@@ -147,19 +155,19 @@ void RawTags::serialize(const Tags &tags, FILE* fOut)
         }
     }
     
-    MUST( ftell(fOut)- numBytes == filePos, "tag set size mismatch");
+    MUST( ftell(fOut) == filePos + (int64_t)numBytes, "tag set size mismatch");
 
 }
 
 #ifndef COORDS_MAPNIK_PLUGIN
 void RawTags::serialize(const Tags &tags, Chunk& chunk)
 {
-    uint64_t tmp = getSerializedSize(tags);
-    MUST(tmp < (1ull)<<32, "tag set size overflow");
-    chunk.put<uint32_t>(tmp);
+    uint8_t bytes[10];
+    int nBytes = varUintToBytes(getSerializedSize(tags), bytes);
+    chunk.put(bytes, nBytes);
 
-    MUST( tags.size() < 1<<16, "attribute count overflow");
-    chunk.put<uint16_t>(tags.size());
+    nBytes = varUintToBytes(tags.size(), bytes);
+    chunk.put(bytes, nBytes);
 
     uint64_t numNames = tags.size() * 2;    //one key, one value
     uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up

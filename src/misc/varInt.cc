@@ -1,12 +1,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
+#include "config.h"
 
-#include <assert.h>
-
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 int varUintToBytes(uint64_t valIn, uint8_t out[10])
 {
 
@@ -37,7 +33,7 @@ int varUintNumBytes(uint64_t val)
     return nBytes;
 }
 
-uint64_t varUintFromBytes(uint8_t *bytes, int* numBytesRead)
+uint64_t varUintFromBytes(const uint8_t *bytes, int* numBytesRead)
 {
     int pos = 0;
     uint64_t res = 0;
@@ -57,6 +53,29 @@ uint64_t varUintFromBytes(uint8_t *bytes, int* numBytesRead)
     return res;
 }
 
+uint64_t varUintFromFile (FILE *f, int* numBytesRead)
+{
+    int pos = 0;
+    uint64_t res = 0;
+    
+    int isNotLast;
+    do {
+        uint8_t byte;
+        MUST( fread(&byte, sizeof(byte), 1, f) == 1, "read error");
+        isNotLast = byte & 0x80;
+        res |= ((uint64_t)(byte & 0x7F)) << (7 * pos);
+        pos += 1;
+    
+    } 
+    while (isNotLast);
+    
+    if (numBytesRead)
+        *numBytesRead = pos;
+        
+    return res;
+}
+
+
 int varIntToBytes(int64_t valIn, uint8_t out[10])
 {
     /* edge case: normally, we extract the sign bit and further process only the absolute value.
@@ -64,7 +83,7 @@ int varIntToBytes(int64_t valIn, uint8_t out[10])
      *            into an int64 (negating it yields itself), and would break the algorithm.
      *            So we manually assign a precomputed result in that case 
      */
-    if (valIn == 0x8000000000000000ll)
+    if (valIn == (int64_t)0x8000000000000000ll)
     {
         // 6 + 7*6 = 48 = 6 bytes = 12 nibbles
         // residue: 0x8000ll
@@ -127,7 +146,7 @@ int64_t varIntFromBytes(uint8_t *bytes, int* numBytesRead)
 
 int varIntNumBytes(int64_t val)
 {
-    if (val == 0x8000000000000000ll) return 10; // edge case, absolute value does not fit int64
+    if (val == (int64_t)0x8000000000000000ll) return 10; // edge case, absolute value does not fit int64
     
     if (val < 0)
         val = -val;
@@ -142,59 +161,4 @@ int varIntNumBytes(int64_t val)
     }
     
     return nBytes;
-}
-
-
-int main()
-{
-
-    //for (uint64_t i = 0; i < 0xFFFFFFFF; i++)
-    uint64_t i;
-    while (1)
-    {
-        i++;
-        if (i % 1000000000 == 0)
-            printf("%dM\n", (uint32_t)(i/1000000));
-        
-        //uint64_t num =   0xFFFFFFFFFFFFFFFFull;
-        //uint64_t num = 0x7FFFFFFFFFFFFFFFull;
-        int64_t num = ((uint64_t)rand()); 
-        
-        while (rand() % 2)
-            num = (num << 10) ^ rand();
-
-        if (rand() % 2)
-            num = -num;
-
-                  
-        uint8_t bytes[10];
-        varIntToBytes(num, bytes);
-        int nBytes;
-        int64_t res = varIntFromBytes(bytes, &nBytes);
-
-        //printf("# %" PRIu64 " -> %" PRIu64 "\n", num, res);
-        
-        //printf("%"PRIi64": %d vs. %d\n", num, nBytes, varIntNumBytes(num));
-        assert( num == res && nBytes == varIntNumBytes(num));
-        /*if (i != res)
-        {
-            printf("error at %u (%u)\n", (uint32_t)i, (uint32_t)res);
-            assert(0);
-        }*/
-        
-    }   
-
-    /*
-    uint8_t tmp[10];
-    int numBytes = toBytes(2147483648, tmp);
-
-    for (int i = 0; i < numBytes; i++)
-    {
-        printf("%X\n", tmp[i]);
-        
-    }*/
-    
-//    printf("# %" PRIu64 "\n", fromBytes(tmp, NULL));
-    
-    return EXIT_SUCCESS;
 }

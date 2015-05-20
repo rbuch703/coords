@@ -31,8 +31,6 @@ public:
     //std::map<std::string, std::string> getTagSet() const;
     RawTags getTags() const { return RawTags(tagBytes);}
     uint64_t size() const;
-    bool hasKey(const char* key) const;
-    std::string getValue(const char* key) const;
     Envelope getBounds() const;
     
     /* convert 'vertices' and 'tagBytes' to owned arrays from memory-mapped ranges. 

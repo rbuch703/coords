@@ -14,8 +14,8 @@
 
 
 /* on-disk format for OsmNode:
-    - uint64_t id
-    - uint32_t version
+    - v_uint id
+    - v_uint version
     - int32_t lat
     - int32_t lon
     - <tags>

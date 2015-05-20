@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "osm/osmMappedTypes.h"
+#include "misc/varInt.h"
 
 using namespace std;
 
@@ -28,20 +29,24 @@ OsmLightweightWay::OsmLightweightWay( FILE* src):
         MUST( 1 == fread(this->vertices, sizeof(OsmGeoPosition) * this->numVertices, 1, src), "read failure");
     }
     
+    this->numTagBytes = varUintFromFile( src, nullptr);
+    assert(this->numTagBytes <= 1<<20);
     
-    MUST( 1 == fread(&this->numTagBytes, sizeof(uint32_t), 1, src), "read failure");
-    assert(this->numTagBytes <= 1<<17);
-    assert(this->numTagBytes >= 4); // contains the uint32_t 'numTagBytes' field itself
+    uint8_t bytes[10];
+    int nRead = varUintToBytes(this->numTagBytes, bytes);
     
-    this->tagBytes = new uint8_t[this->numTagBytes];
-    *((uint32_t*)this->tagBytes) = this->numTagBytes;
-    
-    
-    if (this->numTagBytes-4 > 0)
+    this->tagBytes = new uint8_t[this->numTagBytes + nRead];
+    for (int i= 0; i < nRead; i++)
+        this->tagBytes[i] = bytes[i];
+        
+   
+    if (this->numTagBytes > 0)
     {
         
-        MUST( 1 == fread( &this->tagBytes[4], sizeof(uint8_t) * this->numTagBytes-4, 1, src), "read failure");
+        MUST( 1 == fread( &this->tagBytes[nRead], this->numTagBytes, 1, src), "read failure");
     }
+    
+    this->numTagBytes += nRead;
 }
 
 OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr): 
@@ -59,8 +64,12 @@ OsmLightweightWay::OsmLightweightWay( uint8_t *dataPtr):
     this->vertices = (OsmGeoPosition*)(dataPtr);
     dataPtr +=  (sizeof(OsmGeoPosition) * this->numVertices);
 
-    this->numTagBytes  = *(uint32_t*)dataPtr;
+    int nRead = 0;
+    
     this->tagBytes = dataPtr; 
+    this->numTagBytes  = varUintFromBytes(dataPtr, &nRead);
+    this->numTagBytes += nRead; //plus compresses size of the 'numTagBytes' field itself
+
 }
 
 
@@ -119,10 +128,14 @@ OsmLightweightWay& OsmLightweightWay::operator=(const OsmLightweightWay &other)
 }
 
 uint64_t OsmLightweightWay::size() const {
-    return   sizeof(id)
-           + sizeof(version)
-           + sizeof(numVertices) + numVertices* sizeof(OsmGeoPosition) 
-           + RawTags(this->tagBytes).getSerializedSize();
+    uint64_t tagsSize = RawTags(this->tagBytes).getSerializedSize();
+
+    return sizeof(id) +
+           sizeof(version) +
+           sizeof(numVertices) + 
+           numVertices* sizeof(OsmGeoPosition) +
+           varUintNumBytes(tagsSize) +
+           tagsSize;
 }
 
 Envelope OsmLightweightWay::getBounds() const
@@ -208,66 +221,13 @@ uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
         dest +=                      sizeof(OsmGeoPosition) * this->numVertices;
     }
 
-    assert(this->numTagBytes <= 1<<17);
-    assert(this->numTagBytes >= 4); //contains the 4 byte numTagBytes field itself
+    assert(this->numTagBytes <= 1<<20);
    
     memcpy( dest, this->tagBytes, sizeof(uint8_t) * this->numTagBytes);
     dest += this->numTagBytes;
 
     return dest;
 }
-
-/*
-std::map<std::string, std::string> OsmLightweightWay::getTagSet() const
-{
-    map<string, string> tags;
-    const char *tagPos = (const char*)this->tagBytes;
-    const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
-    while (tagPos < tagEnd)
-    {
-        const char* key = tagPos;
-        tagPos += (strlen(tagPos) + 1);
-        const char* value=tagPos;
-        tagPos += (strlen(tagPos) + 1);
-        tags.insert( make_pair( string(key), string(value) ) );
-    }
-    
-    assert(tags.size() == this->numTags);
-    return tags;
-}*/
-
-bool OsmLightweightWay::hasKey( const char* key) const
-{
-    const char *tagPos = (const char*)this->tagBytes;
-    const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
-    while (tagPos < tagEnd)
-    {
-        //const char* key = tagPos;
-        if (strcmp(tagPos, key) == 0) return true;
-        tagPos += (strlen(tagPos) + 1); //skip beyond the key
-        tagPos += (strlen(tagPos) + 1); //skip beyond the corresponding value
-    }
-    return false;
-}
-
-string OsmLightweightWay::getValue( const char* key) const
-{
-    const char *tagPos = (const char*)this->tagBytes;
-    const char *tagEnd = (const char*)(this->tagBytes + numTagBytes);
-    while (tagPos < tagEnd)
-    {
-        //const char* key = tagPos;
-        if (strcmp(tagPos, key) == 0)   //found matching key; corresponding value is stored right behind it 
-        {
-            tagPos += (strlen(tagPos) + 1); //skip beyond the key
-            return tagPos;
-        }
-        tagPos += (strlen(tagPos) + 1); //skip beyond the key
-        tagPos += (strlen(tagPos) + 1); //skip beyond the corresponding value
-    }
-    return "";
-}
-
 
 ostream& operator<<(ostream &out, const OsmLightweightWay &way)
 {
@@ -282,6 +242,3 @@ ostream& operator<<(ostream &out, const OsmLightweightWay &way)
 
 
 //======================================================
-
-
-

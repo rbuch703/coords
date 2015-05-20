@@ -135,12 +135,14 @@ void ChunkedFile::increaseSize(uint64_t additionalSpace)
 
 Chunk ChunkedFile::createChunk(uint64_t chunkSize)
 {
-    static FILE* f = fopen("chunkSizes.bin", "wb");
     uint64_t contentSize = chunkSize;
     chunkSize += 1; //need space for the 1 byte chunk size marker
-    
+
+    /*    
+    static FILE* f = fopen("chunkSizes.bin", "wb");
     uint32_t cs = chunkSize;
     fwrite(&cs, sizeof(cs), 1, f);
+    */
     //std::cerr << chunkSize << std::endl;
     MUST( chunkSize < chunkSizes[numChunkSizes-1], "chunk size > 1.6GB requested");
 

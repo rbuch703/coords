@@ -4,6 +4,7 @@
 #include "geomSerializers.h"
 #include "genericGeometry.h"
 #include "misc/symbolicNames.h"
+#include "misc/varInt.h"
 
 
 
@@ -11,10 +12,12 @@
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut)
 {
     //cerr << "serializing relation " << relId << endl;
+    uint64_t tagsSize = RawTags::getSerializedSize(tags);
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
                     sizeof(uint64_t) + // 'id' field
-                    RawTags::getSerializedSize(tags) + //tags size
+                    varUintNumBytes(tagsSize) + 
+                    tagsSize + //tags size
                     sizeof(uint32_t) +   // 'numRings' field
                     poly.getSerializedSize(); // outer ring size
 
@@ -60,12 +63,15 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
 
     for (std::pair<const char*, const char*> kv : way.getTags())
         tags.push_back( std::make_pair( kv.first, kv.second));
+    uint64_t tagsSize = RawTags::getSerializedSize(tags);
+    
     uint64_t sizeTmp = 
-                    sizeof(uint8_t)  + // 'type' field
-                    sizeof(uint64_t) + // 'id' field
-                    RawTags::getSerializedSize(tags) + //tags size
-                    sizeof(uint32_t) +   // numPoints
-                    sizeof(int32_t)*2* way.numVertices;
+        sizeof(uint8_t)  + // 'type' field
+        sizeof(uint64_t) + // 'id' field
+        varUintNumBytes(tagsSize) +
+        tagsSize + //tags size
+        sizeof(uint32_t) +   // numPoints
+        sizeof(int32_t)*2* way.numVertices;
                     
     if (asPolygon)
         sizeTmp += sizeof(uint32_t);  // 'numRings' field (="1")

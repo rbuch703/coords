@@ -12,6 +12,7 @@
 
 #include "osmTypes.h"
 #include "misc/rawTags.h"
+#include "misc/varInt.h"
 //#include "symbolic_tags.h"
 
 #include <iostream>
@@ -37,11 +38,13 @@ ostream& operator<<(ostream &out, const vector<OsmKeyValuePair> &tags)
 
 OsmNode::OsmNode( const uint8_t* data_ptr)
 {
-    id = *(uint64_t*)data_ptr;
-    data_ptr += sizeof(uint64_t);
+    int nRead = 0;
+    
+    id = varUintFromBytes(data_ptr, &nRead);
+    data_ptr += nRead;
 
-    version = *(uint32_t*)data_ptr;
-    data_ptr+= sizeof(uint32_t);
+    version = varUintFromBytes(data_ptr, &nRead);
+    data_ptr+= nRead;
     
     lat = *(int32_t*)data_ptr;
     data_ptr+=4;
@@ -59,7 +62,13 @@ OsmNode::OsmNode( const uint8_t* data_ptr)
 
 uint64_t OsmNode::getSerializedSize() const
 {
-    return sizeof(id) + sizeof(version) + sizeof(lat) + sizeof(lon) + RawTags::getSerializedSize(tags);
+    uint64_t tagsSize = RawTags::getSerializedSize(tags);
+    return varUintNumBytes(id) + 
+           varUintNumBytes(version) + 
+           sizeof(lat) + 
+           sizeof(lon) + 
+           varUintNumBytes(tagsSize) +  //size of 'tags size' field
+           tagsSize;                    //size of actual tags
 }
 
 OsmNode::OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
@@ -72,10 +81,16 @@ void OsmNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
     assert (id > 0);  
 
     uint64_t offset = ftello(dataFile);    //get offset at which the dumped node *starts*
-    fwrite( &id,      sizeof(id),      1, dataFile);
-    fwrite( &version, sizeof(version), 1, dataFile);
-    fwrite( &lat,     sizeof(lat),     1, dataFile);
-    fwrite( &lon,     sizeof(lon),     1, dataFile);
+    int numBytes;
+    uint8_t bytes[10];
+    
+    numBytes = varUintToBytes(id, bytes);
+    fwrite( bytes, numBytes,   1, dataFile);
+    
+    numBytes = varUintToBytes(version, bytes);
+    fwrite( bytes, numBytes,   1, dataFile);
+    fwrite( &lat,  sizeof(lat),1, dataFile);
+    fwrite( &lon,  sizeof(lon),1, dataFile);
 
     RawTags::serialize(tags, dataFile);
 
@@ -93,8 +108,15 @@ void OsmNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map
     MUST (id > 0, "Invalid non-positive node id in input file.");
     
     Chunk chunk = dataFile.createChunk( this->getSerializedSize());
-    chunk.put(id);
-    chunk.put(version);
+
+    int numBytes;
+    uint8_t bytes[10];
+    
+    numBytes = varUintToBytes(id, bytes);
+    chunk.put(bytes, numBytes);
+
+    numBytes = varUintToBytes(version, bytes);
+    chunk.put(bytes, numBytes);
     chunk.put(lat);
     chunk.put(lon);
 
@@ -178,11 +200,13 @@ OsmWay::OsmWay( const uint8_t* data_ptr)
 
 uint64_t OsmWay::getSerializedSize() const
 {
+    uint64_t tagsSize = RawTags::getSerializedSize(tags);
     return sizeof(uint64_t) + //id
            sizeof(uint32_t) + //version
            sizeof(uint16_t) + // numRefs
            sizeof(OsmGeoPosition) * refs.size() + //node refs
-           RawTags::getSerializedSize(tags);
+           varUintNumBytes( tagsSize ) + 
+           tagsSize;
 }
 
         
@@ -300,12 +324,14 @@ OsmRelation::OsmRelation( const uint8_t* data_ptr)
 
 uint64_t OsmRelation::getSerializedSize() const
 {
+    uint64_t tagsSize = RawTags::getSerializedSize(this->tags);
     uint64_t size = sizeof(uint64_t) + //id
                     sizeof(uint32_t) + //version
                     sizeof(uint32_t) + //numMembers
                     // type, ref and role null-termination for each member (roles string lengths are added later)
                     (sizeof(OSM_ENTITY_TYPE)+sizeof(uint64_t) + 1) * members.size() +
-                    RawTags::getSerializedSize(this->tags);
+                    varUintNumBytes(tagsSize) +
+                    tagsSize;
                     
     for (const OsmRelationMember& mbr : members)
         size += mbr.role.length();
