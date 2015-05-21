@@ -21,6 +21,15 @@ int varUintToBytes(uint64_t valIn, uint8_t out[10])
     return pos;
 }
 
+int varUintToFile (uint64_t valIn, FILE *f)
+{
+    uint8_t bytes[10];
+    int nBytes = varUintToBytes(valIn, bytes);
+    MUST( fwrite( bytes, nBytes, 1, f) == 1, "write error");
+    return nBytes;
+}
+
+
 int varUintNumBytes(uint64_t val)
 {
     int nBytes = 0;
@@ -75,6 +84,7 @@ uint64_t varUintFromFile (FILE *f, int* numBytesRead)
     return res;
 }
 
+// ======================================================
 
 int varIntToBytes(int64_t valIn, uint8_t out[10])
 {
@@ -121,7 +131,16 @@ int varIntToBytes(int64_t valIn, uint8_t out[10])
     return pos;
 }
 
-int64_t varIntFromBytes(uint8_t *bytes, int* numBytesRead)
+int varIntToFile (int64_t valIn, FILE *f)
+{
+    uint8_t bytes[10];
+    int nBytes = varIntToBytes(valIn, bytes);
+    MUST( fwrite( bytes, nBytes, 1, f) == 1, "write error");
+    return nBytes;
+}
+
+
+int64_t varIntFromBytes(const uint8_t *bytes, int* numBytesRead)
 {
     int isNotLast =  bytes[0] & 0x80;
     int isNegative = bytes[0] & 0x40;

@@ -13,6 +13,7 @@
 
 #include "ring.h"
 #include "escapeSequences.h"
+#include "misc/varInt.h"
 
 
 geos::geom::GeometryFactory Ring::factory;  
@@ -216,38 +217,71 @@ void Ring::serialize(FILE* fOut, bool reverseVertexOrder) const
     const geos::geom::LineString* boundary = this->geosPolygon->getExteriorRing();
     const std::vector<geos::geom::Coordinate>& coords = *boundary->getCoordinatesRO()->toVector();
     
-    uint32_t numVertices = coords.size();
-    MUST(numVertices >= 4, "ring has less than four vertices");
-    MUST( fwrite(&numVertices, sizeof(uint32_t), 1, fOut) == 1, "write error");
-    
+    MUST(coords.size() >= 4, "ring has less than four vertices");
+    varUintToFile(coords.size(), fOut);
+
+    int64_t prevX = 0;
+    int64_t prevY = 0;
     if (!reverseVertexOrder)
     {
         for (uint64_t i = 0; i < coords.size(); i++)
         {
-            int32_t lat = coords[i].x;
-            int32_t lng = coords[i].y;
-            MUST( fwrite(&lat, sizeof(lat), 1, fOut) == 1, "write error");
-            MUST( fwrite(&lng, sizeof(lng), 1, fOut) == 1, "write error");
+            int64_t dX = coords[i].x - prevX;
+            int64_t dY = coords[i].y - prevY;
+            prevX = coords[i].x;
+            prevY = coords[i].y;
+            varIntToFile(dX, fOut);
+            varIntToFile(dY, fOut);
         }
     } else
     {
-        for (int64_t i = coords.size()-1; i >= 0 ; i--)
+        for (int64_t i = coords.size()-1; i >= 0; i--)
         {
-            int32_t lat = coords[i].x;
-            int32_t lng = coords[i].y;
-            MUST( fwrite(&lat, sizeof(lat), 1, fOut) == 1, "write error");
-            MUST( fwrite(&lng, sizeof(lng), 1, fOut) == 1, "write error");
+            int64_t dX = coords[i].x - prevX;
+            int64_t dY = coords[i].y - prevY;
+            prevX = coords[i].x;
+            prevY = coords[i].y;
+            varIntToFile(dX, fOut);
+            varIntToFile(dY, fOut);
         }
     }
 }
 
-uint64_t Ring::getSerializedSize() const
+uint64_t Ring::getSerializedSize(bool reverseVertexOrder) const
 {
     MUST(this->geosPolygon->getNumInteriorRing() == 0, "Ring cannot have interior rings");
-    return sizeof(uint32_t) +   // uint32_t numVertices
-           sizeof( int32_t) * 2 * // two int32_t's per vertex (lat, lng)
-           this->geosPolygon->getExteriorRing()->getCoordinatesRO()->toVector()->size();
+    const std::vector<geos::geom::Coordinate> &coords = 
+        *this->geosPolygon->getExteriorRing()->getCoordinatesRO()->toVector();
+
+    uint64_t size = varUintNumBytes( coords.size() ); //size of 'numVertices' field;
     
+    int64_t prevX = 0;
+    int64_t prevY = 0;
+    if (!reverseVertexOrder)
+    {
+        for (uint64_t i = 0; i < coords.size(); i++)
+        {
+            int64_t dX = coords[i].x - prevX;
+            int64_t dY = coords[i].y - prevY;
+            prevX = coords[i].x;
+            prevY = coords[i].y;
+            size += varIntNumBytes( dX );   //size of the delta-encoded vertices
+            size += varIntNumBytes( dY );
+        }
+    } else
+    {
+        for (int64_t i = coords.size() - 1; i >= 0; i--)
+        {
+            int64_t dX = coords[i].x - prevX;
+            int64_t dY = coords[i].y - prevY;
+            prevX = coords[i].x;
+            prevY = coords[i].y;
+            size += varIntNumBytes( dX );
+            size += varIntNumBytes( dY );
+        }
+    }
+    
+    return size;
 }
 
 const geos::geom::Polygon* Ring::getPolygon() const 

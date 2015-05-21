@@ -12,17 +12,19 @@
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut)
 {
     //cerr << "serializing relation " << relId << endl;
+    uint32_t numRings = 1 + poly.children.size(); // 1 outer, plus the inner rings
+
     uint64_t tagsSize = RawTags::getSerializedSize(tags);
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
                     sizeof(uint64_t) + // 'id' field
                     varUintNumBytes(tagsSize) + 
                     tagsSize + //tags size
-                    sizeof(uint32_t) +   // 'numRings' field
-                    poly.getSerializedSize(); // outer ring size
+                    varUintNumBytes(numRings) +   // 'numRings' field
+                    poly.getSerializedSize(false); // outer ring size
 
     for (const Ring* inner : poly.children)
-        sizeTmp += inner->getSerializedSize();
+        sizeTmp += inner->getSerializedSize(true);
                     
     MUST( sizeTmp < (1ull) <<  32, "polygon size overflow");
     uint32_t numBytes = sizeTmp;
@@ -34,10 +36,7 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
     MUST(fwrite( &relId, sizeof(relId), 1, fOut) == 1, "write error");
     
     RawTags::serialize(tags, fOut);
-    
-    uint32_t numRings = 1 + poly.children.size(); // 1 outer, plus the inner rings
-    MUST(fwrite( &numRings, sizeof(uint32_t), 1, fOut) == 1, "write error");
-    
+    varUintToFile(numRings, fOut);
     poly.serialize(fOut, false);
 
     for (const Ring* inner : poly.children)
@@ -57,8 +56,6 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
     if (asPolygon)
         MUST( v0.lat == vn.lat && v0.lng == vn.lng, "not a ring");
         
-    //cerr << "serializing relation " << relId << endl;
-    //Tags tags(way.);
     Tags tags;
 
     for (std::pair<const char*, const char*> kv : way.getTags())
@@ -70,11 +67,23 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
         sizeof(uint64_t) + // 'id' field
         varUintNumBytes(tagsSize) +
         tagsSize + //tags size
-        sizeof(uint32_t) +   // numPoints
-        sizeof(int32_t)*2* way.numVertices;
+        varUintNumBytes(way.numVertices);
+        
+    int64_t prevLat = 0;
+    int64_t prevLng = 0;
+    for (int i = 0; i < way.numVertices; i++)
+    {
+        int64_t dLat = way.vertices[i].lat - prevLat;
+        int64_t dLng = way.vertices[i].lng - prevLng;
+        prevLat = way.vertices[i].lat;
+        prevLng = way.vertices[i].lng;
+        
+        sizeTmp += varUintNumBytes(dLat);
+        sizeTmp += varUintNumBytes(dLng);
+    }
                     
     if (asPolygon)
-        sizeTmp += sizeof(uint32_t);  // 'numRings' field (="1")
+        sizeTmp += varUintNumBytes(1);  // 'numRings' field (="1")
 
     MUST( sizeTmp < (1ull) <<  32, "polygon size overflow");
     uint32_t numBytes = sizeTmp;
@@ -88,18 +97,21 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
     RawTags::serialize(tags, fOut);
 
     if (asPolygon)
-    {    
-        uint32_t numRings = 1; // ways only consist of a single outer ring (no inner rings)
-        MUST(fwrite( &numRings, sizeof(uint32_t), 1, fOut) == 1, "write error");
-    }
+        varUintToFile(1, fOut); // ways only consist of a single outer ring (no inner rings)
 
-    uint32_t numVertices = way.numVertices;
-    MUST(fwrite( &numVertices, sizeof(uint32_t), 1, fOut) == 1, "write error");
+    varUintToFile(way.numVertices, fOut);
     
+    prevLat = 0;
+    prevLng = 0;
     for (int i = 0; i < way.numVertices; i++)
     {
-        MUST(fwrite( &way.vertices[i].lat, sizeof(int32_t), 1, fOut) == 1, "write error");
-        MUST(fwrite( &way.vertices[i].lng, sizeof(int32_t), 1, fOut) == 1, "write error");
+        int64_t dLat = way.vertices[i].lat - prevLat;
+        int64_t dLng = way.vertices[i].lng - prevLng;
+        prevLat = way.vertices[i].lat;
+        prevLng = way.vertices[i].lng;
+        
+        varIntToFile( dLat, fOut);
+        varIntToFile( dLng, fOut);
     }       
 
     

@@ -45,7 +45,7 @@ public:
     void insertIntoHierarchy( std::vector<Ring*> &hierarchyRoot, uint64_t relId);
 
     void serialize(FILE* fOut, bool reverseVertexOrder) const;
-    uint64_t getSerializedSize() const;
+    uint64_t getSerializedSize(bool reverseVertexOrder) const;
     const geos::geom::Polygon* getPolygon() const;
     
     //const std::vector<uint64_t> & getWayIds() const { return wayIds;}

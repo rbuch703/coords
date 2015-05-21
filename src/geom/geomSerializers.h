@@ -30,18 +30,18 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
         int32_t lng;
         
    2. type == LINE
-        uint32_t numPoints;
+        varUint numPoints;
         'numPoints' times:
-            int32_t lat;
-            int32_t lng;
+            varInt lat; //delta-encoded
+            varInt lng; //delta-encoded
     
    3. type == POLYGON
-        uint32_t numRings;
+        varUint numRings;
         'numRings' times:
-            uint32_t numPoints;
+            varUint numPoints;
             'numPoints' times:
-                int32_t lat;
-                int32_t lng;
+                varInt lat; //delta-encoded
+                varInt lng; //delta-encoded
     
 */
 
