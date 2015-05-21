@@ -78,8 +78,8 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
         prevLat = way.vertices[i].lat;
         prevLng = way.vertices[i].lng;
         
-        sizeTmp += varUintNumBytes(dLat);
-        sizeTmp += varUintNumBytes(dLng);
+        sizeTmp += varIntNumBytes(dLat);
+        sizeTmp += varIntNumBytes(dLng);
     }
                     
     if (asPolygon)

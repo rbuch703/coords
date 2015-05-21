@@ -16,6 +16,7 @@
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
 #include "containers/osmWayStore.h"
+#include "misc/varInt.h"
 
 using namespace std;
 
@@ -429,18 +430,71 @@ void convertWsg84ToWebMercator( GenericGeometry &geom)
 {
     MUST( geom.getFeatureType() == FEATURE_TYPE::POLYGON, "not implemented");
 
-    int32_t* geoPtr = (int32_t*)geom.getGeometryPtr();
+    /* conversion changes value in 'geom' and - since those values are delta-encoded varInts - 
+     * may change the size of 'geom'. So we need to allocate new storage for the output.
+     * Since all 'geom' members compressed may grow at most by a factor of five (one byte before,
+     * encoded (u)int32_t -> 5 bytes after), we need to allocate at most 5 times as much memory
+     * as the original data structure is big. */
+    uint64_t newAllocatedSize = geom.numBytes * 5;
+    uint8_t *newData = new uint8_t[newAllocatedSize];
+    uint8_t *basePtr = geom.bytes;
+    const uint8_t *geoPtr  = geom.getGeometryPtr();
+    int64_t baseSize = geoPtr - basePtr;
+    MUST( baseSize > 0, "logic error");
     
-    uint32_t numRings =  *(geoPtr++);
+    // copy that part of 'geom' that won't change through projection (id, type, tags)
+    memcpy(newData, basePtr, baseSize);
+    
+    uint8_t *newGeoPtr = newData + baseSize;
+    
+    int nRead = 0;
+    //int nWritten=0;
+    uint64_t numRings = varUintFromBytes(geoPtr, &nRead);
+    geoPtr+= nRead;
+    newGeoPtr += varUintToBytes(numRings, newGeoPtr);
             
     while (numRings--)
     {
-        int32_t numPoints = *(geoPtr++);
-        assert(numPoints >= 0 && numPoints < 10000000 && "overflow");
         
-        for (int32_t i = 0; i < numPoints; i++, geoPtr+=2 )
-            convertWsg84ToWebMercator( geoPtr[0], geoPtr[1]);
+        uint64_t numPoints = varUintFromBytes(geoPtr, &nRead);
+        geoPtr += nRead;
+        newGeoPtr += varUintToBytes(numPoints, newGeoPtr);
+        
+        assert(numPoints < 10000000 && "overflow"); //sanity check, not an actual limit
+        
+        int64_t xIn = 0;
+        int64_t yIn = 0;
+        int64_t prevXOut = 0;
+        int64_t prevYOut = 0;
+        while (numPoints-- > 0)
+        {
+            xIn += varIntFromBytes(geoPtr, &nRead); //resolve delta encoding
+            geoPtr += nRead;
+            yIn += varIntFromBytes(geoPtr, &nRead);
+            geoPtr += nRead;
+            
+            MUST( xIn >= INT32_MIN && xIn <= INT32_MAX, "overflow");
+            MUST( yIn >= INT32_MIN && yIn <= INT32_MAX, "overflow");
+            
+            int32_t xOut = xIn;
+            int32_t yOut = yIn;
+            convertWsg84ToWebMercator( xOut, yOut);
+            
+            int64_t dX = xOut - prevXOut;
+            int64_t dY = yOut - prevYOut;
+            newGeoPtr += varIntToBytes(dX, newGeoPtr);
+            newGeoPtr += varIntToBytes(dY, newGeoPtr);
+
+            prevXOut = xOut;
+            prevYOut = yOut;   
+        }
     }
+    uint64_t newSize = newGeoPtr - newData;
+    MUST( newSize <= newAllocatedSize, "overflow");
+    delete [] geom.bytes;
+    geom.bytes = newData;
+    geom.numBytes = newSize;
+    geom.numBytesAllocated = newAllocatedSize;
 }
 
 template <typename T>
