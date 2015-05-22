@@ -15,6 +15,9 @@ int main(int argc, const char** argv)
 {
     assert(argc == 3);
     assert(strlen(argv[1]) == 1);
+    if (argc != 3 || strlen(argv[1]) != 1)
+        exit(EXIT_FAILURE);
+        
     char ch = argv[1][0];
     
     uint64_t relId = atoll(argv[2]);

@@ -38,7 +38,7 @@ FileBackedTile::~FileBackedTile()
     fData = NULL;
 }
 
-void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
+void FileBackedTile::add(OsmLightweightWay &way, const TagDictionary &tags, const Envelope &wayBounds)
 {
     if (fData)
     {
@@ -47,7 +47,7 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
         uint64_t posBefore = ftell(fData);
 #endif*/
         
-        serializeWayAsGeometry(way, false, fData);
+        serializeWayAsGeometry(way.id, way.vertices, way.numVertices, tags, false, fData);
         this->size = ftell(fData);
         //way.serialize(fData);
         //assert( ftell(fData) - posBefore == way.size());
@@ -58,11 +58,11 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds)
     } else 
     {
         assert( topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
-        if (wayBounds.overlapsWith(topLeftChild->bounds)) topLeftChild->add(way, wayBounds);
-        if (wayBounds.overlapsWith(topRightChild->bounds)) topRightChild->add(way, wayBounds);
+        if (wayBounds.overlapsWith(topLeftChild->bounds)) topLeftChild->add(way, tags, wayBounds);
+        if (wayBounds.overlapsWith(topRightChild->bounds)) topRightChild->add(way, tags, wayBounds);
 
-        if (wayBounds.overlapsWith(bottomLeftChild->bounds)) bottomLeftChild->add(way, wayBounds);
-        if (wayBounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(way, wayBounds);
+        if (wayBounds.overlapsWith(bottomLeftChild->bounds)) bottomLeftChild->add(way, tags,  wayBounds);
+        if (wayBounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(way, tags,  wayBounds);
     }
     
 }

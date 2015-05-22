@@ -62,7 +62,6 @@ ADD_EXECUTABLE(coordsResolveStorage
 ADD_EXECUTABLE(coordsCreateTiles
                src/tiler.cc 
                src/tiles.cc 
-               src/misc/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmMappedTypes.cc 
                src/osm/osmBaseTypes.cc
@@ -72,8 +71,10 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/geomSerializers.cc
                src/containers/chunkedFile.cc
                src/containers/osmWayStore.cc
-               src/misc/symbolicNames.cc
+               src/containers/reverseIndex.cc
+               src/misc/mem_map.cc
                src/misc/rawTags.cc
+               src/misc/symbolicNames.cc
                src/misc/varInt.cc
                )
 

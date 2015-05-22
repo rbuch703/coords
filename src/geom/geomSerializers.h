@@ -11,7 +11,10 @@
 
 
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut);
-void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* fOut);
+//void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* fOut);
+void serializeWayAsGeometry(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, 
+                            const TagDictionary &wayTags, bool asPolygon, FILE* fOut);
+
 
 
 

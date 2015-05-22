@@ -14,6 +14,7 @@
 #endif
 
 typedef std::vector< std::pair<std::string, std::string> > Tags;
+typedef std::map< std::string, std::string> TagDictionary;
 
 class RawTags 
 {
@@ -31,7 +32,7 @@ public:
     static uint64_t getSerializedSize( const Tags &tags);
     
     uint64_t getSerializedSize() const;
-    std::map< std::string, std::string> asDictionary() const;
+    TagDictionary asDictionary() const;
 
     class RawTagIterator {
     public:

@@ -48,18 +48,19 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
 }
 
 
-void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* fOut)
+void serializeWayAsGeometry(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, const TagDictionary &wayTags, bool asPolygon, FILE* fOut)
 {
-    OsmGeoPosition v0 = way.vertices[0];
-    OsmGeoPosition vn = way.vertices[way.numVertices-1];
+    OsmGeoPosition v0 = vertices[0];
+    OsmGeoPosition vn = vertices[numVertices-1];
     
     if (asPolygon)
         MUST( v0.lat == vn.lat && v0.lng == vn.lng, "not a ring");
         
     Tags tags;
 
-    for (std::pair<const char*, const char*> kv : way.getTags())
+    for (const OsmKeyValuePair &kv : wayTags)
         tags.push_back( std::make_pair( kv.first, kv.second));
+        
     uint64_t tagsSize = RawTags::getSerializedSize(tags);
     
     uint64_t sizeTmp = 
@@ -67,16 +68,16 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
         sizeof(uint64_t) + // 'id' field
         varUintNumBytes(tagsSize) +
         tagsSize + //tags size
-        varUintNumBytes(way.numVertices);
+        varUintNumBytes(numVertices);
         
     int64_t prevLat = 0;
     int64_t prevLng = 0;
-    for (int i = 0; i < way.numVertices; i++)
+    for (uint64_t i = 0; i < numVertices; i++)
     {
-        int64_t dLat = way.vertices[i].lat - prevLat;
-        int64_t dLng = way.vertices[i].lng - prevLng;
-        prevLat = way.vertices[i].lat;
-        prevLng = way.vertices[i].lng;
+        int64_t dLat = vertices[i].lat - prevLat;
+        int64_t dLng = vertices[i].lng - prevLng;
+        prevLat = vertices[i].lat;
+        prevLng = vertices[i].lng;
         
         sizeTmp += varIntNumBytes(dLat);
         sizeTmp += varIntNumBytes(dLng);
@@ -92,23 +93,23 @@ void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* 
     
     FEATURE_TYPE ft = asPolygon ? FEATURE_TYPE::POLYGON : FEATURE_TYPE::LINE;
     MUST(fwrite( &ft,    sizeof(ft),    1, fOut) == 1, "write error");
-    MUST(fwrite( &way.id, sizeof(way.id), 1, fOut) == 1, "write error");
+    MUST(fwrite( &wayId, sizeof(wayId), 1, fOut) == 1, "write error");
     
     RawTags::serialize(tags, fOut);
 
     if (asPolygon)
         varUintToFile(1, fOut); // ways only consist of a single outer ring (no inner rings)
 
-    varUintToFile(way.numVertices, fOut);
+    varUintToFile(numVertices, fOut);
     
     prevLat = 0;
     prevLng = 0;
-    for (int i = 0; i < way.numVertices; i++)
+    for (uint64_t i = 0; i < numVertices; i++)
     {
-        int64_t dLat = way.vertices[i].lat - prevLat;
-        int64_t dLng = way.vertices[i].lng - prevLng;
-        prevLat = way.vertices[i].lat;
-        prevLng = way.vertices[i].lng;
+        int64_t dLat = vertices[i].lat - prevLat;
+        int64_t dLng = vertices[i].lng - prevLng;
+        prevLat = vertices[i].lat;
+        prevLng = vertices[i].lng;
         
         varIntToFile( dLat, fOut);
         varIntToFile( dLng, fOut);

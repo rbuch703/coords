@@ -11,11 +11,12 @@
 #include <set>
 
 #include "tiles.h"
-#include "misc/escapeSequences.h"
 #include "osm/osmTypes.h"
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
 #include "containers/osmWayStore.h"
+#include "containers/reverseIndex.h"
+#include "misc/escapeSequences.h"
 #include "misc/varInt.h"
 
 using namespace std;
@@ -511,6 +512,75 @@ std::set<T> getSetFromFileEntries(std::string filename)
     fclose(f);
     return res;
 }
+
+uint64_t tryParse(const char* s, uint64_t defaultValue)
+{
+    uint64_t res = 0;
+    for ( ; *s != '\0'; s++)
+    {
+        if ( *s < '0' || *s > '9') return defaultValue;
+        res = (res * 10) + ( *s - '0');
+        
+    }
+    return res;
+}
+
+/* addBoundaryTags() adds tags from boundary relations that refer to a way to said way.
+   Since a way may be part of multiple boundary relations (e.g. country boundaries are usually
+   also the boundaries of a state inside that country), care must be taken when multiple referring
+   relations are about to add the same tags to a way.
+   
+   Algorithm: the admin_level of the way is determined (if it has one itself, otherwise
+              the dummy value 0xFFFF is used). Afterwards,
+              the tags from all boundary relations are added as follows: when a relation
+              has a numerically smaller (or equal) admin level to that of the way
+              (i.e. it is a more important boundary), all of its tags are added to the way
+              (even if that means overwriting existing tags) and the way's admin level is
+              updated. If the relation has a less important admin level, only those of its
+              tags are added to the way that do not overwrite existing tags.
+
+  */
+
+void addBoundaryTags( TagDictionary &tags, const vector<uint64_t> &referencingRelations, 
+                      const map<uint64_t, TagDictionary> &boundaryTags/*, uint64_t wayId*/)
+{
+
+    uint64_t adminLevel = tags.count("admin_level") ? tryParse(tags["admin_level"].c_str(), 0xFFFF) : 0xFFFF;
+    //cout << "admin level is " << adminLevel << endl;
+
+    for ( uint64_t relId : referencingRelations)
+    {
+        if (!boundaryTags.count(relId))
+            continue;
+            
+        const TagDictionary &relationTags = boundaryTags.at(relId);
+        uint64_t relationAdminLevel = relationTags.count("admin_level") ?
+                                      tryParse(relationTags.at("admin_level").c_str(), 0xFFFF) :
+                                      0xFFFF;
+        
+        for ( const OsmKeyValuePair &kv : relationTags)
+        {
+            /* is only the relation type marking the relation as a boundary. This was already
+             * processed when creating the boundaryTags map, and need not be considered further*/
+            if (kv.first == "type")
+                continue;
+                
+            if ( ! tags.count(kv.first))    //add if not already exists
+                tags.insert( kv);
+            else if (relationAdminLevel <= adminLevel)  //overwrite only if from a more important boundary
+                tags[kv.first] = kv.second;
+            
+        }
+
+        if (relationAdminLevel < adminLevel)
+        {
+            adminLevel = relationAdminLevel;
+            //cout << "\tadmin level is now " << adminLevel << endl;
+            //assert(adminLevel != 1024);
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
@@ -584,6 +654,28 @@ int main(int argc, char** argv)
     
     fclose(f); 
 
+    map< uint64_t, TagDictionary> boundaryRelationTags;
+    f = fopen( (storageDirectory+"boundaries.bin").c_str(), "rb");
+    MUST(f != NULL, "cannot open file");
+    {
+        uint64_t relId;
+        while (fread( &relId, sizeof(relId), 1, f) == 1)
+        {
+            uint64_t nBytes;
+            MUST( fread(&nBytes, sizeof(nBytes), 1, f) == 1, "read error");
+            uint8_t *bytes = new uint8_t[nBytes];
+            MUST( fread(bytes, nBytes, 1, f) == 1, "read error");
+            RawTags tags(bytes);
+            
+            MUST( ! boundaryRelationTags.count(relId), "duplicate boundary relation");
+            boundaryRelationTags.insert(make_pair(relId, tags.asDictionary()));
+            delete [] bytes;
+        }
+    }
+    
+    ReverseIndex wayReverseIndex(storageDirectory + "wayReverse", false);
+    cerr << "loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
+    
     // the IDs of ways that serve as outer ways of multipolygons.
     std::set<uint64_t> outerWayIds = getSetFromFileEntries<uint64_t>(storageDirectory + "outerWayIds.bin");
     std::cout << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      
@@ -598,7 +690,33 @@ int main(int argc, char** argv)
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
 
-        RawTags tags = way.getTags();
+        TagDictionary tags = way.getTags().asDictionary();
+        
+        /*cout << "tags before: " << endl;
+        for (OsmKeyValuePair kv : tags)
+            cout << "\t" << kv.first << " -> " << kv.second << endl;*/
+        if (wayReverseIndex.isReferenced(way.id))
+        {
+            vector<uint64_t> relationIds = wayReverseIndex.getReferencingRelations(way.id);
+            uint64_t i = 0;
+            while (i < relationIds.size())
+            {
+                if (! boundaryRelationTags.count(relationIds[i]))
+                {
+                    relationIds[i] = relationIds.back();
+                    relationIds.pop_back();
+                } else
+                    i++;
+            }
+            
+            if (relationIds.size() > 0)
+                addBoundaryTags( tags, relationIds, boundaryRelationTags/*, way.id*/ );
+        }
+        /*cout << "tags after: " << endl;
+        for (OsmKeyValuePair kv : tags)
+            cout << "\t" << kv.first << " -> " << kv.second << endl;*/
+        
+        
         if ( isArea( tags, way.vertices[0] == way.vertices[way.numVertices-1]) )
         {
             /* Area tags on multipolygons' outer ways are pointless, as is the multipolygon
@@ -613,12 +731,12 @@ int main(int argc, char** argv)
                     cerr << ESC_FG_YELLOW << "[WARN] way " << way.id << " has area tags, but is "
                          << "not a closed area. Skipping it." << ESC_RESET << endl;
                 else
-                    areaStorage.add(way, way.getBounds());
+                    areaStorage.add(way, tags, way.getBounds());
             }
         }   
         
         if ( hasLineTag( tags))
-            lineStorage.add(way, way.getBounds());
+            lineStorage.add(way, tags, way.getBounds());
         
         numWays += 1;
 
