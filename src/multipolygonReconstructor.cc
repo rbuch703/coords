@@ -27,7 +27,7 @@
 #include "geom/ringAssembler.h"
 #include "geom/genericGeometry.h"
 #include "geom/geomSerializers.h"
-#include "escapeSequences.h"
+#include "misc/escapeSequences.h"
 
 using namespace std;
 
@@ -451,10 +451,10 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
     
     if (tags.size())
         cerr << ESC_FG_YELLOW << "[WARN] relation " << rel.id << " has no tags. Using those tags"
-             << " that its outer ways agree on." << ESC_FG_RESET  << endl;
+             << " that its outer ways agree on." << ESC_RESET  << endl;
      else
         cerr << ESC_FG_RED << "[WARN] relation " << rel.id << " has no tags even after heuristic"
-             << " members tag-merging." << ESC_FG_RESET << endl;
+             << " members tag-merging." << ESC_RESET << endl;
 
     return tags;
 }
@@ -513,7 +513,7 @@ int main()
                 if (ringAssembler.hasOpenRingSegments())
                     cerr << ESC_FG_YELLOW << "\tnot all open rings could be closed "
                          << "heuristically. Will ignore any ring that is still open" 
-                         << ESC_FG_RESET << endl;
+                         << ESC_RESET << endl;
             }
             
             vector<Ring*> multipolygonRings;
@@ -530,7 +530,7 @@ int main()
                     
                     cerr << ESC_FG_YELLOW << "[WARN] multipolygon ring in relation " << rel.id 
                          << " based on ways (" << wayIds << ") has less then four vertices;"
-                         << " skipping it." << ESC_FG_RESET <<endl;
+                         << " skipping it." << ESC_RESET <<endl;
                     continue;
                 }
                 

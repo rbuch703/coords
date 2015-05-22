@@ -12,7 +12,7 @@
 #include <geos/geom/IntersectionMatrix.h>
 
 #include "ring.h"
-#include "escapeSequences.h"
+#include "misc/escapeSequences.h"
 #include "misc/varInt.h"
 
 
@@ -350,7 +350,7 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
     {
         std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId << ": merging rings "
          << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
-         << " as 'difference B-A'" << ESC_FG_RESET << std::endl;
+         << " as 'difference B-A'" << ESC_RESET << std::endl;
         /* if 'ring' lies completely within 'ring2', but they share an outer edge.
          * 'ring' is likely to be supposed to be subtracted */
         joined = ring2->getPolygon()->difference(ring1->getPolygon());
@@ -359,7 +359,7 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
     {
         std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId << ": merging rings "
          << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
-         << " as 'difference A-B'" << ESC_FG_RESET << std::endl;
+         << " as 'difference A-B'" << ESC_RESET << std::endl;
         joined = ring1->getPolygon()->difference(ring2->getPolygon());
     } else
         /* generic overlap: either both rings only share an edge (but no interior),
@@ -370,11 +370,11 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
         if (mat->isOverlaps(2,2))
             std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId << ": merging rings "
          << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
-         << " as 'union of overlaps'" << ESC_FG_RESET  << std::endl;
+         << " as 'union of overlaps'" << ESC_RESET  << std::endl;
          
         // non-overlapping adjacent (inner) rings are allowed by the OSM multipolygon spec
         //else
-        //    std::cerr << "'union'"  << ESC_FG_RESET << std::endl;
+        //    std::cerr << "'union'"  << ESC_RESET << std::endl;
 
         joined = ring1->getPolygon()->Union(ring2->getPolygon());
         MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
@@ -424,7 +424,7 @@ void Ring::insertIntoHierarchy( std::vector<Ring*> &hierarchyRoot, uint64_t relI
         if ( root->interiorIntersectsWith(*this))
         {
             std::cerr << ESC_FG_YELLOW << "[WARN] overlapping rings found in relation " 
-                      << relId << ", merging them." << ESC_FG_RESET << std::endl;
+                      << relId << ", merging them." << ESC_RESET << std::endl;
             std::cerr << "\tRing 1: ways " << root->wayIds << std::endl;
             std::cerr << "\tRing 2: ways " << this->wayIds << std::endl;
 
@@ -432,7 +432,7 @@ void Ring::insertIntoHierarchy( std::vector<Ring*> &hierarchyRoot, uint64_t relI
             wayIds.insert( wayIds.end(), this->wayIds.begin(), this->wayIds.end() );
 
             std::cerr << ESC_FG_RED << "Merging overlapping rings in relation " << relId 
-                      << ESC_FG_RESET << std::endl;
+                      << ESC_RESET << std::endl;
             geos::geom::Geometry *merged = root->getPolygon()->Union(this->getPolygon());
             MUST( merged->getGeometryTypeId() == geos::geom::GEOS_POLYGON, "merge error");
 

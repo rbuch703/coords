@@ -3,7 +3,7 @@
 #include <iostream>
 #include <set>
 
-#include "escapeSequences.h"
+#include "misc/escapeSequences.h"
 #include "ringAssembler.h"
 
 void RingAssembler::addWay( const OsmLightweightWay &way) 
@@ -67,7 +67,7 @@ void RingAssembler::warnUnconnectedNodes(uint64_t relId) const
             std::cerr << ESC_FG_GRAY << "\t- node " << kv.first.id << " at way sequence ";
             for (uint64_t wayId : kv.second->getWayIdsRecursive())
                 std::cerr << wayId << ", ";
-            std::cerr << ESC_FG_RESET << std::endl;
+            std::cerr << ESC_RESET << std::endl;
         }
     }
 }
@@ -103,7 +103,7 @@ void RingAssembler::tryCloseOpenSegments( double maxConnectionDistance)
         }
             
         std::cerr << ESC_FG_GREEN << "\tfound end point pair with distance " << minDist 
-                  << ESC_FG_RESET << std::endl;
+                  << ESC_RESET << std::endl;
         
         MUST( openEndPoints.count(ep1) && openEndPoints.count(ep2), "invalid endpoint");
         
@@ -219,7 +219,7 @@ static bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const std::ma
         std::cerr << ESC_FG_GRAY << "[INFO]" << " ref to id=" << mbr.ref << " of invalid type '"
              << (mbr.type == OSM_ENTITY_TYPE::NODE ? "node" : 
                  mbr.type == OSM_ENTITY_TYPE::RELATION ? "relation" : "<unknown>" )
-             << "' in multipolygon relation " << relationId << ESC_FG_RESET << std::endl;
+             << "' in multipolygon relation " << relationId << ESC_RESET << std::endl;
         return false;
     }
     
@@ -258,7 +258,7 @@ RingAssembler RingAssembler::fromRelation( OsmRelation &rel,
             {
                 std::cerr << ESC_FG_YELLOW << "[WARN] relation " << rel.id << " contains way "
                      << mbr.ref << " multiple times. Skipping all but the first "
-                     << "occurrence." << ESC_FG_RESET << std::endl;
+                     << "occurrence." << ESC_RESET << std::endl;
                 continue;
             }
             

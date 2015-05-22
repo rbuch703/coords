@@ -11,7 +11,7 @@
 #include <set>
 
 #include "tiles.h"
-#include "escapeSequences.h"
+#include "misc/escapeSequences.h"
 #include "osm/osmTypes.h"
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
@@ -369,6 +369,7 @@ bool isArea( const T &tags, bool geometryIsClosedArea )
         }
         
         if (tag.first == "water" && tag.second == "riverbank") return true;
+        if (tag.first == "waterway" && geometryIsClosedArea) return true;
         if (tag.first == "amenity" && geometryIsClosedArea) return true;
         if (tag.first == "leisure") 
         {
@@ -610,7 +611,7 @@ int main(int argc, char** argv)
             {
                 if (way.vertices[0] != way.vertices[way.numVertices-1])
                     cerr << ESC_FG_YELLOW << "[WARN] way " << way.id << " has area tags, but is "
-                         << "not a closed area. Skipping it." << ESC_FG_RESET << endl;
+                         << "not a closed area. Skipping it." << ESC_RESET << endl;
                 else
                     areaStorage.add(way, way.getBounds());
             }
