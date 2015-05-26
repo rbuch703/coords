@@ -9,6 +9,7 @@
 #include "consumers/osmConsumerCounter.h"
 #include "consumers/osmConsumerDumper.h"
 #include "consumers/osmConsumerIdRemapper.h"
+#include "misc/cleanup.h"
 #include "osm/osmParserPbf.h"
 //#include "osm/osmParserXml.h"
 
@@ -38,11 +39,46 @@ int parseArguments(int argc, char** argv)
     return optind;
 }
 
-void deleteFileIfExists(std::string filename)
+void cleanupDestination(const std::string &storageDirectory)
 {
-    int res = unlink(filename.c_str());
-    MUST(res == 0 || errno == ENOENT, "cannot access file");
+
+    // multipolygons and list of 'outer' ways of multipolygons
+    deleteIfExists(storageDirectory, "multipolygons.bin");
+    deleteIfExists(storageDirectory, "outerWayIds.bin");
+
+    //remap tables
+    deleteIfExists(storageDirectory, "mapNodes.idx");
+    deleteIfExists(storageDirectory, "mapRelations.idx");
+    deleteIfExists(storageDirectory, "mapWays.idx");
+
+    //reverse indices
+    deleteIfExists(storageDirectory, "nodeReverse.aux");
+    deleteIfExists(storageDirectory, "nodeReverse.idx");
+    deleteIfExists(storageDirectory, "wayReverse.aux");
+    deleteIfExists(storageDirectory, "wayReverse.idx");
+    deleteIfExists(storageDirectory, "relationReverse.aux");
+    deleteIfExists(storageDirectory, "relationReverse.idx");
+
+    // osm entity data, indices and free chunk files
+    deleteIfExists(storageDirectory, "nodes.data");
+    deleteIfExists(storageDirectory, "nodes.data.free");
+    deleteIfExists(storageDirectory, "nodes.idx");
+    deleteIfExists(storageDirectory, "ways.data");
+    deleteIfExists(storageDirectory, "ways.data.free");
+    deleteIfExists(storageDirectory, "ways.idx");
+    deleteIfExists(storageDirectory, "relations.data");
+    deleteIfExists(storageDirectory, "relations.data.free");
+    deleteIfExists(storageDirectory, "relations.idx");
+
+    // raw vertex data
+    deleteIfExists(storageDirectory, "vertices.data");
+ 
+    // bucket files
+    deleteNumberedFiles(storageDirectory, "nodeRefs", ".raw");
+    deleteNumberedFiles(storageDirectory, "nodeRefsResolved", ".raw");
+    deleteNumberedFiles(storageDirectory, "referencedWays", ".raw");
 }
+
 
 int main(int argc, char** argv)
 {
@@ -86,21 +122,8 @@ int main(int argc, char** argv)
     if (destinationDirectory.back() != '/' && destinationDirectory.back() != '\\')
         destinationDirectory += "/";
     
-    //remove leftover files from earlier runs:
-    // - remap files
-    deleteFileIfExists(destinationDirectory + "mapNodes.idx"    );
-    deleteFileIfExists(destinationDirectory + "mapRelations.idx");
-    deleteFileIfExists(destinationDirectory + "mapWays.idx"     );
 
-    // - reverse indices
-    deleteFileIfExists(destinationDirectory + "nodeReverse.idx"    );
-    deleteFileIfExists(destinationDirectory + "nodeReverse.aux"    );
-    deleteFileIfExists(destinationDirectory + "wayReverse.idx"     );
-    deleteFileIfExists(destinationDirectory + "wayReverse.aux"     );
-    deleteFileIfExists(destinationDirectory + "relationReverse.idx");
-    deleteFileIfExists(destinationDirectory + "relationReverse.aux");
-
-    
+    cleanupDestination(destinationDirectory);
 
     MUST(nextArgumentIndex < argc, "argv index out of bounds");
     

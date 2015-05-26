@@ -17,6 +17,7 @@
 #include "containers/osmWayStore.h"
 #include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
+#include "misc/cleanup.h"
 #include "misc/escapeSequences.h"
 #include "misc/varInt.h"
 
@@ -400,7 +401,7 @@ bool hasLineTag( const T &tags)
 static const double INT_TO_LAT_LNG = 1/10000000.0;
 static const double INT_TO_MERCATOR_METERS = 1/100.0;
 
-static const double HALF_EARTH_CIRCUMFERENCE = 20037508.34; // ~ 20037km
+static const double HALF_EARTH_CIRCUMFERENCE = 20037508.3428; // ~ 20037km
 static const double PI = 3.141592653589793;
 
 static inline void convertWsg84ToWebMercator( int32_t &lat, int32_t &lng)
@@ -601,6 +602,16 @@ map<uint64_t, TagDictionary> getBoundaryRelationTags(const string &storageDirect
     return res;
 }
 
+void cleanupTileDirectory(const std::string tileDirectory)
+{
+    deleteNumberedFiles(tileDirectory, "area", "");
+    deleteIfExists(     tileDirectory, "area");
+    
+    deleteNumberedFiles(tileDirectory, "line", "");
+    deleteIfExists(     tileDirectory, "line");
+}
+
+
 int main(int argc, char** argv)
 {
     usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
@@ -621,6 +632,7 @@ int main(int argc, char** argv)
         destinationDirectory += "/";
 
     ensureDirectoryExists(destinationDirectory);
+    cleanupTileDirectory( destinationDirectory);
     
     /*Envelope worldBounds = { .latMin = -900000000, .latMax = 900000000, 
                              .lngMin = -1800000000,.lngMin = 1800000000};*/

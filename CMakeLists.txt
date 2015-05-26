@@ -29,6 +29,7 @@ ADD_EXECUTABLE(coordsCreateStorage
     src/misc/rawTags.cc
     src/misc/symbolicNames.cc
     src/misc/varInt.cc
+    src/misc/cleanup.cc
     src/consumers/osmConsumer.cc 
     src/consumers/osmConsumerCounter.cc
     src/consumers/osmConsumerDumper.cc 
@@ -73,6 +74,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/containers/osmWayStore.cc
                src/containers/osmRelationStore.cc
                src/containers/reverseIndex.cc
+               src/misc/cleanup.cc
                src/misc/mem_map.cc
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
