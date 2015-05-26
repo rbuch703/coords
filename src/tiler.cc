@@ -15,6 +15,7 @@
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
 #include "containers/osmWayStore.h"
+#include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
 #include "misc/escapeSequences.h"
 #include "misc/varInt.h"
@@ -581,6 +582,25 @@ void addBoundaryTags( TagDictionary &tags, const vector<uint64_t> &referencingRe
     }
 }
 
+map<uint64_t, TagDictionary> getBoundaryRelationTags(const string &storageDirectory)
+{
+    map<uint64_t, TagDictionary> res;
+    
+    RelationStore relStore(storageDirectory + "relations");
+    for (OsmRelation rel : relStore)
+    {
+        TagDictionary tags(rel.tags.begin(), rel.tags.end());
+
+        if (tags.count("type") && tags["type"] == "boundary")
+        {
+            res.insert( make_pair(rel.id, tags) );
+            //cerr << ESC_FG_BLUE << "relation " << rel.id 
+            ///     << " is a boundary" << ESC_RESET << endl;
+        }
+    }
+    return res;
+}
+
 int main(int argc, char** argv)
 {
     usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
@@ -654,25 +674,8 @@ int main(int argc, char** argv)
     
     fclose(f); 
 
-    map< uint64_t, TagDictionary> boundaryRelationTags;
-    f = fopen( (storageDirectory+"boundaries.bin").c_str(), "rb");
-    MUST(f != NULL, "cannot open file");
-    {
-        uint64_t relId;
-        while (fread( &relId, sizeof(relId), 1, f) == 1)
-        {
-            uint64_t nBytes;
-            MUST( fread(&nBytes, sizeof(nBytes), 1, f) == 1, "read error");
-            uint8_t *bytes = new uint8_t[nBytes];
-            MUST( fread(bytes, nBytes, 1, f) == 1, "read error");
-            RawTags tags(bytes);
-            
-            MUST( ! boundaryRelationTags.count(relId), "duplicate boundary relation");
-            boundaryRelationTags.insert(make_pair(relId, tags.asDictionary()));
-            delete [] bytes;
-        }
-    }
-    
+    map< uint64_t, TagDictionary> boundaryRelationTags = getBoundaryRelationTags(storageDirectory);
+        
     ReverseIndex wayReverseIndex(storageDirectory + "wayReverse", false);
     cerr << "loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
     

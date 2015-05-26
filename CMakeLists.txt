@@ -71,6 +71,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/geomSerializers.cc
                src/containers/chunkedFile.cc
                src/containers/osmWayStore.cc
+               src/containers/osmRelationStore.cc
                src/containers/reverseIndex.cc
                src/misc/mem_map.cc
                src/misc/rawTags.cc

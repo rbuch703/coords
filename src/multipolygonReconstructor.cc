@@ -28,7 +28,7 @@
 #include "geom/genericGeometry.h"
 #include "geom/geomSerializers.h"
 #include "misc/escapeSequences.h"
-#include "misc/varInt.h"
+//#include "misc/varInt.h"
 
 using namespace std;
 
@@ -468,9 +468,6 @@ int main()
     FILE* fOuterWayIds = fopen("intermediate/outerWayIds.bin", "wb");
     MUST( fOuterWayIds, "cannot open output file");
 
-    FILE* fOutBoundaries = fopen("intermediate/boundaries.bin", "wb");
-    MUST( fOutBoundaries, "cannot open output file");
-
 
     RelationStore relStore("intermediate"/*"/multipolygon_world"*/"/relations");
     
@@ -505,20 +502,6 @@ int main()
                 
             OsmRelation rel = relStore[relId];
             map<string, string> tags(rel.tags.begin(), rel.tags.end());
-            if (tags.count("type") && tags["type"] == "boundary")
-            {
-                //cerr << ESC_FG_BLUE << "relation " << rel.id 
-                ///     << " is a boundary" << ESC_RESET << endl;
-                MUST(fwrite(&rel.id, sizeof(rel.id), 1, fOutBoundaries) == 1, "write error");
-                uint64_t size = RawTags::getSerializedSize(rel.tags);
-                size += varUintNumBytes(size);
-                
-                MUST(fwrite(&size, sizeof(size), 1, fOutBoundaries) == 1, "write error");
-                RawTags::serialize(rel.tags, fOutBoundaries);
-                
-                //for ( const OsmKeyValuePair &kv : rel.tags)
-                //    boundaryKeys.insert(kv.first);
-            }
         
             if ((! tags.count("type")) || (tags["type"] != "multipolygon"))
                 continue;
