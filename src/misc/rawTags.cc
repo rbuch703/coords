@@ -87,92 +87,56 @@ std::map< std::string, std::string> RawTags::asDictionary() const
     return res;
 }
 
-
 void RawTags::serialize(const Tags &tags, FILE* fOut)
 {
-    uint8_t conv[10];
-    uint64_t numBytes = getSerializedSize(tags);
-    int nBytes = varUintToBytes(numBytes, conv);
-    MUST(fwrite( conv, nBytes, 1, fOut) == 1, "write error");
-
-    int64_t filePos = ftell(fOut);
-
-    nBytes = varUintToBytes(tags.size(), conv);
-    MUST(fwrite( conv,  nBytes,  1, fOut) == 1, "write error");
-
-    if ( tags.size() == 0)
-        return;
-        
-    uint64_t numNames = tags.size() * 2;    //one key, one value
-    uint64_t bitfieldSize = (numNames + 7) / 8; //one bit per name --> have to round up
-    uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
-    memset(isSymbolicName, 0, bitfieldSize);
+    uint64_t numBytes = 0;
+    uint8_t *bytes = serialize(tags, &numBytes);
     
-    int idx = 0;
-    for ( const std::pair<std::string, std::string> &kv : tags)
-    {
-        int byteIdx = idx / 8;
-        int bitIdx  = 7 - (idx % 8);
-        if (symbolicNameId.count(kv.first))
-            isSymbolicName[byteIdx] |= (1 << bitIdx);
-        
-        MUST( bitIdx > 0, "logic error");
-        bitIdx -= 1;
-
-        if (symbolicNameId.count(kv.second))
-            isSymbolicName[byteIdx] |= (1 << bitIdx);
-        
-        idx += 2;
-    }
-    
-    if (bitfieldSize)
-    {
-        MUST( fwrite( isSymbolicName, bitfieldSize, 1, fOut) == 1, "write error");
-    }
-    
-    delete [] isSymbolicName;
-    
-    for (const std::pair<std::string, std::string> &kv : tags)
-    {
-        if (symbolicNameId.count(kv.first))
-        {
-            uint8_t symbolicId = symbolicNameId.at(kv.first);
-            MUST( fwrite( &symbolicId, sizeof(symbolicId), 1, fOut) == 1, "write error");
-        } else
-        {
-            const char* key = kv.first.c_str();
-            MUST( fwrite( key, strlen(key)+1, 1, fOut) == 1, "write error");
-        }
-        
-        if (symbolicNameId.count(kv.second))
-        {
-            uint8_t symbolicId = symbolicNameId.at(kv.second);
-            MUST( fwrite( &symbolicId, sizeof(symbolicId), 1, fOut) == 1, "write error");
-        } else
-        {
-            const char* val = kv.second.c_str();
-            MUST( fwrite( val, strlen(val)+1, 1, fOut) == 1, "write error");
-        }
-    }
-    
-    MUST( ftell(fOut) == filePos + (int64_t)numBytes, "tag set size mismatch");
-
+    MUST( fwrite(bytes, numBytes, 1, fOut) == 1, "write error");
+    delete [] bytes;
 }
 
 #ifndef COORDS_MAPNIK_PLUGIN
 void RawTags::serialize(const Tags &tags, Chunk& chunk)
 {
-    uint8_t bytes[10];
-    int nBytes = varUintToBytes(getSerializedSize(tags), bytes);
-    chunk.put(bytes, nBytes);
+    uint64_t numBytes = 0;
+    uint8_t *bytes = serialize(tags, &numBytes);
+    
+    chunk.put(bytes, numBytes);
+    delete [] bytes;
+}
+#endif
 
-    nBytes = varUintToBytes(tags.size(), bytes);
-    chunk.put(bytes, nBytes);
 
+uint8_t* RawTags::serialize( const Tags &tags, uint64_t *numBytesOut)
+{
+    uint64_t numBytes = getSerializedSize(tags);
+    uint64_t numBytesIncludingSizeField = numBytes + varUintNumBytes(numBytes);
+    if (numBytesOut)
+        *numBytesOut = numBytesIncludingSizeField;
+        
+    uint8_t *outBuf = new uint8_t[numBytesIncludingSizeField];
+    uint8_t *outPos = outBuf;
+    
+    outPos += varUintToBytes(numBytes, outPos);
+    uint8_t *outStart = outPos; //byte at which the memory area of size 'numBytes' starts
+
+    outPos += varUintToBytes(tags.size(), outPos);
+
+    if ( tags.size() == 0)
+    {
+        MUST( outPos - outStart == (int64_t)numBytes, "tag set size mismatch");
+        MUST( outPos - outBuf   == (int64_t)numBytesIncludingSizeField, "tag set size mismatch");
+
+        return outBuf;
+    }
+        
     uint64_t numNames = tags.size() * 2;    //one key, one value
-    uint64_t bitfieldSize = (numNames +7) / 8; //one bit per name --> have to round up
-    uint8_t *isSymbolicName = new uint8_t[bitfieldSize];
+    uint64_t bitfieldSize = (numNames + 7) / 8; //one bit per name --> have to round up
+    uint8_t *isSymbolicName = outPos;
     memset(isSymbolicName, 0, bitfieldSize);
+
+    outPos += bitfieldSize;
     
     int idx = 0;
     for ( const std::pair<std::string, std::string> &kv : tags)
@@ -180,45 +144,40 @@ void RawTags::serialize(const Tags &tags, Chunk& chunk)
         int byteIdx = idx / 8;
         int bitIdx  = 7 - (idx % 8);
         if (symbolicNameId.count(kv.first))
+        {
             isSymbolicName[byteIdx] |= (1 << bitIdx);
+            *(outPos++) = symbolicNameId.at(kv.first);
+        } else
+        {
+            const char* key = kv.first.c_str();
+            int terminatedLength = strlen(key) + 1;
+            memcpy(outPos, key, terminatedLength);
+            outPos += terminatedLength;
+        }
         
         MUST( bitIdx > 0, "logic error");
         bitIdx -= 1;
 
         if (symbolicNameId.count(kv.second))
+        {
             isSymbolicName[byteIdx] |= (1 << bitIdx);
-        
-        idx += 2;
-    }
-    
-    if (bitfieldSize)
-        chunk.put(isSymbolicName, bitfieldSize);
-    
-    delete [] isSymbolicName;
-    
-    for (const std::pair<std::string, std::string> &kv : tags)
-    {
-        if (symbolicNameId.count(kv.first))
-        {
-            chunk.put<uint8_t>( symbolicNameId.at(kv.first) );
-        } else
-        {
-            const char* key = kv.first.c_str();
-            chunk.put( key, strlen(key)+1 );
-        }
-        
-        if (symbolicNameId.count(kv.second))
-        {
-            chunk.put<uint8_t>( symbolicNameId.at(kv.second) );
+            *(outPos++) = symbolicNameId.at(kv.second);
         } else
         {
             const char* val = kv.second.c_str();
-            chunk.put( val, strlen(val)+1);
+            int terminatedLength = strlen(val) + 1;
+            memcpy(outPos, val, terminatedLength);
+            outPos += terminatedLength;
         }
+        
+        idx += 2;
     }
-}
-#endif
 
+    MUST( outPos - outStart == (int64_t)numBytes, "tag set size mismatch");
+    MUST( outPos - outBuf   == (int64_t)numBytesIncludingSizeField, "tag set size mismatch");
+
+    return outBuf;
+}
 
 RawTags::RawTagIterator::RawTagIterator(const uint8_t* symbolicNameBits, 
                                         const uint8_t *tagsAtPos, uint64_t pos):

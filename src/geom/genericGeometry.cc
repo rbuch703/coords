@@ -70,6 +70,21 @@ GenericGeometry::GenericGeometry(): numBytes(0), numBytesAllocated(0), bytes(nul
 #endif
 
 
+GenericGeometry::GenericGeometry(uint8_t *bytes, uint32_t numBytes, bool takeOwnership)
+{
+    this->numBytes = numBytes;
+    this->numBytesAllocated = numBytes;
+
+    if (takeOwnership)
+    {
+        this->bytes = bytes;
+    } else
+    {
+        this->bytes = new uint8_t[numBytes];
+        memcpy( this->bytes, bytes, numBytes);
+    }
+}
+
 void GenericGeometry::init(FILE* f, bool avoidRealloc)
 {
     MUST(fread( &this->numBytes, sizeof(uint32_t), 1, f) == 1, "feature read error");
@@ -128,6 +143,12 @@ OSM_ENTITY_TYPE GenericGeometry::getEntityType() const
             MUST(false, "invalid FEATURE_TYPE");
             break;
     }
+}
+
+void GenericGeometry::serialize(FILE* f) const
+{
+    MUST( fwrite(&this->numBytes, sizeof(uint32_t), 1, f) == 1, "write error");
+    MUST( fwrite(this->bytes, this->numBytes, 1, f) == 1, "write error");
 }
 
 uint64_t GenericGeometry::getEntityId() const 
@@ -211,6 +232,15 @@ Envelope GenericGeometry::getPolygonBounds() const
     MUST( ringStart == beyond, "geometry size mismatch");
     return env;
 
+}
+
+bool GenericGeometry::hasMultipleRings() const
+{
+    if (this->getFeatureType() != FEATURE_TYPE::POLYGON)
+        return false;
+        
+    const uint8_t* geo = getGeometryPtr();
+    return varUintFromBytes( geo, nullptr);
 }
 
 

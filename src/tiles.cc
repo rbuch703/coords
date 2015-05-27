@@ -46,12 +46,9 @@ void FileBackedTile::add(OsmLightweightWay &way, const TagDictionary &tags, cons
 /*#ifndef NDEBUG
         uint64_t posBefore = ftell(fData);
 #endif*/
-        
-        serializeWayAsGeometry(way.id, way.vertices, way.numVertices, tags, false, fData);
+
+        serializeWay(way.id, way.vertices, way.numVertices, tags, false).serialize(fData);
         this->size = ftell(fData);
-        //way.serialize(fData);
-        //assert( ftell(fData) - posBefore == way.size());
-        //size += way.size();
 
         if ( (uint64_t)ftell(fData) > maxNodeSize)
             subdivide();

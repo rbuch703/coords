@@ -11,5 +11,7 @@ void deleteNumberedFiles(const std::string &storageDirectory,
                          const std::string &prefix, 
                          const std::string &suffix);
 
+void ensureDirectoryExists(const std::string &directory);
+
 #endif
 

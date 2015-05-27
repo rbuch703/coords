@@ -4,17 +4,23 @@
 
 #include "osm/osmMappedTypes.h"
 #include "geom/ring.h"
+#include "geom/genericGeometry.h"
 #include "misc/rawTags.h"
+
+//#include <geos/geom/Geometry.h>
 
 #include <string>
 #include <map>
 
+//forward declaration
+namespace geos { namespace geom { class Geometry; } }
 
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut);
-//void serializeWayAsGeometry(const OsmLightweightWay &way, bool asPolygon, FILE* fOut);
-void serializeWayAsGeometry(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, 
-                            const TagDictionary &wayTags, bool asPolygon, FILE* fOut);
 
+GenericGeometry serializeWay(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, 
+                            const TagDictionary &wayTags, bool asPolygon);
+
+geos::geom::Geometry* createGeosGeometry( const GenericGeometry &geom);
 
 
 

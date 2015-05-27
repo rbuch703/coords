@@ -1,16 +1,12 @@
 
 #include <string.h> //for strlen
-#include <fcntl.h>  //for sync_file_range()
-#include <sys/mman.h>   //for madvise()
-#include <unistd.h> //for sysconf()
 #include <string.h> //for memcpy
+#include <math.h>   //for fabs()
+
 #include <iostream>
 
 #include "osm/osmMappedTypes.h"
 #include "misc/varInt.h"
-
-using namespace std;
-
 
 OsmLightweightWay::OsmLightweightWay() : isDataMapped(false), vertices(NULL), numVertices(0), tagBytes(NULL), numTagBytes(0), id(0), version(0)
 {    
@@ -149,6 +145,26 @@ Envelope OsmLightweightWay::getBounds() const
     return aabb;
 }
 
+static double getArea(const OsmGeoPosition* vertices, uint64_t numVertices)
+{
+    OsmGeoPosition v0 = vertices[0];
+    OsmGeoPosition vn = vertices[numVertices-1];
+    
+    double area = vn.lat * v0.lng - v0.lat * vn.lng;
+    for (uint64_t i = 0; i < numVertices-1; i++)
+        area += (vertices[i].lat * (double)vertices[i+1].lng - 
+                 vertices[i+1].lat * (double)vertices[i].lng);
+        
+    return fabs(area/2.0);
+}
+
+double OsmLightweightWay::getArea() const
+{
+        
+    return ::getArea( this->vertices, this->numVertices);
+    
+}
+
 void OsmLightweightWay::unmap()
 {
     if (!isDataMapped)
@@ -229,7 +245,7 @@ uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
     return dest;
 }
 
-ostream& operator<<(ostream &out, const OsmLightweightWay &way)
+std::ostream& operator<<(std::ostream &out, const OsmLightweightWay &way)
 {
     out << "Way " << way.id << " (";
     for ( int i = 0; i < way.numVertices; i++)

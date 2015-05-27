@@ -27,13 +27,16 @@ class GenericGeometry {
 public:
     GenericGeometry(FILE* f);
     GenericGeometry(const GenericGeometry &other);
+    GenericGeometry(uint8_t *bytes, uint32_t numBytes, bool takeOwnership);
+
 #ifdef COORDS_MAPNIK_PLUGIN
     GenericGeometry();
 #endif
 
     ~GenericGeometry();
     
-    void init(FILE *F, bool avoidRealloc);
+    void init(FILE *f, bool avoidRealloc);
+    void serialize(FILE* f) const;
     
     FEATURE_TYPE getFeatureType() const;    //POINT/LINE/POLYGON
     OSM_ENTITY_TYPE getEntityType() const;  //NODE/WAY/RELATION
@@ -42,6 +45,8 @@ public:
     //std::vector<Tag> getTags() const;
     RawTags getTags() const;
     const uint8_t* getGeometryPtr() const;
+    bool hasMultipleRings() const;
+
 private:
     Envelope getLineBounds() const;
     Envelope getPolygonBounds() const;

@@ -6,12 +6,13 @@
 */
 
 #include <assert.h>
-//#include "containers/chunkedFile.h"
 #include "config.h"
 #include "osm/osmBaseTypes.h"
 #include "misc/rawTags.h"
 #include "geom/envelope.h"
 
+//just for testing
+//double getArea(const OsmGeoPosition* vertices, uint64_t numVertices);
 
 class OsmLightweightWay {
 public:
@@ -32,6 +33,7 @@ public:
     RawTags getTags() const { return RawTags(tagBytes);}
     uint64_t size() const;
     Envelope getBounds() const;
+    double getArea() const;
     
     /* convert 'vertices' and 'tagBytes' to owned arrays from memory-mapped ranges. 
        After this call, changes to either one of these arrays no longer cause changes

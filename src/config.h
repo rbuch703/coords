@@ -3,6 +3,7 @@
 #define CONFIG_H
 
 #include <stdio.h> //since MUST() needs printf()
+#include <stdlib.h> //since MUST() needs abort()
 #include <stdint.h>
 
 #ifndef MUST

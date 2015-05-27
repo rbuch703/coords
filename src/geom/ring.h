@@ -84,7 +84,7 @@ static void flattenHierarchyToPolygons(std::vector<Ring*> &roots);
 
 public:
 /* the geometric factory has to have a life time at least as long as
-   any objects it creates. So instead of created one on-demand, we 
+   any objects it creates. So instead of creating one on-demand, we 
    store it as a singleton class variable */
 static geos::geom::GeometryFactory factory;  
 

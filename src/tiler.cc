@@ -30,23 +30,6 @@ std::string storageDirectory;
 std::string destinationDirectory;
 std::string usageLine;
 
-void ensureDirectoryExists(string directory)
-{
-    struct stat dummy;
-    size_t start_pos = 0;
-    
-    do
-    {
-        size_t pos = directory.find('/', start_pos);
-        string basedir = directory.substr(0, pos);  //works even if no slash is present --> pos == string::npos
-        if (0!= stat(basedir.c_str(), &dummy)) //directory does not yet exist
-            if (0 != mkdir(basedir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) //755
-                { perror(("[ERR] mkdir '" + directory + "'").c_str());}
-        if (pos == string::npos) break;
-        start_pos = pos+1;
-    } while ( true);
-}
-
 double squaredDistanceToLine(const OsmGeoPosition &P, const OsmGeoPosition &LineA, const OsmGeoPosition &LineB)
 {
     assert( LineB!= LineA);
@@ -654,7 +637,7 @@ int main(int argc, char** argv)
          << (MAX_META_NODE_SIZE/1000000) << "MB." << endl;
 
     FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
-    MUST(f, "cannot open file");
+    MUST(f, "cannot open file 'multipolygons.bin'");
     
     int ch;
     while ( (ch = fgetc(f)) != EOF)
@@ -681,7 +664,6 @@ int main(int argc, char** argv)
 
         if (++pos % 10000 == 0)
             cout << (pos/1000) << "k multipolygons read" << endl;
-        
     }
     
     fclose(f); 
@@ -746,7 +728,17 @@ int main(int argc, char** argv)
                     cerr << ESC_FG_YELLOW << "[WARN] way " << way.id << " has area tags, but is "
                          << "not a closed area. Skipping it." << ESC_RESET << endl;
                 else
+                {
+                    /* zoom level 12: 
+                     * - map is 256* 1^12 = 1^20 pixels wide (also high)
+                     * - map is 2*2003750834cm wide (also high)
+                     * - each pixel corresponds to a width of 3821.851413727cm
+                     * - each pixel corresponds to an area of 14606548 cm²
+                     * - ignore all ways with an area of less than ~ 4px --> 58426192cm²*/
+                    //std::cout << way.getArea() << std::endl;
+                    //if (way.getArea() > 58426192)
                     areaStorage.add(way, tags, way.getBounds());
+                }
             }
         }   
         
