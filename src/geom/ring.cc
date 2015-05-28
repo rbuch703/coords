@@ -15,8 +15,13 @@
 #include "misc/escapeSequences.h"
 #include "misc/varInt.h"
 
-
-geos::geom::GeometryFactory Ring::factory;  
+/* Note: all geometry data is stored as integers. Having the computations be performed
+         using arbitrary floats can lead to subtle errors (simple polygons with non-connected
+         interior, unclosed rings, ...) when later rounding those floats to integers. 
+         To prevent those, we instruct geos to keep all coordinates as integers in the first
+         place. */
+static geos::geom::PrecisionModel model( geos::geom::PrecisionModel::Type::FIXED);
+geos::geom::GeometryFactory Ring::factory(&model);  
 
 Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds):
     wayIds(wayIds), geosPolygon(geosPolygon)

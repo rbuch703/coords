@@ -13,8 +13,16 @@
 #include <geos/geom/LinearRing.h>
 #include <geos/geom/Point.h>
 #include <geos/geom/Polygon.h>
+#include <geos/geom/PrecisionModel.h>
 
-static geos::geom::GeometryFactory factory;
+
+/* Note: all geometry data is stored as integers. Having the computations be performed
+         using arbitrary floats can lead to subtle errors (simple polygons with non-connected
+         interior, unclosed rings, ...) when later rounding those floats to integers. 
+         To prevent those, we instruct geos to keep all coordinates as integers in the first
+         place. */
+static geos::geom::PrecisionModel model( geos::geom::PrecisionModel::Type::FIXED);
+static geos::geom::GeometryFactory factory(&model);
 
 
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut)

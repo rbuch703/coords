@@ -32,8 +32,6 @@
 
 using namespace std;
 
-typedef map<string, string> TagSet;
-
 /* The high-level algorithm to create multipolygons from a multipolygon relation is as follows:
  *     1. ignore all non-way members
  *     2. build geometric rings (node sequences that start and end with the same node) by
@@ -373,10 +371,10 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
    workflows (e.g. adding a hole to an area that was formerly represented by a single way)
    can also lead to outer ways being tagged instead of the whole multipolygon relation.
 */
-TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64_t, 
-                            OsmLightweightWay> &ways, const TagSet &outerTags)
+TagDictionary getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64_t, 
+                            OsmLightweightWay> &ways, const TagDictionary &outerTags)
 {
-    TagSet tags;
+    TagDictionary tags;
     for (const OsmKeyValuePair &kv : rel.tags)
         tags.insert(make_pair(kv.first, kv.second));
         
@@ -426,12 +424,12 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
      *              'outer' way --> use all those tags that all outer ways have in common.
      **/
 
-    vector<TagSet> outerWayTagSets;
+    vector<TagDictionary> outerWayTagSets;
     for (uint64_t outerWayId : ring->wayIds)
     {
         MUST( ways.count(outerWayId) > 0, "cannot access outer way");
 
-        TagSet ts;
+        TagDictionary ts;
         for (const OsmKeyValuePair &kv : ways.at(outerWayId).getTags())
             ts.insert( make_pair(kv.first, kv.second));
         
@@ -443,7 +441,7 @@ TagSet getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64
     for (OsmKeyValuePair kv : outerWayTagSets.front())
     {
         bool presentInAllOuterWays = true;
-        for (const TagSet &ts : outerWayTagSets)
+        for (const TagDictionary &ts : outerWayTagSets)
             presentInAllOuterWays &= (ts.count(kv.first) && ts.at(kv.first) == kv.second);
         
         if (presentInAllOuterWays)
@@ -506,7 +504,7 @@ int main()
             if ((! tags.count("type")) || (tags["type"] != "multipolygon"))
                 continue;
             
-            TagSet outerTags;
+            TagDictionary outerTags;
             RingAssembler ringAssembler = RingAssembler::fromRelation(rel, ways, outerTags);
             ringAssembler.warnUnconnectedNodes(rel.id);
             
@@ -554,7 +552,7 @@ int main()
             
             for (Ring* poly: roots)
             {
-                TagSet tags = getMultipolygonTags(poly, rel, ways, outerTags);
+                TagDictionary tags = getMultipolygonTags(poly, rel, ways, outerTags);
                 serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, fOut);
                 
                 for (uint64_t wayId : poly->wayIds)

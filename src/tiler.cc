@@ -14,6 +14,7 @@
 #include "osm/osmTypes.h"
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
+#include "geom/geomSerializers.h"
 #include "containers/osmWayStore.h"
 #include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
@@ -166,135 +167,6 @@ OsmWay getEditableCopy(OsmLightweightWay &src) {
                    vector<OsmGeoPosition>( src.vertices, src.vertices + src.numVertices),
                    vector<OsmKeyValuePair>( tags.begin(), tags.end()));
 }
-
-/*
-OsmLightweightWay toLightweightWay( const OsmWay &other)
-{
-    OsmLightweightWay res;
-    res.id = other.id;
-    res.version = other.version;
-    res.isDataMapped = false;
-    res.numVertices = other.refs.size();
-    res.vertices = new OsmGeoPosition[res.numVertices];
-    for (int i = 0; i < res.numVertices; i++)
-        res.vertices[i] = other.refs[i];
-        
-    res.numTags = other.tags.size();
-    res.numTagBytes = 0;
-    for (uint64_t i = 0; i < other.tags.size(); i++)
-    {
-        res.numTagBytes += other.tags[i].first.size() + 1;    //  key string length including termination
-        res.numTagBytes += other.tags[i].second.size() + 1;   //value string length including termination
-    }
-    
-    res.tagBytes = new uint8_t[res.numTagBytes];
-    char *pos = (char*)res.tagBytes;
-    for (uint64_t i = 0; i < other.tags.size(); i++)
-    {
-        strcpy(pos, other.tags[i].first.c_str());
-        pos += strlen( pos ) + 1;
-        
-        strcpy(pos, other.tags[i].second.c_str());
-        pos += strlen( pos ) + 1;
-    }
-    assert( (uint8_t*)pos == res.tagBytes + res.numTagBytes);
-    return res;    
-}
-*/
-
-static uint64_t frequencies[] = {0,0,0,0,0,0};
-#if 0
-OsmLightweightWay getLod12Version(OsmLightweightWay &wayIn)
-{
-    //create a non-mapped copy. This is necessary because the mapped OsmLightweightWay 
-    //cannot easily be changed in size
-    OsmWay way = getEditableCopy(wayIn);
-
-    int keep =  0;
-    
-    if( way.hasKey("landuse"))
-    {
-            //we are only interested in "natural" *polygons*
-        if (way.refs.front() == way.refs.back())
-            keep = 1;
-
-    }
-        
-    if (way.hasKey("natural"))
-    {
-        //we are only interested in "natural" *polygons*
-        if (way.refs.front() == way.refs.back())
-            keep = 2;
-    }
-        
-     if (way.hasKey("highway"))
-        if (way["highway"] == "primary" || way["highway"] == "motorway" || way["highway"] == "trunk")
-            keep = 3;
-
-   
-    if (way.hasKey("boundary") && way["boundary"] == "administrative" && way.hasKey("admin_level"))
-        if (way["admin_level"] == "6" || way["admin_level"] == "4" || way["admin_level"] == "2")
-            keep = 4;
-
-     if (way.hasKey("railway"))
-            keep = 5;
-
-
-    Envelope bounds = wayIn.getBounds();
-    uint64_t solidAngle = abs(bounds.latMax - bounds.latMin);
-    solidAngle *= abs(bounds.lngMax - bounds.lngMin);
-    /* WARNING!!!: FIXME: these are very rough computations based on a lat/lng grid (plate
-     * carree). More accurate computations would need to take into account the coordinates 
-     * in web mercator projection (the projection the data will be rendered in) */
-    double solidAngleDeg = solidAngle / (10000000.0 * 10000000.0);
-    // at zoom level 12: a tile is on average 0.0879° wide and 0.0415° high, and has 256x256 pixels
-    double solidAnglePixel = (0.0879/256) *(0.0415/256);
-
-    static const double degsPerPixel = ((0.0879 + 0.0415)/2.0)/256.0;
-    
-    if (keep == 1 || keep == 2) //polygons
-    {
-        if (solidAngleDeg < solidAnglePixel*64)
-            keep = 0;
-        else
-            
-        {
-            if ( way.refs.front() != way.refs.back())
-            {
-                cout << "non-closed polygon " << way << endl;
-                for ( const OsmKeyValuePair &kv: way.tags)
-                    cout << "\t" << kv.first << " -> " << kv.second << endl;
-            }
-            // average of horizontal and vertical degrees per tile; 
-            if (!simplifyArea( way.refs, degsPerPixel * 4 * 10000000)) // 4 px allowed deviation; 
-                keep = 0;
-        }
-    }
-            
-    if (keep == 3 || keep == 4 || keep == 5) //line geometry
-    {
-        double dLat = abs(bounds.latMax - bounds.latMin)/10000000.0;
-        double dLng = abs(bounds.lngMax - bounds.lngMin)/10000000.0;
-        //cout << dLat << ", " << dLng << endl;
-        if (dLat < (0.0415/256*4) && dLng < (0.0879/256*4))
-        {
-            //cout << "#" << endl;
-            keep = 0;
-        }
-        else
-            if (!simplifyStroke( way.refs, degsPerPixel * 4 * 10000000)) // 4 px allowed deviation; 
-                keep = 0;
-
-    }
-    
-    frequencies[keep] += 1;
-    
-    if (!keep)
-        way.id = 0;
-    
-    return toLightweightWay(way);
-}
-#endif
 
 int parseArguments(int argc, char** argv)
 {
@@ -594,6 +466,14 @@ void cleanupTileDirectory(const std::string tileDirectory)
     deleteIfExists(     tileDirectory, "line");
 }
 
+static const uint64_t MAP_WIDTH_IN_CM     = 2 * (uint64_t)2003750834;
+static const uint64_t L12_MAP_WIDTH_IN_PIXELS = 256 * ( 1 << 12);
+static const double   L12_MAP_RESOLUTION_IN_CM_PER_PIXEL = 
+                          MAP_WIDTH_IN_CM / (double)L12_MAP_WIDTH_IN_PIXELS;
+static const double   L12_PIXEL_AREA = L12_MAP_RESOLUTION_IN_CM_PER_PIXEL *
+                                       L12_MAP_RESOLUTION_IN_CM_PER_PIXEL;
+static const double   L12_MIN_POLYGON_AREA = 4 * L12_PIXEL_AREA;
+
 
 int main(int argc, char** argv)
 {
@@ -658,7 +538,12 @@ int main(int argc, char** argv)
             lineStorage.add( geom, bounds);*/
             
         if (isArea(tags, true))
-            areaStorage.add(geom, bounds);
+        {
+            geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
+            if (geosGeom->getArea() > L12_MIN_POLYGON_AREA)
+                areaStorage.add(geom, bounds);
+
+        }
 /*        else
             cerr << "[WARN] multipolygon " << geom.getEntityId() << " has no tag that indicates it should be treated as an area. Skipping." << endl;*/
 
@@ -736,8 +621,8 @@ int main(int argc, char** argv)
                      * - each pixel corresponds to an area of 14606548 cm²
                      * - ignore all ways with an area of less than ~ 4px --> 58426192cm²*/
                     //std::cout << way.getArea() << std::endl;
-                    //if (way.getArea() > 58426192)
-                    areaStorage.add(way, tags, way.getBounds());
+                    if (way.getArea() > L12_MIN_POLYGON_AREA)
+                        areaStorage.add(way, tags, way.getBounds());
                 }
             }
         }   
@@ -788,11 +673,5 @@ int main(int argc, char** argv)
          << "with " << (numVertices/1000000) << "M vertices and " << (numTagBytes / 1000000) 
          << "MB tags" << endl;
     //cout << "stats: data set contains " << (numLod12Ways/ 1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes / 1000) << "kB tags at LOD 12." << endl;   
-    cout << "stats: skipped: "  << frequencies[0] << 
-                 ", landuse: "  << frequencies[1] << 
-                 ", natural: "  << frequencies[2] << 
-                 ", highway: "  << frequencies[3] << 
-                 ", boundary: " << frequencies[4] << endl;
-
     return EXIT_SUCCESS;
 }
