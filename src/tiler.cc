@@ -10,6 +10,7 @@
 #include <iostream>
 #include <set>
 
+#include <geos/simplify/TopologyPreservingSimplifier.h>
 #include "tiles.h"
 #include "osm/osmTypes.h"
 #include "osm/osmMappedTypes.h"
@@ -470,6 +471,9 @@ static const uint64_t MAP_WIDTH_IN_CM     = 2 * (uint64_t)2003750834;
 static const uint64_t L12_MAP_WIDTH_IN_PIXELS = 256 * ( 1 << 12);
 static const double   L12_MAP_RESOLUTION_IN_CM_PER_PIXEL = 
                           MAP_WIDTH_IN_CM / (double)L12_MAP_WIDTH_IN_PIXELS;
+
+static const double   L12_MAX_DEVIATION = L12_MAP_RESOLUTION_IN_CM_PER_PIXEL;
+
 static const double   L12_PIXEL_AREA = L12_MAP_RESOLUTION_IN_CM_PER_PIXEL *
                                        L12_MAP_RESOLUTION_IN_CM_PER_PIXEL;
 static const double   L12_MIN_POLYGON_AREA = 4 * L12_PIXEL_AREA;
@@ -524,6 +528,7 @@ int main(int argc, char** argv)
     {
         ungetc(ch, f);
         GenericGeometry geom(f);
+        MUST( geom.getEntityType() == OSM_ENTITY_TYPE::RELATION, "found multipolygon that is not a relation");
         convertWsg84ToWebMercator(geom);
 
         Envelope bounds = geom.getBounds();
@@ -541,7 +546,14 @@ int main(int argc, char** argv)
         {
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
             if (geosGeom->getArea() > L12_MIN_POLYGON_AREA)
-                areaStorage.add(geom, bounds);
+            {
+                geos::simplify::TopologyPreservingSimplifier simp(geosGeom);
+                simp.setDistanceTolerance(L12_MAX_DEVIATION);
+                GenericGeometry gen = serialize( &(*simp.getResultGeometry()), geom.getEntityId(), tags);
+                areaStorage.add( gen, bounds);
+            }
+
+            delete geosGeom;
 
         }
 /*        else
@@ -599,7 +611,7 @@ int main(int argc, char** argv)
             cout << "\t" << kv.first << " -> " << kv.second << endl;*/
         
         
-        if ( isArea( tags, way.vertices[0] == way.vertices[way.numVertices-1]) )
+        if ( isArea( tags, way.vertices[0] == way.vertices[way.numVertices-1] && way.numVertices > 3) )
         {
             /* Area tags on multipolygons' outer ways are pointless, as is the multipolygon
              * that forms the area and not the way that is part of it. Mostly these area
@@ -609,7 +621,7 @@ int main(int argc, char** argv)
              */
             if (!(outerWayIds.count(way.id)))
             {
-                if (way.vertices[0] != way.vertices[way.numVertices-1])
+                if (way.vertices[0] != way.vertices[way.numVertices-1] || way.numVertices <= 3)
                     cerr << ESC_FG_YELLOW << "[WARN] way " << way.id << " has area tags, but is "
                          << "not a closed area. Skipping it." << ESC_RESET << endl;
                 else
@@ -621,8 +633,23 @@ int main(int argc, char** argv)
                      * - each pixel corresponds to an area of 14606548 cm²
                      * - ignore all ways with an area of less than ~ 4px --> 58426192cm²*/
                     //std::cout << way.getArea() << std::endl;
-                    if (way.getArea() > L12_MIN_POLYGON_AREA)
-                        areaStorage.add(way, tags, way.getBounds());
+                    geos::geom::Geometry *geosGeom = createGeosGeometry(way);
+                    if (geosGeom->getArea() > L12_MIN_POLYGON_AREA)
+                    {
+                        geos::simplify::TopologyPreservingSimplifier simp(geosGeom);
+                        simp.setDistanceTolerance(L12_MAX_DEVIATION);
+                        
+                        Tags dummy(tags.begin(), tags.end());
+                        uint8_t* tagBytes = RawTags::serialize( dummy, (uint64_t*)nullptr);
+                        RawTags rawTags(tagBytes);
+
+                        GenericGeometry gen = serialize( &(*simp.getResultGeometry()),
+                                                         way.id | IS_WAY_REFERENCE, rawTags);
+                                                         
+                        areaStorage.add( gen, gen.getBounds());
+                        delete [] tagBytes;
+                    }
+                    delete geosGeom;
                 }
             }
         }   

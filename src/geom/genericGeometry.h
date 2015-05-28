@@ -16,7 +16,13 @@
 #include <string>
 #include <vector>
 
-enum struct FEATURE_TYPE: uint8_t {POINT, LINE, POLYGON};
+enum struct FEATURE_TYPE: uint8_t {POINT = 0, LINE = 1, POLYGON = 2};
+
+/* new flag byte (not yet in use) to replace the FEATURE_TYPE byte*/
+enum struct GEOMETRY_FLAGS: uint8_t { 
+    POINT = 0, LINE = 1, WAY_POLYGON = 2, RELATION_POLYGON = 3,  // bits 0-1: type
+    IS_DUPLICATE = 4  // bit 2: whether the same geometry has been stored in another tile as well
+};
 
 std::ostream& operator<<(std::ostream& os, FEATURE_TYPE ft);
 std::ostream& operator<<(std::ostream& os, OSM_ENTITY_TYPE et);

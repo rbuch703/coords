@@ -130,7 +130,7 @@ FEATURE_TYPE GenericGeometry::getFeatureType() const
 OSM_ENTITY_TYPE GenericGeometry::getEntityType() const 
 {
     MUST( numBytes >= 9, "corrupted on-disk geometry");
-    uint64_t id = *((uint64_t*)bytes+1);
+    uint64_t id = *((uint64_t*)(bytes+1));
     switch (getFeatureType())
     {
         case FEATURE_TYPE::POINT: return OSM_ENTITY_TYPE::NODE;

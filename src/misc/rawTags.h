@@ -32,6 +32,9 @@ public:
 #ifndef COORDS_MAPNIK_PLUGIN
     static void     serialize( const Tags &tags, Chunk &chunk);
 #endif
+    uint64_t serialize( uint8_t * const outputBuffer) const;
+
+    // returns the serialized size of 'Tags', *not* counting the leading numBytes field
     static uint64_t getSerializedSize( const Tags &tags);
     
     uint64_t getSerializedSize() const;

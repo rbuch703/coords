@@ -20,7 +20,10 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
 GenericGeometry serializeWay(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, 
                             const TagDictionary &wayTags, bool asPolygon);
 
-geos::geom::Geometry* createGeosGeometry( const GenericGeometry &geom);
+GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags);
+
+geos::geom::Geometry* createGeosGeometry( const GenericGeometry   &geom);
+geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom);
 
 
 

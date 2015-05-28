@@ -175,6 +175,105 @@ static geos::geom::CoordinateSequence* getCoordinateSequence(const uint8_t* &pos
     return seq;
 }
 
+static uint64_t getSerializedSize( const geos::geom::LineString *ring)
+{
+    const geos::geom::CoordinateSequence &coords = *ring->getCoordinatesRO();
+    uint64_t nBytes = 0;
+    int64_t prevX = 0;
+    int64_t prevY = 0;
+    
+    nBytes += varUintNumBytes(coords.size());
+    for (uint64_t i= 0; i < coords.size(); i++)
+    {
+        int64_t dX = coords[i].x - prevX;
+        int64_t dY = coords[i].y - prevY;
+        nBytes += varIntNumBytes(dX);
+        nBytes += varIntNumBytes(dY);
+        prevX += dX;
+        prevY += dY;
+    }
+    return nBytes;
+}
+
+static uint64_t serialize( const geos::geom::LineString *ring, uint8_t* const outputBuffer)
+{
+    const geos::geom::CoordinateSequence &coords = *ring->getCoordinatesRO();
+    uint64_t numVertices = coords.size();
+    //std::cout << "serializing ring with " << numVertices << " vertices" << std::endl;
+    uint8_t* outPos = outputBuffer;
+    int64_t prevX = 0;
+    int64_t prevY = 0;
+    
+    outPos += varUintToBytes(numVertices, outPos);
+    
+    for (uint64_t i= 0; i < numVertices; i++)
+    {
+        int64_t dX = coords[i].x - prevX;
+        int64_t dY = coords[i].y - prevY;
+        outPos += varIntToBytes(dX, outPos);
+        outPos += varIntToBytes(dY, outPos);
+        prevX += dX;
+        prevY += dY;
+    }
+    return outPos - outputBuffer;
+}
+
+
+static uint64_t getSerializedSize( const geos::geom::Polygon *polygon)
+{
+    uint64_t numInteriorRings = polygon->getNumInteriorRing();
+    uint64_t nBytes = varUintNumBytes(numInteriorRings + 1); //plus one exterior ring
+    
+    nBytes += getSerializedSize( polygon->getExteriorRing() );
+    
+    for (uint64_t i = 0; i < numInteriorRings; i++)
+        nBytes += getSerializedSize( polygon->getInteriorRingN(i));
+        
+    return nBytes;
+    
+
+}
+
+GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags)
+{
+    uint64_t tagsSize = tags.getSerializedSize();
+    uint64_t size = sizeof(uint8_t) + //FEATURE_TYPE
+                    sizeof(uint64_t) + // id
+                    varUintNumBytes(tagsSize) +
+                    tagsSize;
+    MUST( geom->getGeometryTypeId() == geos::geom::GeometryTypeId::GEOS_POLYGON,
+          "serializing GEOS geometries other than polygons is not implemented");
+    geos::geom::Polygon *poly = dynamic_cast<geos::geom::Polygon*>(geom);
+    MUST(poly, "invalid conversion");
+    //std::cerr << "serializing id=" << id << std::endl;
+    
+    size += getSerializedSize( poly );
+    
+    uint8_t *outputBuffer = new uint8_t[size];
+    uint8_t *outPos = outputBuffer;
+    outputBuffer[0] = (uint8_t)FEATURE_TYPE::POLYGON;
+    outPos = outputBuffer + sizeof(uint8_t);
+    
+    *(uint64_t*)outPos = id;
+    outPos += sizeof(uint64_t);
+    
+    outPos += tags.serialize(outPos);
+    
+    uint64_t numInteriorRings = poly->getNumInteriorRing();
+    outPos += varUintToBytes(numInteriorRings+1, outPos); //plus exterior ring
+
+    outPos += serialize( poly->getExteriorRing(), outPos );
+
+    
+    for (uint64_t i = 0; i < numInteriorRings; i++)
+        outPos += serialize( poly->getInteriorRingN(i), outPos );
+    
+    MUST( outPos - outputBuffer == (int64_t)size, "serialization size mismatch");
+
+    return GenericGeometry(outputBuffer, size, true);
+}
+
+
 static geos::geom::LineString* getGeosLine(const GenericGeometry &geom)
 {
     const uint8_t *pos = geom.getGeometryPtr();
@@ -220,7 +319,23 @@ geos::geom::Geometry* createGeosGeometry( const GenericGeometry &geom)
         default:
             MUST(false, "invalid feature type");
     }
+}
 
+geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom)
+{
+    geos::geom::CoordinateSequence *seq = 
+        factory.getCoordinateSequenceFactory()->create( (size_t)0, 2);    //start with 0 members; each member will have 2 dimensions
+
+    
+    MUST( geom.numVertices <= 2000, "overflow"); //OSM hard limit for nodes per way
+    for (int i = 0; i < geom.numVertices; i++)
+        seq->add( geos::geom::Coordinate( geom.vertices[i].lat, geom.vertices[i].lng));
+
+    if (geom.vertices[0].lat == geom.vertices[geom.numVertices-1].lat &&
+        geom.vertices[0].lng == geom.vertices[geom.numVertices-1].lng)
+        return factory.createPolygon( factory.createLinearRing(seq), nullptr);
+    else
+        return factory.createLineString( seq);
     
 }
 

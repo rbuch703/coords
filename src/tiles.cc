@@ -50,7 +50,7 @@ void FileBackedTile::add(OsmLightweightWay &way, const TagDictionary &tags, cons
         serializeWay(way.id, way.vertices, way.numVertices, tags, false).serialize(fData);
         this->size = ftell(fData);
 
-        if ( (uint64_t)ftell(fData) > maxNodeSize)
+        if ( this->size > maxNodeSize)
             subdivide();
     } else 
     {
@@ -79,9 +79,9 @@ void FileBackedTile::add(GenericGeometry &geom, const Envelope &bounds)
         //serializeWay(way, false, fData);
         //way.serialize(fData);
         //assert( ftell(fData) - posBefore == way.size());
-        //size += way.size();
+        size = ftell(fData);
 
-        if ( (uint64_t)ftell(fData) > maxNodeSize)
+        if ( this->size > maxNodeSize)
             subdivide();
     } else 
     {

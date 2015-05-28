@@ -31,16 +31,16 @@ RawTags::RawTags(const uint8_t* src)
     //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
     src += nRead;
     
-    uint16_t numTags = varUintFromBytes(src, &nRead);
+    this->numTags = varUintFromBytes(src, &nRead);
     src += nRead;
     
     //uint8_t *symbolicNameBytes = pos;
     uint64_t numNames = numTags * 2; // key and value per tag
     uint64_t numSymbolicNameBytes = (numNames + 7) / 8;
     
-    numTagBytes = totalNumBytes - numSymbolicNameBytes - varUintNumBytes(numTags);
-    symbolicNameBits = src;
-    tagsStart = src + numSymbolicNameBytes;
+    this->numTagBytes = totalNumBytes - numSymbolicNameBytes - varUintNumBytes(numTags);
+    this->symbolicNameBits = src;
+    this->tagsStart = src + numSymbolicNameBytes;
 }
 
 uint64_t RawTags::getSerializedSize(const Tags &tags)
@@ -75,6 +75,25 @@ uint64_t RawTags::getSerializedSize() const
     
     return numBytes;
 }
+
+uint64_t RawTags::serialize( uint8_t * const outputBuffer) const
+{
+    uint8_t *outPos = outputBuffer;
+    
+    uint64_t numBytes = this->getSerializedSize();
+    outPos += varUintToBytes(numBytes, outPos);
+    outPos += varUintToBytes(this->numTags, outPos);
+    
+    uint64_t numNames = numTags * 2;
+    uint64_t bitfieldSize = ( numNames + 7) / 8; //one bit per name --> have to round up
+    memcpy(outPos, symbolicNameBits, bitfieldSize);
+    outPos += bitfieldSize;
+    
+    memcpy(outPos, tagsStart, numTagBytes);
+    outPos += numTagBytes;
+    
+    return outPos - outputBuffer;
+}   
 
 
 std::map< std::string, std::string> RawTags::asDictionary() const
