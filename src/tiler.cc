@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <getopt.h> //for getopt_long()
 //#include <unistd.h> // for unlink()
-#include <sys/stat.h> //for stat()
-#include <math.h>
+//#include <sys/stat.h> //for stat()
+//#include <math.h>
 
 #include <vector>
 #include <list>
@@ -16,6 +16,7 @@
 #include "osm/osmMappedTypes.h"
 #include "geom/envelope.h"
 #include "geom/geomSerializers.h"
+#include "geom/srsConversion.h"
 #include "containers/osmWayStore.h"
 #include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
@@ -32,143 +33,6 @@ std::string storageDirectory;
 std::string destinationDirectory;
 std::string usageLine;
 
-double squaredDistanceToLine(const OsmGeoPosition &P, const OsmGeoPosition &LineA, const OsmGeoPosition &LineB)
-{
-    assert( LineB!= LineA);
-    double num = (LineB.lat - (double)LineA.lat )*(LineA.lng - (double)P.lng );
-    num -=       (LineB.lng - (double)LineA.lng )*(LineA.lat - (double)P.lat );
-    if (num < 0) num = -num; //distance is an absolute value
-    
-    double dLat = LineB.lat - (double)LineA.lat;
-    double dLng = LineB.lng - (double)LineA.lng;
-    
-    double denom_sq = dLat*dLat + dLng*dLng;//(B.x-A.x)*(B.x-A.x) + (B.y-A.y)*(B.y-A.y);
-    assert(denom_sq != 0);
-    return (num*num) / denom_sq;
-}
-
-
-void simplifySection(list<OsmGeoPosition> &container, list<OsmGeoPosition>::iterator segment_first, list<OsmGeoPosition>::iterator segment_last, uint64_t allowedDeviation)
-{
-    list<OsmGeoPosition>::iterator it_max;
-    
-    double max_dist_sq = 0;
-    OsmGeoPosition LineA = *segment_first;
-    OsmGeoPosition LineB = *segment_last;
-    list<OsmGeoPosition>::iterator it  = segment_first;
-    // make sure that 'it' starts from segment_first+1; segment_first must never be deleted
-    for (it++; it != segment_last; it++)
-    {
-        double dist_sq;
-        if (LineA == LineB)
-        {
-            double dLat =  it->lat - (double)LineA.lat;
-            double dLng =  it->lng - (double)LineA.lng;
-            dist_sq = dLat*dLat + dLng*dLng;
-        } else
-            dist_sq = squaredDistanceToLine(*it, LineA, LineB);
-        if (dist_sq > max_dist_sq) { it_max = it; max_dist_sq = dist_sq;}
-    }
-    if (max_dist_sq == 0) return;
-    
-    if (max_dist_sq < allowedDeviation*allowedDeviation) 
-    {
-        // no point further than 'allowedDeviation' from line A-B --> can delete all points in between
-        segment_first++;
-        // erase range includes first iterator but excludes second one
-        container.erase( segment_first, segment_last);
-        //assert( m_vertices.front() == m_vertices.back());
-    } else  //use point with maximum deviation as additional necessary point in the simplified polygon, recurse
-    {
-        simplifySection(container, segment_first, it_max, allowedDeviation);
-        simplifySection(container, it_max, segment_last, allowedDeviation);
-    }
-}
-
-
-bool simplifyArea(vector<OsmGeoPosition> &area, double allowedDeviation)
-{
-    //bool clockwise = isClockwise();
-    assert( area.front() == area.back() && "Not a Polygon");
-    /** simplifySection() requires the Polygon to consist of at least two vertices,
-        so we need to test the number of vertices here. Also, a segment cannot be a polygon
-        if its vertex count is less than four (since the polygon of smallest order is a triangle,
-        and first and last vertex are identical). Since simplification cannot add vertices,
-        we can safely terminate the simplification here, if we have less than four vertices. */
-    if ( area.size() < 4) { area.clear(); return false; }
-
-
-    list<OsmGeoPosition> vertices( area.begin(), area.end() );
-    
-    list<OsmGeoPosition>::iterator last = vertices.end();
-    last--;
-    simplifySection( vertices, vertices.begin(), last, allowedDeviation);
-
-    area = vector<OsmGeoPosition>(vertices.begin(), vertices.end() );
-
-    //canonicalize();
-    
-    /** Need three vertices to form an area; four since first and last are identical
-        If the polygon was simplified to degenerate to a line or even a single point,
-        This means that the whole polygon would not be visible given the current 
-        allowedDeviation. It may thus be omitted completely */
-    if (area.size() < 4) { return false; }
-
-    assert( area.front() == area.back());
-    //if ( isClockwise() != clockwise) this->reverse();
-    return true;
-}
-
-/*
-AABoundingBox VertexChain::getBoundingBox() const
-{
-    AABoundingBox box(m_vertices.front());
-    for (vector<Vertex>::const_iterator it = m_vertices.begin(); it!= m_vertices.end(); it++)
-        box += *it;
-        
-    return box;
-}*/
-
-bool simplifyStroke(vector<OsmGeoPosition> &segment, double allowedDeviation)
-{
-    
-    //TODO: check whether the whole VertexChain would be simplified to a single line (start-end)
-    //      if so, do not allocate the list, but set the result right away
-
-    list<OsmGeoPosition> vertices( segment.begin(), segment.end());
-    
-    list<OsmGeoPosition>::iterator last = vertices.end();
-    last--;
-    simplifySection( vertices, vertices.begin(), last, allowedDeviation);
-    
-    /*
-    if (vertices.size() == 2)
-    {
-        BigInt dx = vertices.front().get_x() - vertices.back().get_x();
-        BigInt dy = vertices.front().get_y() - vertices.back().get_y();
-        dist_sq = asDouble (dx*dx+dy*dy);
-        if (dist_sq < allowedDeviation*allowedDeviation) 
-            vertices.pop_back();
-    }*/
-    
-    segment = vector<OsmGeoPosition>( vertices.begin(), vertices.end() );    
-    //canonicalize();
-    if (segment.size() == 2 && segment[0] == segment[1])
-        return false;
-    
-    return segment.size() > 1;
-}
-
-OsmWay getEditableCopy(OsmLightweightWay &src) {
-    
-    map<string, string> tags = src.getTags().asDictionary();
-
-    return OsmWay( src.id, 
-                   src.version, 
-                   vector<OsmGeoPosition>( src.vertices, src.vertices + src.numVertices),
-                   vector<OsmKeyValuePair>( tags.begin(), tags.end()));
-}
-
 int parseArguments(int argc, char** argv)
 {
     static const struct option long_options[] =
@@ -182,7 +46,8 @@ int parseArguments(int argc, char** argv)
     while (-1 != (opt = getopt_long(argc, argv, "d:", long_options, &opt_idx)))
     {
         switch(opt) {
-            case '?': exit(EXIT_FAILURE); break; //unknown option; getopt_long() already printed an error message
+            //unknown option; getopt_long() already printed an error message
+            case '?': exit(EXIT_FAILURE); break; 
             case 'd': destinationDirectory = optarg; break;
             default: abort(); break;
         }
@@ -241,7 +106,7 @@ bool isArea( const T &tags, bool geometryIsClosedArea )
     return false;
 }
 
-static const std::set<std::string> lineIndicatorTags { 
+static const std::set<std::string> lineIndicatorTags {
     "highway", "waterway", "boundary", "power", "barrier", "railway" };
 
 template <typename T>
@@ -254,108 +119,55 @@ bool hasLineTag( const T &tags)
     return false;
 }
 
-static const double INT_TO_LAT_LNG = 1/10000000.0;
-static const double INT_TO_MERCATOR_METERS = 1/100.0;
+static const std::set<std::string> l12Highways = {
+    "motorway", "motorway_link",
+    "trunk",    "trunk_link",
+    "primary",  "primary_link",
+    "secondary","secondary_link",
+    "tertiary", "tertiary_link"};
 
-static const double HALF_EARTH_CIRCUMFERENCE = 20037508.3428; // ~ 20037km
-static const double PI = 3.141592653589793;
-
-static inline void convertWsg84ToWebMercator( int32_t &lat, int32_t &lng)
+uint64_t getPositiveIntIfOnlyDigits(const char* s)
 {
-    MUST( lat >=  -900000000 && lat <=  900000000, "latitude out of range");
-    MUST( lng >= -1800000000 && lng <= 1800000000, "longitude out of range");
-
-    static const int MAX_MERCATOR_VALUE = HALF_EARTH_CIRCUMFERENCE / INT_TO_MERCATOR_METERS;
-
-    int32_t x =  (lng * INT_TO_LAT_LNG) / 180 * MAX_MERCATOR_VALUE;
-    MUST( x >= -MAX_MERCATOR_VALUE && x <= MAX_MERCATOR_VALUE, "projection overflow");
+    bool onlyDigits = true;
+    int numDigits = 0;
+    int num = 0;
     
-    int32_t y =  log(tan((90 + lat * INT_TO_LAT_LNG) * PI / 360)) / PI * MAX_MERCATOR_VALUE;
-    if (y < -MAX_MERCATOR_VALUE) y = -MAX_MERCATOR_VALUE;
-    if (y >  MAX_MERCATOR_VALUE) y =  MAX_MERCATOR_VALUE;
-    
-       
-    lat = x;
-    lng = y;
-}
-
-
-void convertWsg84ToWebMercator( OsmLightweightWay &way)
-{
-    for (uint64_t i = 0; i < way.numVertices; i++)
-        convertWsg84ToWebMercator( way.vertices[i].lat, way.vertices[i].lng);
-}
-
-void convertWsg84ToWebMercator( GenericGeometry &geom)
-{
-    MUST( geom.getFeatureType() == FEATURE_TYPE::POLYGON, "not implemented");
-
-    /* conversion changes value in 'geom' and - since those values are delta-encoded varInts - 
-     * may change the size of 'geom'. So we need to allocate new storage for the output.
-     * Since all 'geom' members compressed may grow at most by a factor of five (one byte before,
-     * encoded (u)int32_t -> 5 bytes after), we need to allocate at most 5 times as much memory
-     * as the original data structure is big. */
-    uint64_t newAllocatedSize = geom.numBytes * 5;
-    uint8_t *newData = new uint8_t[newAllocatedSize];
-    uint8_t *basePtr = geom.bytes;
-    const uint8_t *geoPtr  = geom.getGeometryPtr();
-    int64_t baseSize = geoPtr - basePtr;
-    MUST( baseSize > 0, "logic error");
-    
-    // copy that part of 'geom' that won't change through projection (id, type, tags)
-    memcpy(newData, basePtr, baseSize);
-    
-    uint8_t *newGeoPtr = newData + baseSize;
-    
-    int nRead = 0;
-    //int nWritten=0;
-    uint64_t numRings = varUintFromBytes(geoPtr, &nRead);
-    geoPtr+= nRead;
-    newGeoPtr += varUintToBytes(numRings, newGeoPtr);
-            
-    while (numRings--)
+    for ( const char* pos = s; *pos != '\0'; pos++)
     {
-        
-        uint64_t numPoints = varUintFromBytes(geoPtr, &nRead);
-        geoPtr += nRead;
-        newGeoPtr += varUintToBytes(numPoints, newGeoPtr);
-        
-        assert(numPoints < 10000000 && "overflow"); //sanity check, not an actual limit
-        
-        int64_t xIn = 0;
-        int64_t yIn = 0;
-        int64_t prevXOut = 0;
-        int64_t prevYOut = 0;
-        while (numPoints-- > 0)
-        {
-            xIn += varIntFromBytes(geoPtr, &nRead); //resolve delta encoding
-            geoPtr += nRead;
-            yIn += varIntFromBytes(geoPtr, &nRead);
-            geoPtr += nRead;
-            
-            MUST( xIn >= INT32_MIN && xIn <= INT32_MAX, "overflow");
-            MUST( yIn >= INT32_MIN && yIn <= INT32_MAX, "overflow");
-            
-            int32_t xOut = xIn;
-            int32_t yOut = yIn;
-            convertWsg84ToWebMercator( xOut, yOut);
-            
-            int64_t dX = xOut - prevXOut;
-            int64_t dY = yOut - prevYOut;
-            newGeoPtr += varIntToBytes(dX, newGeoPtr);
-            newGeoPtr += varIntToBytes(dY, newGeoPtr);
-
-            prevXOut = xOut;
-            prevYOut = yOut;   
-        }
+        numDigits += 1;
+        onlyDigits &= (*pos >= '0' && *pos <= '9');
+        num = (num * 10) + (*pos - '0');
     }
-    uint64_t newSize = newGeoPtr - newData;
-    MUST( newSize <= newAllocatedSize, "overflow");
-    delete [] geom.bytes;
-    geom.bytes = newData;
-    geom.numBytes = newSize;
-    geom.numBytesAllocated = newAllocatedSize;
+    
+    return onlyDigits ? num : 0;
 }
+
+template <typename T>
+bool hasL12LineTag( const T &tags)
+{
+    bool isAdminBoundary = false;
+    int adminLevel = 0;
+    for (const Tag &tag : tags)
+    {
+        if (tag.first == "highway")
+            if ( l12Highways.count(tag.second)) return true;
+        if (tag.first == "boundary" && tag.second == "administrative")
+            isAdminBoundary = true;
+        if (tag.first == "admin_level")
+            adminLevel = getPositiveIntIfOnlyDigits(tag.second.c_str());
+        if (tag.first == "railway" && (tag.second == "rail" || tag.second == "narrow_gauge"))
+            return true;
+        if (tag.first == "waterway" && (tag.second == "river" || tag.second== "canal"))
+            return true;
+        
+    }
+
+    if (isAdminBoundary && adminLevel > 0 && adminLevel <= 6) 
+        return true;
+        
+    return false;
+}
+
 
 template <typename T>
 std::set<T> getSetFromFileEntries(std::string filename)
@@ -449,11 +261,7 @@ map<uint64_t, TagDictionary> getBoundaryRelationTags(const string &storageDirect
         TagDictionary tags(rel.tags.begin(), rel.tags.end());
 
         if (tags.count("type") && tags["type"] == "boundary")
-        {
             res.insert( make_pair(rel.id, tags) );
-            //cerr << ESC_FG_BLUE << "relation " << rel.id 
-            ///     << " is a boundary" << ESC_RESET << endl;
-        }
     }
     return res;
 }
@@ -501,14 +309,10 @@ int main(int argc, char** argv)
     ensureDirectoryExists(destinationDirectory);
     cleanupTileDirectory( destinationDirectory);
     
-    /*Envelope worldBounds = { .latMin = -900000000, .latMax = 900000000, 
-                             .lngMin = -1800000000,.lngMin = 1800000000};*/
-               
     Envelope webMercatorWorldBounds = { .xMin = -2003750834, .xMax = 2003750834, 
                                         .yMin = -2003750834, .yMax = 2003750834}; 
     
     FileBackedTile areaStorage( (destinationDirectory + "area").c_str(), webMercatorWorldBounds, MAX_META_NODE_SIZE);
-    
     FileBackedTile lineStorage( (destinationDirectory + "line").c_str(), webMercatorWorldBounds, MAX_META_NODE_SIZE);
     //FileBackedTile storageLod12( (destinationDirectory + "lod12").c_str(), worldBounds, MAX_META_NODE_SIZE);
 
@@ -516,7 +320,6 @@ int main(int argc, char** argv)
     //uint64_t numLod12Ways = 0;
     uint64_t pos = 0;
     uint64_t numVertices = 0;
-    uint64_t numTagBytes = 0;
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
          << (MAX_META_NODE_SIZE/1000000) << "MB." << endl;
 
@@ -529,7 +332,7 @@ int main(int argc, char** argv)
         ungetc(ch, f);
         GenericGeometry geom(f);
         MUST( geom.getEntityType() == OSM_ENTITY_TYPE::RELATION, "found multipolygon that is not a relation");
-        convertWsg84ToWebMercator(geom);
+        convertWgs84ToWebMercator(geom);
 
         Envelope bounds = geom.getBounds();
         
@@ -538,10 +341,8 @@ int main(int argc, char** argv)
         
         RawTags tags = geom.getTags();
         
-        // all multipolygons are by definition areas and not lines
-        /*if (hasLineTag( tags ))
-            lineStorage.add( geom, bounds);*/
-            
+        /* all multipolygons are by definition areas and not lines, so we don't have to check 
+           for line tags */
         if (isArea(tags, true))
         {
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
@@ -578,7 +379,7 @@ int main(int argc, char** argv)
     for (OsmLightweightWay way: LightweightWayStore(storageDirectory + "ways", true))
     {
         way.unmap();
-        convertWsg84ToWebMercator(way);
+        convertWgs84ToWebMercator(way);
         
         pos += 1;
         if (pos % 1000000 == 0)
@@ -586,9 +387,6 @@ int main(int argc, char** argv)
 
         TagDictionary tags = way.getTags().asDictionary();
         
-        /*cout << "tags before: " << endl;
-        for (OsmKeyValuePair kv : tags)
-            cout << "\t" << kv.first << " -> " << kv.second << endl;*/
         if (wayReverseIndex.isReferenced(way.id))
         {
             vector<uint64_t> relationIds = wayReverseIndex.getReferencingRelations(way.id);
@@ -606,10 +404,6 @@ int main(int argc, char** argv)
             if (relationIds.size() > 0)
                 addBoundaryTags( tags, relationIds, boundaryRelationTags/*, way.id*/ );
         }
-        /*cout << "tags after: " << endl;
-        for (OsmKeyValuePair kv : tags)
-            cout << "\t" << kv.first << " -> " << kv.second << endl;*/
-        
         
         if ( isArea( tags, way.vertices[0] == way.vertices[way.numVertices-1] && way.numVertices > 3) )
         {
@@ -626,13 +420,6 @@ int main(int argc, char** argv)
                          << "not a closed area. Skipping it." << ESC_RESET << endl;
                 else
                 {
-                    /* zoom level 12: 
-                     * - map is 256* 1^12 = 1^20 pixels wide (also high)
-                     * - map is 2*2003750834cm wide (also high)
-                     * - each pixel corresponds to a width of 3821.851413727cm
-                     * - each pixel corresponds to an area of 14606548 cm²
-                     * - ignore all ways with an area of less than ~ 4px --> 58426192cm²*/
-                    //std::cout << way.getArea() << std::endl;
                     geos::geom::Geometry *geosGeom = createGeosGeometry(way);
                     if (geosGeom->getArea() > L12_MIN_POLYGON_AREA)
                     {
@@ -654,27 +441,27 @@ int main(int argc, char** argv)
             }
         }   
         
-        if ( hasLineTag( tags))
-            lineStorage.add(way, tags, way.getBounds());
-        
-        numWays += 1;
-
-        numVertices += way.numVertices;
-            
-        for (Tag kv: way.getTags())
+        if ( hasL12LineTag( tags))
         {
-            //cout << kv.first << " = " << kv.second << endl;
-            numTagBytes += 2 + kv.first.size() + kv.second.size();
+            geos::geom::Geometry *geosGeom = createGeosGeometry(way);
+            geos::simplify::TopologyPreservingSimplifier simp(geosGeom);
+            simp.setDistanceTolerance(L12_MAX_DEVIATION);
+            
+            Tags dummy(tags.begin(), tags.end());
+            uint8_t* tagBytes = RawTags::serialize( dummy, (uint64_t*)nullptr);
+            RawTags rawTags(tagBytes);
+
+            GenericGeometry gen = serialize( &(*simp.getResultGeometry()),
+                                             way.id | IS_WAY_REFERENCE, rawTags);
+                                             
+            lineStorage.add( gen, gen.getBounds());
+            delete [] tagBytes; //need to delete manual, RawTags does not take ownership
+            delete geosGeom;
+            
         }
         
-            
-
-        /*way = getLod12Version(way);
-        if (!way.id)    //has been invalidated by getLod12Version() --> should not be stored
-            continue;
-            
-        storageLod12.add(way, way.getBounds());
-        numLod12Ways += 1;*/
+        numWays += 1;
+        numVertices += way.numVertices;
     }
     
     
@@ -692,13 +479,9 @@ int main(int argc, char** argv)
     lineStorage.subdivide(MAX_NODE_SIZE);
     areaStorage.subdivide(MAX_NODE_SIZE);
  
-    /*storageLod12.closeFiles();
-    storageLod12.subdivide(MAX_NODE_SIZE, true);*/
     cout << "done." << endl;
 
     cout << "stats: data set contains " << (numWays     / 1000000) << "M ways "
-         << "with " << (numVertices/1000000) << "M vertices and " << (numTagBytes / 1000000) 
-         << "MB tags" << endl;
-    //cout << "stats: data set contains " << (numLod12Ways/ 1000) << "k ways with " << (numVertices/1000) << "k vertices and " << (numTagBytes / 1000) << "kB tags at LOD 12." << endl;   
+         << "with " << (numVertices/1000000) << "M vertices " << endl;
     return EXIT_SUCCESS;
 }

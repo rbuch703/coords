@@ -234,16 +234,16 @@ static uint64_t getSerializedSize( const geos::geom::Polygon *polygon)
 
 }
 
-GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags)
+
+static GenericGeometry serializePolygon(const geos::geom::Polygon* poly, 
+                                 uint64_t id, const RawTags &tags)
 {
     uint64_t tagsSize = tags.getSerializedSize();
     uint64_t size = sizeof(uint8_t) + //FEATURE_TYPE
                     sizeof(uint64_t) + // id
                     varUintNumBytes(tagsSize) +
                     tagsSize;
-    MUST( geom->getGeometryTypeId() == geos::geom::GeometryTypeId::GEOS_POLYGON,
-          "serializing GEOS geometries other than polygons is not implemented");
-    geos::geom::Polygon *poly = dynamic_cast<geos::geom::Polygon*>(geom);
+
     MUST(poly, "invalid conversion");
     //std::cerr << "serializing id=" << id << std::endl;
     
@@ -264,13 +264,57 @@ GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags
 
     outPos += serialize( poly->getExteriorRing(), outPos );
 
-    
     for (uint64_t i = 0; i < numInteriorRings; i++)
         outPos += serialize( poly->getInteriorRingN(i), outPos );
     
     MUST( outPos - outputBuffer == (int64_t)size, "serialization size mismatch");
 
     return GenericGeometry(outputBuffer, size, true);
+}
+
+static GenericGeometry serializeLineString(const geos::geom::LineString* line, 
+                                 uint64_t id, const RawTags &tags)
+{
+    uint64_t tagsSize = tags.getSerializedSize();
+    uint64_t size = sizeof(uint8_t) + //FEATURE_TYPE
+                    sizeof(uint64_t) + // id
+                    varUintNumBytes(tagsSize) +
+                    tagsSize;
+
+    MUST(line, "invalid conversion");
+    //std::cerr << "serializing id=" << id << std::endl;
+    
+    size += getSerializedSize( line );
+    
+    uint8_t *outputBuffer = new uint8_t[size];
+    uint8_t *outPos = outputBuffer;
+    outputBuffer[0] = (uint8_t)FEATURE_TYPE::LINE;
+    outPos = outputBuffer + sizeof(uint8_t);
+    
+    *(uint64_t*)outPos = id;
+    outPos += sizeof(uint64_t);
+    outPos += tags.serialize(outPos);
+    outPos += serialize( line, outPos );
+
+    MUST( outPos - outputBuffer == (int64_t)size, "serialization size mismatch");
+
+    return GenericGeometry(outputBuffer, size, true);
+    
+}
+
+
+GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags)
+{
+    switch ( geom->getGeometryTypeId() )
+    {
+        case geos::geom::GeometryTypeId::GEOS_POLYGON: 
+            return serializePolygon(dynamic_cast<geos::geom::Polygon*>(geom), id, tags);
+        case geos::geom::GeometryTypeId::GEOS_LINESTRING:
+            return serializeLineString(dynamic_cast<geos::geom::LineString*>(geom), id, tags);
+        default:     
+            MUST( false , "serializing GEOS geometries other than polygons and line strings"
+                          " is not implemented");
+    }
 }
 
 
@@ -332,10 +376,11 @@ geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom)
         seq->add( geos::geom::Coordinate( geom.vertices[i].lat, geom.vertices[i].lng));
 
     if (geom.vertices[0].lat == geom.vertices[geom.numVertices-1].lat &&
-        geom.vertices[0].lng == geom.vertices[geom.numVertices-1].lng)
+        geom.vertices[0].lng == geom.vertices[geom.numVertices-1].lng &&
+        geom.numVertices >= 4)
         return factory.createPolygon( factory.createLinearRing(seq), nullptr);
     else
-        return factory.createLineString( seq);
+        return factory.createLineString( seq );
     
 }
 

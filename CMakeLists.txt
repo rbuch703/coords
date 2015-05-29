@@ -68,8 +68,9 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/osm/osmBaseTypes.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
-               src/geom/ring.cc
                src/geom/geomSerializers.cc
+               src/geom/ring.cc
+               src/geom/srsConversion.cc
                src/containers/chunkedFile.cc
                src/containers/osmWayStore.cc
                src/containers/osmRelationStore.cc
