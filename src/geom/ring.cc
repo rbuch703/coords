@@ -313,7 +313,8 @@ static std::vector<Ring*> getRings( geos::geom::Geometry* geometry,
     std::vector<Ring*> rings;
     //cerr << "#" << relId << " - " << geometry->getGeometryType() << endl;
     MUST( geometry->getGeometryTypeId() == geos::geom::GEOS_POLYGON ||
-          geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON,
+          geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON ||
+          geometry->getGeometryTypeId() == geos::geom::GEOS_GEOMETRYCOLLECTION,
           "geometric join failed");
           
     if (geometry->getGeometryTypeId() == geos::geom::GEOS_POLYGON)
@@ -321,18 +322,24 @@ static std::vector<Ring*> getRings( geos::geom::Geometry* geometry,
         for (geos::geom::Polygon *poly : 
                 Ring::createRings( dynamic_cast<geos::geom::Polygon*>(geometry), relId))
             rings.push_back( new Ring(poly, wayIds));
-    } else
+    } else // MultiPolygon is a subclass of GeometryCollection, so this branch can handle both
     {
-        MUST(geometry->getGeometryTypeId() == geos::geom::GEOS_MULTIPOLYGON, 
-             "logic error");
-
         auto collection = dynamic_cast<geos::geom::GeometryCollection*>(geometry);
+        MUST(collection,"logic error");
+
         for (uint64_t i = 0; i < collection->getNumGeometries(); i++)
         {
-            MUST( collection->getGeometryN(i)->getGeometryTypeId() ==
-                  geos::geom::GEOS_POLYGON, "geometric difference failed")
+            if (collection->getGeometryN(i)->getGeometryTypeId() != geos::geom::GEOS_POLYGON)
+            {
+                std::cerr << ESC_FG_YELLOW << "[WARN] relation " << relId 
+                          << ": merge result (" << wayIds << " contains geometries of type " 
+                          << collection->getGeometryN(i)->getGeometryType() 
+                          << ESC_RESET << std::endl;
+                continue;
+            }
             
             auto poly = dynamic_cast<const geos::geom::Polygon*>(collection->getGeometryN(i));
+            MUST(poly, "logic error");
 
             for (geos::geom::Polygon *pRing : Ring::createRings( poly, relId))
                 rings.push_back( new Ring(pRing, wayIds));
@@ -378,12 +385,21 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
          << " as 'union of overlaps'" << ESC_RESET  << std::endl;
          
         // non-overlapping adjacent (inner) rings are allowed by the OSM multipolygon spec
-        //else
-        //    std::cerr << "'union'"  << ESC_RESET << std::endl;
-
+        /*else
+        {
+            std::cerr << ESC_FG_GRAY << "[INFO] relation " << relId << ": merging rings "
+         << "(" << ring1->wayIds << ") and (" << ring2->wayIds << ")" 
+         << " as 'union'" << ESC_RESET  << std::endl;
+        }*/
+        
         joined = ring1->getPolygon()->Union(ring2->getPolygon());
-        MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
-              "geometric join failed");
+
+        /*This assertion would be true for geometrically exact computations. But since
+         *we operate on an integer grid, subtle geometry displacements can occur that
+         *result in different kinds of join results*/
+        /*MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
+              "geometric join failed");*/
+          
     }
 
     std::vector<uint64_t> wayIds = ring1->wayIds;
