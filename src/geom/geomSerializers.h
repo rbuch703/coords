@@ -17,16 +17,12 @@ namespace geos { namespace geom { class Geometry; } }
 
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut);
 
-GenericGeometry serializeWay(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, 
-                            const TagDictionary &wayTags, bool asPolygon);
+GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon);
 
 GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags);
 
 geos::geom::Geometry* createGeosGeometry( const GenericGeometry   &geom);
 geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom);
-
-
-
 
 /* ON-DISK LAYOUT FOR GEOMETRY
 :

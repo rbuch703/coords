@@ -29,11 +29,15 @@ public:
     void     serialize( FILE* data_file/*, mmap_t *index_map*/) const;
     uint8_t* serialize( uint8_t* dest) const;
 
-    //std::map<std::string, std::string> getTagSet() const;
+    void addTagsFromBoundaryRelations(    
+        std::vector<uint64_t> referringRelationIds,
+        const std::map<uint64_t, TagDictionary> &boundaryRelationTags);
+        
     RawTags getTags() const { return RawTags(tagBytes);}
     uint64_t size() const;
     Envelope getBounds() const;
     double getArea() const;
+    bool isArea() const;
     
     /* convert 'vertices' and 'tagBytes' to owned arrays from memory-mapped ranges. 
        After this call, changes to either one of these arrays no longer cause changes

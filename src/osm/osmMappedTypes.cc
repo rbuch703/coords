@@ -160,9 +160,15 @@ static double getArea(const OsmGeoPosition* vertices, uint64_t numVertices)
 
 double OsmLightweightWay::getArea() const
 {
-        
-    return ::getArea( this->vertices, this->numVertices);
-    
+    return ::getArea( this->vertices, this->numVertices);  
+}
+
+bool OsmLightweightWay::isArea() const
+{
+    OsmGeoPosition v0 = vertices[0];
+    OsmGeoPosition vn = vertices[numVertices-1];
+    return v0.lat == vn.lat && v0.lng == vn.lng && numVertices > 3;
+
 }
 
 void OsmLightweightWay::unmap()
@@ -244,6 +250,112 @@ uint8_t* OsmLightweightWay::serialize( uint8_t* dest) const
 
     return dest;
 }
+
+static uint64_t tryParse(const char* s, uint64_t defaultValue)
+{
+    uint64_t res = 0;
+    for ( ; *s != '\0'; s++)
+    {
+        if ( *s < '0' || *s > '9') return defaultValue;
+        res = (res * 10) + ( *s - '0');
+        
+    }
+    return res;
+}
+
+/* addBoundaryTags() adds tags from boundary relations that refer to a way to said way.
+   Since a way may be part of multiple boundary relations (e.g. country boundaries are usually
+   also the boundaries of a state inside that country), care must be taken when multiple referring
+   relations are about to add the same tags to a way.
+   
+   Algorithm: the admin_level of the way is determined (if it has one itself, otherwise
+              the dummy value 0xFFFF is used). Afterwards,
+              the tags from all boundary relations are added as follows: when a relation
+              has a numerically smaller (or equal) admin level to that of the way
+              (i.e. it is a more important boundary), all of its tags are added to the way
+              (even if that means overwriting existing tags) and the way's admin level is
+              updated. If the relation has a less important admin level, only those of its
+              tags are added to the way that do not overwrite existing tags.
+
+  */
+
+static void addBoundaryTags( TagDictionary &tags, 
+                             const std::vector<uint64_t> &referringRelations, 
+                             const std::map<uint64_t, TagDictionary> &boundaryTags)
+{
+
+    uint64_t adminLevel = tags.count("admin_level") ? tryParse(tags["admin_level"].c_str(), 0xFFFF) : 0xFFFF;
+    //cout << "admin level is " << adminLevel << endl;
+
+    for ( uint64_t relId : referringRelations)
+    {
+        if (!boundaryTags.count(relId))
+            continue;
+            
+        const TagDictionary &relationTags = boundaryTags.at(relId);
+        uint64_t relationAdminLevel = relationTags.count("admin_level") ?
+                                      tryParse(relationTags.at("admin_level").c_str(), 0xFFFF) :
+                                      0xFFFF;
+        
+        for ( const OsmKeyValuePair &kv : relationTags)
+        {
+            /* is only the relation type marking the relation as a boundary. This was already
+             * processed when creating the boundaryTags map, and need not be considered further*/
+            if (kv.first == "type")
+                continue;
+                
+            if ( ! tags.count(kv.first))    //add if not already exists
+                tags.insert( kv);
+            else if (relationAdminLevel <= adminLevel)  //overwrite only if from a more important boundary
+                tags[kv.first] = kv.second;
+            
+        }
+
+        if (relationAdminLevel < adminLevel)
+        {
+            adminLevel = relationAdminLevel;
+            //cout << "\tadmin level is now " << adminLevel << endl;
+            //assert(adminLevel != 1024);
+        }
+    }
+}
+
+
+void OsmLightweightWay::addTagsFromBoundaryRelations(
+    std::vector<uint64_t> referringRelationIds,
+    const std::map<uint64_t, TagDictionary> &boundaryRelationTags)
+{
+    uint64_t i = 0;
+    while (i < referringRelationIds.size())
+    {
+        if (! boundaryRelationTags.count(referringRelationIds[i]))
+        {
+            referringRelationIds[i] = referringRelationIds.back();
+            referringRelationIds.pop_back();
+        } else
+            i++;
+    }
+    
+    if (referringRelationIds.size() == 0)
+        return;
+
+    TagDictionary tagDict = this->getTags().asDictionary();
+    addBoundaryTags( tagDict, referringRelationIds, boundaryRelationTags );
+    
+    Tags tags(tagDict.begin(), tagDict.end());
+
+    /* we are going to modify the way (or rather its tags), so make sure that this change
+     * is not reflected in the underlying data store where the way was read from */
+    if (isDataMapped)
+        this->unmap();
+
+    uint64_t numBytes = 0;
+    uint8_t *newTagBytes = RawTags::serialize(tags, &numBytes);
+    delete [] this->tagBytes;
+    this->tagBytes = newTagBytes;
+    this->numTagBytes = numBytes;
+}
+
 
 std::ostream& operator<<(std::ostream &out, const OsmLightweightWay &way)
 {

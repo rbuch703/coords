@@ -19,9 +19,6 @@ typedef std::map< std::string, std::string> TagDictionary;
 class RawTags 
 {
 public:
-    RawTags(uint64_t numTags, uint64_t numTagBytes, const uint8_t *symbolicNameBits, 
-            const uint8_t* tagsStart);
-            
     RawTags(const uint8_t* src);
 
     /* returns: a memory buffer to which the Tags have been serialized.

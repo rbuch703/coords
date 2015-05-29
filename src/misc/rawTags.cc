@@ -15,14 +15,6 @@
     2. if is not symbolic --> zero-terminated string
 */
 
-
-RawTags::RawTags(uint64_t numTags, uint64_t numTagBytes, 
-                 const uint8_t *symbolicNameBits, 
-                 const uint8_t* tagsStart):
-    numTags(numTags), numTagBytes(numTagBytes),
-    symbolicNameBits(symbolicNameBits), tagsStart(tagsStart) 
-{}
-
 RawTags::RawTags(const uint8_t* src)
 {
     int nRead = 0;

@@ -63,37 +63,28 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
     MUST( endPos == numBytes + posBefore, " polygon size mismatch");
 }
 
-GenericGeometry serializeWay(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, 
-                            const TagDictionary &wayTags, bool asPolygon)
+GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon)
 {
-    OsmGeoPosition v0 = vertices[0];
-    OsmGeoPosition vn = vertices[numVertices-1];
+    OsmGeoPosition v0 = way.vertices[0];
+    OsmGeoPosition vn = way.vertices[way.numVertices-1];
     
     if (asPolygon)
         MUST( v0.lat == vn.lat && v0.lng == vn.lng, "polygon ring is not closed");
         
-    Tags tags(wayTags.begin(), wayTags.end());
-
-    /*for (const OsmKeyValuePair &kv : wayTags)
-        tags.push_back( std::make_pair( kv.first, kv.second));*/
-        
-    uint64_t tagsSize = RawTags::getSerializedSize(tags);
-    
     uint64_t sizeTmp = 
         sizeof(uint8_t)  + // 'type' field
         sizeof(uint64_t) + // 'id' field
-        varUintNumBytes(tagsSize) +
-        tagsSize + //tags size
-        varUintNumBytes(numVertices);
+        way.numTagBytes +
+        varUintNumBytes(way.numVertices);
         
     int64_t prevLat = 0;
     int64_t prevLng = 0;
-    for (uint64_t i = 0; i < numVertices; i++)
+    for (uint64_t i = 0; i < way.numVertices; i++)
     {
-        int64_t dLat = vertices[i].lat - prevLat;
-        int64_t dLng = vertices[i].lng - prevLng;
-        prevLat = vertices[i].lat;
-        prevLng = vertices[i].lng;
+        int64_t dLat = way.vertices[i].lat - prevLat;
+        int64_t dLng = way.vertices[i].lng - prevLng;
+        prevLat = way.vertices[i].lat;
+        prevLng = way.vertices[i].lng;
         
         sizeTmp += varIntNumBytes(dLat);
         sizeTmp += varIntNumBytes(dLng);
@@ -119,29 +110,26 @@ GenericGeometry serializeWay(uint64_t wayId, OsmGeoPosition* vertices, uint64_t 
     *(FEATURE_TYPE*)outPos = ft;
     outPos += sizeof(FEATURE_TYPE);
     
-    *(uint64_t*)outPos = wayId;
+    *(uint64_t*)outPos = way.id;
     outPos += sizeof(uint64_t);
 
-    uint64_t numTagBytes = 0;
-    uint8_t * tagBytes = RawTags::serialize(tags, &numTagBytes);
-    memcpy(outPos, tagBytes, numTagBytes);
-    delete [] tagBytes;
-    outPos += numTagBytes;
+    memcpy(outPos, way.tagBytes, way.numTagBytes);
+    outPos += way.numTagBytes;
 
     if (asPolygon)
         // ways only consist of a single outer ring (no inner rings)
         outPos += varUintToBytes(1, outPos); 
 
-    outPos += varUintToBytes(numVertices, outPos);
+    outPos += varUintToBytes(way.numVertices, outPos);
     
     prevLat = 0;
     prevLng = 0;
-    for (uint64_t i = 0; i < numVertices; i++)
+    for (uint64_t i = 0; i < way.numVertices; i++)
     {
-        int64_t dLat = vertices[i].lat - prevLat;
-        int64_t dLng = vertices[i].lng - prevLng;
-        prevLat = vertices[i].lat;
-        prevLng = vertices[i].lng;
+        int64_t dLat = way.vertices[i].lat - prevLat;
+        int64_t dLng = way.vertices[i].lng - prevLng;
+        prevLat = way.vertices[i].lat;
+        prevLng = way.vertices[i].lng;
         
         outPos += varIntToBytes( dLat, outPos);
         outPos += varIntToBytes( dLng, outPos);
@@ -384,9 +372,10 @@ geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom)
     
 }
 
+/*
 void serializeWayAsGeometry(uint64_t wayId, OsmGeoPosition* vertices, uint64_t numVertices, const TagDictionary &wayTags, bool asPolygon, FILE* fOut)
 {
     GenericGeometry geom = serializeWay(wayId, vertices, numVertices, wayTags, asPolygon);
     MUST( fwrite( geom.bytes, geom.numBytes, 1, fOut) == 1, "write error");
 }
-
+*/

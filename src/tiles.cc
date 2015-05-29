@@ -24,6 +24,10 @@ FileBackedTile::FileBackedTile(const char*fileName, const Envelope &bounds, uint
             fData = fopen(fileName, "wb+"); //open for reading and writing; truncate file
             if (!fData) {perror("fopen"); abort();}
         }
+
+FileBackedTile::FileBackedTile(const std::string &fileName, const Envelope &bounds, uint64_t maxNodeSize) : FileBackedTile(fileName.c_str(), bounds, maxNodeSize) 
+{
+}
         
 FileBackedTile::~FileBackedTile() 
 {
@@ -38,16 +42,12 @@ FileBackedTile::~FileBackedTile()
     fData = NULL;
 }
 
-void FileBackedTile::add(OsmLightweightWay &way, const TagDictionary &tags, const Envelope &wayBounds)
+void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds, bool asPolygon)
 {
     if (fData)
     {
         assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-/*#ifndef NDEBUG
-        uint64_t posBefore = ftell(fData);
-#endif*/
-
-        serializeWay(way.id, way.vertices, way.numVertices, tags, false).serialize(fData);
+        serializeWay(way, asPolygon).serialize(fData);
         this->size = ftell(fData);
 
         if ( this->size > maxNodeSize)
@@ -55,11 +55,15 @@ void FileBackedTile::add(OsmLightweightWay &way, const TagDictionary &tags, cons
     } else 
     {
         assert( topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
-        if (wayBounds.overlapsWith(topLeftChild->bounds)) topLeftChild->add(way, tags, wayBounds);
-        if (wayBounds.overlapsWith(topRightChild->bounds)) topRightChild->add(way, tags, wayBounds);
+        if (wayBounds.overlapsWith(topLeftChild->bounds)) 
+            topLeftChild->add(way, wayBounds, asPolygon);
+        if (wayBounds.overlapsWith(topRightChild->bounds)) 
+            topRightChild->add(way, wayBounds, asPolygon);
 
-        if (wayBounds.overlapsWith(bottomLeftChild->bounds)) bottomLeftChild->add(way, tags,  wayBounds);
-        if (wayBounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(way, tags,  wayBounds);
+        if (wayBounds.overlapsWith(bottomLeftChild->bounds)) 
+            bottomLeftChild->add(way,  wayBounds, asPolygon);
+        if (wayBounds.overlapsWith(bottomRightChild->bounds)) 
+            bottomRightChild->add(way,  wayBounds, asPolygon);
     }
     
 }
