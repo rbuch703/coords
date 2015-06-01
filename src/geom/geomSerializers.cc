@@ -16,19 +16,24 @@
 #include <geos/geom/PrecisionModel.h>
 
 
-/* Note: all geometry data is stored as integers. Having the computations be performed
-         using arbitrary floats can lead to subtle errors (simple polygons with non-connected
-         interior, unclosed rings, ...) when later rounding those floats to integers. 
-         To prevent those, we instruct geos to keep all coordinates as integers in the first
-         place. */
-static geos::geom::PrecisionModel model( geos::geom::PrecisionModel::Type::FIXED);
-static geos::geom::GeometryFactory factory(&model);
+/* Note: all geometry data is stored as integers, but geometry processing occurs as floats
+         (because GEOS does not work robustly when operating on ints, and will fail on some
+		 OSM data). So all methods serializing GEOS data must take care to sensibly round
+		 the float values. */
+
+static geos::geom::GeometryFactory factory;
+
+
+//forward declarations
+static void serialize(const geos::geom::LineString *ring, bool reverseVertexOrder, FILE* fOut);
+static uint64_t getSerializedSize(const geos::geom::LineString *ring, bool reverseVertexOrder);
 
 
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut)
 {
     //cerr << "serializing relation " << relId << endl;
     uint32_t numRings = 1 + poly.children.size(); // 1 outer, plus the inner rings
+    MUST( poly.getPolygon()->getNumInteriorRing() == 0, "Ring with inner ring.");
 
     uint64_t tagsSize = RawTags::getSerializedSize(tags);
     uint64_t sizeTmp = 
@@ -37,10 +42,13 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
                     varUintNumBytes(tagsSize) + 
                     tagsSize + //tags size
                     varUintNumBytes(numRings) +   // 'numRings' field
-                    poly.getSerializedSize(false); // outer ring size
+                    getSerializedSize(poly.getPolygon()->getExteriorRing(), false); // outer ring size
 
     for (const Ring* inner : poly.children)
-        sizeTmp += inner->getSerializedSize(true);
+    {
+        MUST( inner->getPolygon()->getNumInteriorRing() == 0, "Ring with inner ring.");
+        sizeTmp += getSerializedSize( inner->getPolygon()->getExteriorRing(), true);
+    }
                     
     MUST( sizeTmp < (1ull) <<  32, "polygon size overflow");
     uint32_t numBytes = sizeTmp;
@@ -53,14 +61,142 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
     
     RawTags::serialize(tags, fOut);
     varUintToFile(numRings, fOut);
-    poly.serialize(fOut, false);
+    MUST( poly.getPolygon()->getNumInteriorRing() == 0, "Ring with inner ring.");
+    serialize(poly.getPolygon()->getExteriorRing(), false, fOut);
 
     for (const Ring* inner : poly.children)
-        inner->serialize(fOut, true);
+    {
+        MUST( inner->getPolygon()->getNumInteriorRing() == 0, "Ring with inner ring.");
+        serialize( inner->getPolygon()->getExteriorRing(), true, fOut);
+
+    }
     
     uint64_t endPos = ftell(fOut);
     //cout << "size calculated: " << numBytes << ", actual: " << (endPos - posBefore) << endl;
     MUST( endPos == numBytes + posBefore, " polygon size mismatch");
+}
+
+static void serialize(const geos::geom::LineString *ring, bool reverseVertexOrder, FILE* fOut)
+{
+    const std::vector<geos::geom::Coordinate>& coords = 
+        *ring->getCoordinatesRO()->toVector();
+    
+    MUST(coords.size() >= 4, "ring has less than four vertices");
+    varUintToFile(coords.size(), fOut);
+
+    
+    int64_t prevX = 0;
+    int64_t prevY = 0;
+    if (!reverseVertexOrder)
+    {
+        for (uint64_t i = 0; i < coords.size(); i++)
+        {
+            int64_t x = (int64_t)coords[i].x;
+            int64_t y = (int64_t)coords[i].y;
+            int64_t dX = x - prevX;
+            int64_t dY = y - prevY;
+            prevX = x;
+            prevY = y;
+            varIntToFile(dX, fOut);
+            varIntToFile(dY, fOut);
+        }
+    } else
+    {
+        for (int64_t i = coords.size()-1; i >= 0; i--)
+        {
+            int64_t x = (int64_t)coords[i].x;
+            int64_t y = (int64_t)coords[i].y;
+            int64_t dX = x - prevX;
+            int64_t dY = y - prevY;
+            prevX = x;
+            prevY = y;
+            varIntToFile(dX, fOut);
+            varIntToFile(dY, fOut);
+        }
+    }
+}
+
+static uint64_t serialize( const geos::geom::LineString *ring, bool reverseVertexOrder, uint8_t* const outputBuffer)
+{
+    const geos::geom::CoordinateSequence &coords = *ring->getCoordinatesRO();
+    uint64_t numVertices = coords.size();
+    //std::cout << "serializing ring with " << numVertices << " vertices" << std::endl;
+    uint8_t* outPos = outputBuffer;
+    int64_t prevX = 0;
+    int64_t prevY = 0;
+    
+    outPos += varUintToBytes(numVertices, outPos);
+    
+    if (!reverseVertexOrder)
+    {
+        for (uint64_t i= 0; i < numVertices; i++)
+        {
+            int x = (int64_t)coords[i].x;
+            int y = (int64_t)coords[i].y;
+            int64_t dX = x - prevX;
+            int64_t dY = y - prevY;
+            outPos += varIntToBytes(dX, outPos);
+            outPos += varIntToBytes(dY, outPos);
+            prevX += dX;
+            prevY += dY;
+        }
+    } else
+    {
+        for (int64_t i = numVertices; i >= 0; i--)
+        {
+            int x = (int64_t)coords[i].x;
+            int y = (int64_t)coords[i].y;
+            int64_t dX = x - prevX;
+            int64_t dY = y - prevY;
+            outPos += varIntToBytes(dX, outPos);
+            outPos += varIntToBytes(dY, outPos);
+            prevX += dX;
+            prevY += dY;
+        }
+    
+    }
+    return outPos - outputBuffer;
+}
+
+static uint64_t getSerializedSize(const geos::geom::LineString *ring, bool reverseVertexOrder)
+{
+    const std::vector<geos::geom::Coordinate> &coords = 
+        *ring->getCoordinatesRO()->toVector();
+
+    uint64_t size = varUintNumBytes( coords.size() ); //size of 'numVertices' field;
+    
+    int64_t prevX = 0;
+    int64_t prevY = 0;
+    if (!reverseVertexOrder)
+    {
+        for (uint64_t i = 0; i < coords.size(); i++)
+        {
+            int64_t x = (int64_t)coords[i].x;
+            int64_t y = (int64_t)coords[i].y;
+            int64_t dX = x - prevX;
+            int64_t dY = y - prevY;
+            prevX = x;
+            prevY = y;
+            size += varIntNumBytes( dX );   //size of the delta-encoded vertices
+            size += varIntNumBytes( dY );
+        }
+    } else
+    {
+        for (int64_t i = coords.size() - 1; i >= 0; i--)
+        {
+            int64_t x = (int64_t)coords[i].x;
+            int64_t y = (int64_t)coords[i].y;
+
+            int64_t dX = x - prevX;
+            int64_t dY = y - prevY;
+            prevX = x;
+            prevY = y;
+            size += varIntNumBytes( dX );
+            size += varIntNumBytes( dY );
+        }
+    }
+    
+    return size;
 }
 
 GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon)
@@ -163,59 +299,15 @@ static geos::geom::CoordinateSequence* getCoordinateSequence(const uint8_t* &pos
     return seq;
 }
 
-static uint64_t getSerializedSize( const geos::geom::LineString *ring)
-{
-    const geos::geom::CoordinateSequence &coords = *ring->getCoordinatesRO();
-    uint64_t nBytes = 0;
-    int64_t prevX = 0;
-    int64_t prevY = 0;
-    
-    nBytes += varUintNumBytes(coords.size());
-    for (uint64_t i= 0; i < coords.size(); i++)
-    {
-        int64_t dX = coords[i].x - prevX;
-        int64_t dY = coords[i].y - prevY;
-        nBytes += varIntNumBytes(dX);
-        nBytes += varIntNumBytes(dY);
-        prevX += dX;
-        prevY += dY;
-    }
-    return nBytes;
-}
-
-static uint64_t serialize( const geos::geom::LineString *ring, uint8_t* const outputBuffer)
-{
-    const geos::geom::CoordinateSequence &coords = *ring->getCoordinatesRO();
-    uint64_t numVertices = coords.size();
-    //std::cout << "serializing ring with " << numVertices << " vertices" << std::endl;
-    uint8_t* outPos = outputBuffer;
-    int64_t prevX = 0;
-    int64_t prevY = 0;
-    
-    outPos += varUintToBytes(numVertices, outPos);
-    
-    for (uint64_t i= 0; i < numVertices; i++)
-    {
-        int64_t dX = coords[i].x - prevX;
-        int64_t dY = coords[i].y - prevY;
-        outPos += varIntToBytes(dX, outPos);
-        outPos += varIntToBytes(dY, outPos);
-        prevX += dX;
-        prevY += dY;
-    }
-    return outPos - outputBuffer;
-}
-
-
 static uint64_t getSerializedSize( const geos::geom::Polygon *polygon)
 {
     uint64_t numInteriorRings = polygon->getNumInteriorRing();
     uint64_t nBytes = varUintNumBytes(numInteriorRings + 1); //plus one exterior ring
     
-    nBytes += getSerializedSize( polygon->getExteriorRing() );
+    nBytes += getSerializedSize( polygon->getExteriorRing(), false );
     
     for (uint64_t i = 0; i < numInteriorRings; i++)
-        nBytes += getSerializedSize( polygon->getInteriorRingN(i));
+        nBytes += getSerializedSize( polygon->getInteriorRingN(i), false);
         
     return nBytes;
     
@@ -250,10 +342,16 @@ static GenericGeometry serializePolygon(const geos::geom::Polygon* poly,
     uint64_t numInteriorRings = poly->getNumInteriorRing();
     outPos += varUintToBytes(numInteriorRings+1, outPos); //plus exterior ring
 
-    outPos += serialize( poly->getExteriorRing(), outPos );
+    /* FIXME: for Mapnik, the polygon outer ring orientation has to be the opposite of the
+              orientation of the inner rings. Currently, this code assumes that said orientation
+              fixing has been done before and so will not be attempted here. To improve 
+              robustness, orientation testing and correction shoul dbe performed here as well (
+              e.g. based on an signed polygon area test() */
+              
+    outPos += serialize( poly->getExteriorRing(), false, outPos );
 
     for (uint64_t i = 0; i < numInteriorRings; i++)
-        outPos += serialize( poly->getInteriorRingN(i), outPos );
+        outPos += serialize( poly->getInteriorRingN(i), false, outPos );
     
     MUST( outPos - outputBuffer == (int64_t)size, "serialization size mismatch");
 
@@ -272,7 +370,7 @@ static GenericGeometry serializeLineString(const geos::geom::LineString* line,
     MUST(line, "invalid conversion");
     //std::cerr << "serializing id=" << id << std::endl;
     
-    size += getSerializedSize( line );
+    size += getSerializedSize( line, false );
     
     uint8_t *outputBuffer = new uint8_t[size];
     uint8_t *outPos = outputBuffer;
@@ -282,7 +380,7 @@ static GenericGeometry serializeLineString(const geos::geom::LineString* line,
     *(uint64_t*)outPos = id;
     outPos += sizeof(uint64_t);
     outPos += tags.serialize(outPos);
-    outPos += serialize( line, outPos );
+    outPos += serialize( line, false, outPos );
 
     MUST( outPos - outputBuffer == (int64_t)size, "serialization size mismatch");
 

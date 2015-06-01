@@ -15,13 +15,11 @@
 #include "misc/escapeSequences.h"
 #include "misc/varInt.h"
 
-/* Note: all geometry data is stored as integers. Having the computations be performed
-         using arbitrary floats can lead to subtle errors (simple polygons with non-connected
-         interior, unclosed rings, ...) when later rounding those floats to integers. 
-         To prevent those, we instruct geos to keep all coordinates as integers in the first
-         place. */
-static geos::geom::PrecisionModel model( geos::geom::PrecisionModel::Type::FIXED);
-geos::geom::GeometryFactory Ring::factory(&model);  
+/* Note: all geometry data is stored as integers, but geometry processing occurs as floats
+         (because GEOS does not work robustly when operating on ints, and will fail on some
+		 OSM data). So all methods serializing GEOS data must take care to sensibly round
+		 the float values. */
+geos::geom::GeometryFactory Ring::factory;
 
 Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds):
     wayIds(wayIds), geosPolygon(geosPolygon)
@@ -216,79 +214,6 @@ bool Ring::interiorIntersectsWith(const Ring &other) const
 }
 
 
-void Ring::serialize(FILE* fOut, bool reverseVertexOrder) const
-{
-    MUST(this->geosPolygon->getNumInteriorRing() == 0, "Ring cannot have interior rings");
-    const geos::geom::LineString* boundary = this->geosPolygon->getExteriorRing();
-    const std::vector<geos::geom::Coordinate>& coords = *boundary->getCoordinatesRO()->toVector();
-    
-    MUST(coords.size() >= 4, "ring has less than four vertices");
-    varUintToFile(coords.size(), fOut);
-
-    int64_t prevX = 0;
-    int64_t prevY = 0;
-    if (!reverseVertexOrder)
-    {
-        for (uint64_t i = 0; i < coords.size(); i++)
-        {
-            int64_t dX = coords[i].x - prevX;
-            int64_t dY = coords[i].y - prevY;
-            prevX = coords[i].x;
-            prevY = coords[i].y;
-            varIntToFile(dX, fOut);
-            varIntToFile(dY, fOut);
-        }
-    } else
-    {
-        for (int64_t i = coords.size()-1; i >= 0; i--)
-        {
-            int64_t dX = coords[i].x - prevX;
-            int64_t dY = coords[i].y - prevY;
-            prevX = coords[i].x;
-            prevY = coords[i].y;
-            varIntToFile(dX, fOut);
-            varIntToFile(dY, fOut);
-        }
-    }
-}
-
-uint64_t Ring::getSerializedSize(bool reverseVertexOrder) const
-{
-    MUST(this->geosPolygon->getNumInteriorRing() == 0, "Ring cannot have interior rings");
-    const std::vector<geos::geom::Coordinate> &coords = 
-        *this->geosPolygon->getExteriorRing()->getCoordinatesRO()->toVector();
-
-    uint64_t size = varUintNumBytes( coords.size() ); //size of 'numVertices' field;
-    
-    int64_t prevX = 0;
-    int64_t prevY = 0;
-    if (!reverseVertexOrder)
-    {
-        for (uint64_t i = 0; i < coords.size(); i++)
-        {
-            int64_t dX = coords[i].x - prevX;
-            int64_t dY = coords[i].y - prevY;
-            prevX = coords[i].x;
-            prevY = coords[i].y;
-            size += varIntNumBytes( dX );   //size of the delta-encoded vertices
-            size += varIntNumBytes( dY );
-        }
-    } else
-    {
-        for (int64_t i = coords.size() - 1; i >= 0; i--)
-        {
-            int64_t dX = coords[i].x - prevX;
-            int64_t dY = coords[i].y - prevY;
-            prevX = coords[i].x;
-            prevY = coords[i].y;
-            size += varIntNumBytes( dX );
-            size += varIntNumBytes( dY );
-        }
-    }
-    
-    return size;
-}
-
 const geos::geom::Polygon* Ring::getPolygon() const 
 { 
     return this->geosPolygon; 
@@ -394,11 +319,8 @@ std::vector<Ring*> Ring::merge( const Ring* ring1, const Ring* ring2,
         
         joined = ring1->getPolygon()->Union(ring2->getPolygon());
 
-        /*This assertion would be true for geometrically exact computations. But since
-         *we operate on an integer grid, subtle geometry displacements can occur that
-         *result in different kinds of join results*/
-        /*MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
-              "geometric join failed");*/
+        MUST( joined->getGeometryTypeId() == geos::geom::GEOS_POLYGON, 
+              "geometric join failed");
           
     }
 
