@@ -42,7 +42,7 @@ FileBackedTile::~FileBackedTile()
     fData = NULL;
 }
 
-void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds, bool asPolygon)
+void FileBackedTile::add(const OsmLightweightWay &way, const Envelope &wayBounds, bool asPolygon)
 {
     if (fData)
     {
@@ -68,7 +68,7 @@ void FileBackedTile::add(OsmLightweightWay &way, const Envelope &wayBounds, bool
     
 }
 
-void FileBackedTile::add(GenericGeometry &geom, const Envelope &bounds)
+void FileBackedTile::add(const GenericGeometry &geom, const Envelope &bounds)
 {
     if (fData)
     {

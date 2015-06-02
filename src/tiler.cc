@@ -24,10 +24,12 @@
 #include "misc/escapeSequences.h"
 #include "misc/varInt.h"
 
-using namespace std;
+#include "lod/polygonLodHandler.h"
+#include "lod/buildingPolygonLodHandler.h"
+#include "lod/landusePolygonLodHandler.h"
+#include "lod/waterPolygonLodHandler.h"
 
-const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
-const uint64_t MAX_NODE_SIZE      = 10ll * 1000 * 1000;
+using namespace std;
 
 std::string storageDirectory;
 std::string tileDirectory;
@@ -78,46 +80,6 @@ int parseArguments(int argc, char** argv)
         tileDirectory += "/";
     
     return optind;
-}
-
-template <typename T>
-bool isArea( const T &tags, bool geometryIsClosedArea )
-{
-    for (const Tag &tag : tags)
-    {
-        if (tag.first == "building" && (tag.second != "wall" && tag.second != "bridge")) return true;
-        if (tag.first == "landuse") return true;
-        if (tag.first == "natural")
-        {
-            if (tag.second != "coastline" && 
-                tag.second != "cliff" &&
-                tag.second != "hedge" &&
-                tag.second != "tree" &&
-                tag.second != "ridge" &&
-                tag.second != "tree_row")
-                return true;
-                
-            //cliffs in OSM can be linear or areas
-            if (tag.second == "cliff" && geometryIsClosedArea) return true;
-        }
-        
-        if (tag.first == "place")
-        {
-            if (geometryIsClosedArea) return true;
-        }
-        
-        if (tag.first == "water" && tag.second == "riverbank") return true;
-        if (tag.first == "waterway" && geometryIsClosedArea) return true;
-        if (tag.first == "amenity" && geometryIsClosedArea) return true;
-        if (tag.first == "leisure") 
-        {
-            if (tag.second != "slipway" && 
-                tag.second != "track") return true;
-        }
-        if (tag.first == "area" && tag.second != "no") return true;
-    }
-            
-    return false;
 }
 
 static const std::set<std::string> lineIndicatorTags {
@@ -212,32 +174,8 @@ map<uint64_t, TagDictionary> loadBoundaryRelationTags(const string &storageDirec
     return res;
 }
 
-void cleanupTileDirectory(const std::string tileDirectory)
-{
-    deleteNumberedFiles(tileDirectory, "area_", "");
-    deleteIfExists(     tileDirectory, "area_");
-
-    deleteNumberedFiles(tileDirectory, "area_l12_", "");
-    deleteIfExists(     tileDirectory, "area_l12_");
-
-    deleteNumberedFiles(tileDirectory, "line_", "");
-    deleteIfExists(     tileDirectory, "line_");
-
-    deleteNumberedFiles(tileDirectory, "line_l12_", "");
-    deleteIfExists(     tileDirectory, "line_l12_");
-
-}
 
 static const uint64_t MAP_WIDTH_IN_CM     = 2 * (uint64_t)2003750834;
-static const uint64_t L12_MAP_WIDTH_IN_PIXELS = 256 * ( 1 << 12);
-static const double   L12_MAP_RESOLUTION_IN_CM_PER_PIXEL = 
-                          MAP_WIDTH_IN_CM / (double)L12_MAP_WIDTH_IN_PIXELS;
-
-static const double   L12_MAX_DEVIATION = L12_MAP_RESOLUTION_IN_CM_PER_PIXEL;
-
-static const double   L12_PIXEL_AREA = L12_MAP_RESOLUTION_IN_CM_PER_PIXEL *
-                                       L12_MAP_RESOLUTION_IN_CM_PER_PIXEL;
-static const double   L12_MIN_POLYGON_AREA = 4 * L12_PIXEL_AREA;
 
 void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t wayId,
                     FileBackedTile &target, double maxDeviation)
@@ -251,26 +189,61 @@ void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t wa
     target.add( gen, gen.getBounds());
 }
 
+void addToTileSet(geos::geom::Geometry* &polygon, 
+                   uint64_t entityId,
+                   RawTags tags,
+                   PolygonLodHandler* handler)
+{
+    
+    const void* const* storeAtLevel = handler->getZoomLevels();
+    {
+        GenericGeometry gen = serialize( polygon, entityId, tags);
+        handler->store(gen, gen.getBounds());
+    }
+
+
+    for (int zoomLevel = PolygonLodHandler::MAX_ZOOM_LEVEL; zoomLevel >= 0; zoomLevel--)
+    {
+        if (!storeAtLevel[zoomLevel])
+            continue;
+            
+        double pixelWidthInCm = MAP_WIDTH_IN_CM / double(256 * (1ull << zoomLevel));
+        double pixelArea = pixelWidthInCm * pixelWidthInCm; // in [cm²]
+        if (polygon->getArea() < 4 * pixelArea)
+            break;
+        
+        geos::simplify::TopologyPreservingSimplifier simp(polygon);
+        simp.setDistanceTolerance(pixelWidthInCm);
+        geos::geom::Geometry *simplifiedPolygon = simp.getResultGeometry()->clone();
+        
+        GenericGeometry gen = serialize( simplifiedPolygon, entityId, tags);
+        handler->store(gen, gen.getBounds(), zoomLevel);
+        delete polygon;
+        polygon = simplifiedPolygon;    
+    }
+
+}
+
 int main(int argc, char** argv)
 {
     parseArguments(argc, argv);
     ensureDirectoryExists(tileDirectory);
-    cleanupTileDirectory( tileDirectory);
     
-    const Envelope mercatorWorldBounds = { .xMin = -2003750834, .xMax = 2003750834, 
-                                           .yMin = -2003750834, .yMax = 2003750834}; 
+
+    std::vector<PolygonLodHandler*> polygonLodHandlers;
+    polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
+    polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
+    polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
+
+    for (const PolygonLodHandler* handler : polygonLodHandlers)
+        handler->cleanupFiles();
     
-    FileBackedTile areaStorage( tileDirectory + "area_", mercatorWorldBounds, MAX_META_NODE_SIZE);
-    FileBackedTile areaL12Storage( tileDirectory + "area_l12_", mercatorWorldBounds, MAX_META_NODE_SIZE);
-    FileBackedTile lineStorage( tileDirectory + "line_", mercatorWorldBounds, MAX_META_NODE_SIZE);
-    FileBackedTile lineL12Storage( tileDirectory + "line_l12_", mercatorWorldBounds, MAX_META_NODE_SIZE);
-    //FileBackedTile storageLod12( (tileDirectory + "lod12").c_str(), worldBounds, MAX_META_NODE_SIZE);
 
     uint64_t numWays = 0;
     uint64_t pos = 0;
     uint64_t numVertices = 0;
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
-         << (MAX_META_NODE_SIZE/1000000) << "MB." << endl;
+         << (PolygonLodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
 
     FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
     MUST(f, "cannot open file 'multipolygons.bin'. Did you forget to run the multipolygon reconstructor?");
@@ -289,26 +262,18 @@ int main(int argc, char** argv)
             continue;
         
         RawTags tags = geom.getTags();
-        
-        /* all multipolygons are by definition areas and not lines, so we don't have to check 
-           for line tags */
-        if (isArea(tags, true))
+        TagDictionary tagsDict = tags.asDictionary();
+
+        for (PolygonLodHandler* handler: polygonLodHandlers)
         {
-            areaStorage.add( geom, bounds);
+            if (!handler->applicable(tagsDict, true))
+                continue;
+
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
-            if (geosGeom->getArea() > L12_MIN_POLYGON_AREA)
-            {
-                geos::simplify::TopologyPreservingSimplifier simp(geosGeom);
-                simp.setDistanceTolerance(L12_MAX_DEVIATION);
-                GenericGeometry gen = serialize( &(*simp.getResultGeometry()), geom.getEntityId(), tags);
-                areaL12Storage.add( gen, bounds);
-            }
+            addToTileSet(geosGeom, geom.getEntityId(), tags, handler);
 
             delete geosGeom;
-
         }
-/*        else
-            cerr << "[WARN] multipolygon " << geom.getEntityId() << " has no tag that indicates it should be treated as an area. Skipping." << endl;*/
 
         if (++pos % 10000 == 0)
             cout << (pos/1000) << "k multipolygons read" << endl;
@@ -341,63 +306,41 @@ int main(int argc, char** argv)
             way.addTagsFromBoundaryRelations( wayReverseIndex.getReferencingRelations(way.id),
                                               boundaryRelationTags);
         
-        /* note: do this only after way.addTagsFromBoundaryRelations() !!!
-         * RawTags do not allocate memory themselves, but are just an overlay to the
-         * tag memory of the underlying OsmLightweightWay. And addTagsFromBoundaryRelations()
-         * re-allocates the memory for the way's tags, invalidating said overlay. */
-        
-        if ( isArea( way.getTags(), way.isArea()) )
-        {
-            if (!(outerWayIds.count(way.id)))
-            {
-                if (!way.isArea())
-                    cerr << ESC_FG_YELLOW << "[WARN] way " << way.id << " has area tags, but is "
-                         << "not a closed area. Skipping it." << ESC_RESET << endl;
-                else
-                {
-                    areaStorage.add(way, way.getBounds(), true);
-                
-                    geos::geom::Geometry *geosGeom = createGeosGeometry(way);
-                    if (geosGeom->getArea() > L12_MIN_POLYGON_AREA)
-                        simplifyAndAdd(geosGeom, way.getTags(), way.id, areaL12Storage,
-                                       L12_MAX_DEVIATION);
 
-                    delete geosGeom;
-                }
-            }
-        }   
-        
-        if (hasLineTag(way.getTags()))
+        if (way.isClosed())
         {
-            lineStorage.add(way, way.getBounds(), false);
-            if ( hasL12LineTag(way.getTags()))
+            TagDictionary tagsDict = way.getTags().asDictionary();
+            for (PolygonLodHandler* handler: polygonLodHandlers)
             {
+                if (!handler->applicable(tagsDict, true))
+                    continue;
+
                 geos::geom::Geometry *geosGeom = createGeosGeometry(way);
-                simplifyAndAdd(geosGeom, way.getTags(), way.id, lineL12Storage,
-                               1.5*L12_MAX_DEVIATION);
+                addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, way.getTags(), handler);
+
                 delete geosGeom;
             }
         }
+        //FIXME: re-add code to store lines
     }
     
-    
     cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
-         << (MAX_NODE_SIZE/1000000) << "MB." << endl;
-//    exit(0);
+         << (PolygonLodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;
     /* the number of concurrently open files for a given process is limited by the OS (
        e.g. to ~1000 for normal user accounts on Linux. Keeping all node files open
        concurrently may easily exceed that limit. But in stage 2, we only need to keep
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
-    areaStorage.closeFiles();
-    lineStorage.closeFiles();
-    areaL12Storage.closeFiles();
-    lineL12Storage.closeFiles();
+       
+    for (PolygonLodHandler *handler : polygonLodHandlers)
+        handler->closeFiles();
     
-    areaStorage.subdivide(MAX_NODE_SIZE);
-    lineStorage.subdivide(MAX_NODE_SIZE);
-    areaL12Storage.subdivide(MAX_NODE_SIZE);
-    lineL12Storage.subdivide(MAX_NODE_SIZE);
+
+    for (PolygonLodHandler *handler : polygonLodHandlers)
+    {
+        handler->subdivide();
+        delete handler;
+    }
  
     cout << "done." << endl;
 

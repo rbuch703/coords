@@ -163,11 +163,13 @@ double OsmLightweightWay::getArea() const
     return ::getArea( this->vertices, this->numVertices);  
 }
 
-bool OsmLightweightWay::isArea() const
+bool OsmLightweightWay::isClosed() const
 {
+    if (numVertices <= 3) return false;
+    
     OsmGeoPosition v0 = vertices[0];
     OsmGeoPosition vn = vertices[numVertices-1];
-    return v0.lat == vn.lat && v0.lng == vn.lng && numVertices > 3;
+    return v0.lat == vn.lat && v0.lng == vn.lng;
 
 }
 

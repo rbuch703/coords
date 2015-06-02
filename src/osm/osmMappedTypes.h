@@ -37,7 +37,7 @@ public:
     uint64_t size() const;
     Envelope getBounds() const;
     double getArea() const;
-    bool isArea() const;
+    bool isClosed() const;
     
     /* convert 'vertices' and 'tagBytes' to owned arrays from memory-mapped ranges. 
        After this call, changes to either one of these arrays no longer cause changes
