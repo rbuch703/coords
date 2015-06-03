@@ -9,7 +9,7 @@ const Envelope PolygonLodHandler::mercatorWorldBounds = {
 
 PolygonLodHandler::PolygonLodHandler(std::string tileDirectory, std::string baseName): 
     tileDirectory(tileDirectory), baseName(baseName),
-    baseTileSet(tileDirectory + baseName+"_", mercatorWorldBounds , MAX_NODE_SIZE)
+    baseTileSet(tileDirectory + baseName+"_", mercatorWorldBounds , MAX_META_NODE_SIZE)
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
         lodTileSets[i] = nullptr;

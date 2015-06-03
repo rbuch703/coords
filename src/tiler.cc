@@ -209,7 +209,7 @@ void addToTileSet(geos::geom::Geometry* &polygon,
             
         double pixelWidthInCm = MAP_WIDTH_IN_CM / double(256 * (1ull << zoomLevel));
         double pixelArea = pixelWidthInCm * pixelWidthInCm; // in [cm²]
-        if (polygon->getArea() < 4 * pixelArea)
+        if (polygon->getArea() < pixelArea)
             break;
         
         geos::simplify::TopologyPreservingSimplifier simp(polygon);
@@ -247,7 +247,7 @@ int main(int argc, char** argv)
 
     FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
     MUST(f, "cannot open file 'multipolygons.bin'. Did you forget to run the multipolygon reconstructor?");
-    
+
     int ch;
     while ( (ch = fgetc(f)) != EOF)
     {
@@ -281,6 +281,7 @@ int main(int argc, char** argv)
     
     fclose(f);
 
+    cerr << "stage 2: loading tags from boundary relations" << endl;
     map<uint64_t,TagDictionary> boundaryRelationTags= loadBoundaryRelationTags(storageDirectory);
         
     ReverseIndex wayReverseIndex(storageDirectory + "wayReverse", false);
@@ -296,6 +297,14 @@ int main(int argc, char** argv)
         pos += 1;
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
+
+        if (way.numVertices < 2)
+        {
+            cout << ESC_FG_YELLOW << "[WARN] way " << way.id 
+                 << " has less than two vertices. Skipping." << ESC_RESET << endl;
+             continue;
+        }
+
 
         way.unmap();
         numWays += 1;
@@ -324,7 +333,7 @@ int main(int argc, char** argv)
         //FIXME: re-add code to store lines
     }
     
-    cout << "stage 2: subdividing meta nodes to individual nodes of no more than "
+    cout << "stage 3: subdividing meta nodes to individual nodes of no more than "
          << (PolygonLodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;
     /* the number of concurrently open files for a given process is limited by the OS (
        e.g. to ~1000 for normal user accounts on Linux. Keeping all node files open

@@ -32,8 +32,8 @@ public:
 public:     
     static const int MAX_ZOOM_LEVEL = 24;
     static const Envelope mercatorWorldBounds;
-    static const uint64_t MAX_META_NODE_SIZE = 50000ll * 1000 * 1000;
-    static const uint64_t MAX_NODE_SIZE      = 50000ll * 1000 * 1000;
+    static const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
+    static const uint64_t MAX_NODE_SIZE      =  10ll * 1000 * 1000;
 
 protected:
 
