@@ -467,12 +467,10 @@ int main()
     MUST( fOuterWayIds, "cannot open output file");
 
 
-    RelationStore relStore("intermediate"/*"/multipolygon_world"*/"/relations");
+    const RelationStore relStore("intermediate/relations");
     
-    BucketFileSet<int> relationWaysBuckets("intermediate"/*"/multipolygon_world"*/"/referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
+    BucketFileSet<int> relationWaysBuckets("intermediate/referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
 
-    //set<std::string> boundaryKeys;
-    
     //for (uint64_t bucketId = 0; bucketId == 0; bucketId++)
     for (uint64_t bucketId = 0; bucketId < relationWaysBuckets.getNumBuckets(); bucketId++)
     {
@@ -491,6 +489,8 @@ int main()
         }
 
         //for( uint64_t relId = 37436; relId == 37436; relId++)
+
+        #pragma omp parallel for schedule (dynamic, 1000)
         for (uint64_t relId =  bucketId   * WAYS_OF_RELATIONS_BUCKET_SIZE;
                       relId < (bucketId+1)* WAYS_OF_RELATIONS_BUCKET_SIZE;
                       relId++)
@@ -553,10 +553,15 @@ int main()
             for (Ring* poly: roots)
             {
                 TagDictionary tags = getMultipolygonTags(poly, rel, ways, outerTags);
-                serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, fOut);
                 
-                for (uint64_t wayId : poly->wayIds)
-                    MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, "write error");
+                #pragma omp critical
+                {
+                    serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, fOut);
+                    
+                    for (uint64_t wayId : poly->wayIds)
+                        MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, 
+                            "write error");
+                }
             }
             //removeBoundaryOverlaps(roots, rel.id);
             for (Ring* ring : roots)
@@ -566,9 +571,5 @@ int main()
     fclose(fOut);
     fclose(fOuterWayIds);
 
-    /*cout << "boundary keys:" << endl;
-    for (const std::string &key : boundaryKeys)
-        cout << key << endl;*/
-   
     return EXIT_SUCCESS;
 }

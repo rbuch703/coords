@@ -40,7 +40,7 @@ ADD_EXECUTABLE(coordsCreateStorage
 
 TARGET_LINK_LIBRARIES( coordsCreateStorage -lprotobuf -lz )
 
-SET( CXX_FLAGS "-std=c++11 -Wall -Wextra")
+SET( CXX_FLAGS "-std=c++11 -Wall -Wextra -fopenmp")
 SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
 
 
