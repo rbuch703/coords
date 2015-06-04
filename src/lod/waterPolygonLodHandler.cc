@@ -7,7 +7,7 @@
 };*/
 
 
-WaterPolygonLodHandler::WaterPolygonLodHandler(std::string tileDirectory, std::string baseName): PolygonLodHandler(tileDirectory, baseName)
+WaterPolygonLodHandler::WaterPolygonLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
     for (int i : {13, 9, 7})
     {
@@ -19,18 +19,23 @@ WaterPolygonLodHandler::WaterPolygonLodHandler(std::string tileDirectory, std::s
 }
 
 
-bool WaterPolygonLodHandler::applicable(TagDictionary &tags, bool isClosedRing) const
+int WaterPolygonLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const
 {
     if (!isClosedRing)
-        return false;
+        return -1;
 
-    if (tags.count("waterway") && tags["waterway"] == "riverbank") return true;
-    if (tags.count("natural")  && tags["natural"]  == "water")     return true;
+    if (tags.count("waterway") && tags["waterway"] == "riverbank") return 0;
+    if (tags.count("natural")  && tags["natural"]  == "water")     return 0;
     
     if (tags.count("landuse") && (tags["landuse"] == "basin" || tags["landuse"] == "reservoir"))
-        return true;
+        return 0;
         
-    return false;
+    return -1;
     
+}
+
+bool WaterPolygonLodHandler::isArea() const
+{
+    return true;
 }
 

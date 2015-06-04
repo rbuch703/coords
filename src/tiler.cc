@@ -22,12 +22,11 @@
 #include "containers/reverseIndex.h"
 #include "misc/cleanup.h"
 #include "misc/escapeSequences.h"
-#include "misc/varInt.h"
-
-#include "lod/polygonLodHandler.h"
+#include "lod/lodHandler.h"
 #include "lod/buildingPolygonLodHandler.h"
 #include "lod/landusePolygonLodHandler.h"
 #include "lod/waterPolygonLodHandler.h"
+#include "lod/roadLodHandler.h"
 
 using namespace std;
 
@@ -189,37 +188,39 @@ void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t wa
     target.add( gen, gen.getBounds());
 }
 
-void addToTileSet(geos::geom::Geometry* &polygon, 
-                   uint64_t entityId,
-                   RawTags tags,
-                   PolygonLodHandler* handler)
+void addToTileSet(geos::geom::Geometry* &geometry,
+                  uint64_t entityId,
+                  RawTags tags,
+                  LodHandler* handler,
+                  int coarsestZoomLevel
+                  )
 {
-    
+    if (coarsestZoomLevel < 0)
+        return;
+        
+    GenericGeometry gen = serialize( geometry, entityId, tags);
+    handler->store(gen, gen.getBounds());
+
     const void* const* storeAtLevel = handler->getZoomLevels();
-    {
-        GenericGeometry gen = serialize( polygon, entityId, tags);
-        handler->store(gen, gen.getBounds());
-    }
-
-
-    for (int zoomLevel = PolygonLodHandler::MAX_ZOOM_LEVEL; zoomLevel >= 0; zoomLevel--)
+    for (int zoomLevel = LodHandler::MAX_ZOOM_LEVEL; zoomLevel >= coarsestZoomLevel; zoomLevel--)
     {
         if (!storeAtLevel[zoomLevel])
             continue;
             
         double pixelWidthInCm = MAP_WIDTH_IN_CM / double(256 * (1ull << zoomLevel));
         double pixelArea = pixelWidthInCm * pixelWidthInCm; // in [cm²]
-        if (polygon->getArea() < pixelArea)
+
+        if (handler->isArea() && geometry->getArea() < pixelArea)
             break;
         
-        geos::simplify::TopologyPreservingSimplifier simp(polygon);
+        geos::simplify::TopologyPreservingSimplifier simp(geometry);
         simp.setDistanceTolerance(pixelWidthInCm);
-        geos::geom::Geometry *simplifiedPolygon = simp.getResultGeometry()->clone();
+        geos::geom::Geometry *simplifiedGeometry = simp.getResultGeometry()->clone();
         
-        GenericGeometry gen = serialize( simplifiedPolygon, entityId, tags);
+        GenericGeometry gen = serialize( simplifiedGeometry, entityId, tags);
         handler->store(gen, gen.getBounds(), zoomLevel);
-        delete polygon;
-        polygon = simplifiedPolygon;    
+        delete geometry;
+        geometry = simplifiedGeometry;
     }
 
 }
@@ -230,12 +231,13 @@ int main(int argc, char** argv)
     ensureDirectoryExists(tileDirectory);
     
 
-    std::vector<PolygonLodHandler*> polygonLodHandlers;
+    std::vector<LodHandler*> polygonLodHandlers;
     polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
     polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
     polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
+    polygonLodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
 
-    for (const PolygonLodHandler* handler : polygonLodHandlers)
+    for (const LodHandler* handler : polygonLodHandlers)
         handler->cleanupFiles();
     
 
@@ -243,7 +245,7 @@ int main(int argc, char** argv)
     uint64_t pos = 0;
     uint64_t numVertices = 0;
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
-         << (PolygonLodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
+         << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
 
     FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
     MUST(f, "cannot open file 'multipolygons.bin'. Did you forget to run the multipolygon reconstructor?");
@@ -264,13 +266,15 @@ int main(int argc, char** argv)
         RawTags tags = geom.getTags();
         TagDictionary tagsDict = tags.asDictionary();
 
-        for (PolygonLodHandler* handler: polygonLodHandlers)
+        for (LodHandler* handler: polygonLodHandlers)
         {
-            if (!handler->applicable(tagsDict, true))
+            int level = handler->applicableUpToZoomLevel(tagsDict, true);
+            
+            if (level < 0) //not applicable at all
                 continue;
 
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
-            addToTileSet(geosGeom, geom.getEntityId(), tags, handler);
+            addToTileSet(geosGeom, geom.getEntityId(), tags, handler, level);
 
             delete geosGeom;
         }
@@ -316,36 +320,34 @@ int main(int argc, char** argv)
                                               boundaryRelationTags);
         
 
-        if (way.isClosed())
+        TagDictionary tagsDict = way.getTags().asDictionary();
+        for (LodHandler* handler: polygonLodHandlers)
         {
-            TagDictionary tagsDict = way.getTags().asDictionary();
-            for (PolygonLodHandler* handler: polygonLodHandlers)
-            {
-                if (!handler->applicable(tagsDict, true))
-                    continue;
+            int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
+            if (level < 0)
+                continue;
 
-                geos::geom::Geometry *geosGeom = createGeosGeometry(way);
-                addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, way.getTags(), handler);
+            geos::geom::Geometry *geosGeom = createGeosGeometry(way);
+            addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, way.getTags(), handler, level);
 
-                delete geosGeom;
-            }
+            delete geosGeom;
         }
         //FIXME: re-add code to store lines
     }
     
     cout << "stage 3: subdividing meta nodes to individual nodes of no more than "
-         << (PolygonLodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;
+         << (LodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;
     /* the number of concurrently open files for a given process is limited by the OS (
        e.g. to ~1000 for normal user accounts on Linux. Keeping all node files open
        concurrently may easily exceed that limit. But in stage 2, we only need to keep
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
        
-    for (PolygonLodHandler *handler : polygonLodHandlers)
+    for (LodHandler *handler : polygonLodHandlers)
         handler->closeFiles();
     
 
-    for (PolygonLodHandler *handler : polygonLodHandlers)
+    for (LodHandler *handler : polygonLodHandlers)
     {
         handler->subdivide();
         delete handler;

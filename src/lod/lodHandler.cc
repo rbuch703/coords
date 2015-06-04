@@ -1,13 +1,12 @@
 
-#include "polygonLodHandler.h"
+#include "lodHandler.h"
 #include "misc/cleanup.h"
-#include "config.h"
 
-const Envelope PolygonLodHandler::mercatorWorldBounds = { 
+const Envelope LodHandler::mercatorWorldBounds = { 
     .xMin = -2003750834, .xMax = 2003750834, 
     .yMin = -2003750834, .yMax = 2003750834}; 
 
-PolygonLodHandler::PolygonLodHandler(std::string tileDirectory, std::string baseName): 
+LodHandler::LodHandler(std::string tileDirectory, std::string baseName): 
     tileDirectory(tileDirectory), baseName(baseName),
     baseTileSet(tileDirectory + baseName+"_", mercatorWorldBounds , MAX_META_NODE_SIZE)
 {
@@ -15,15 +14,15 @@ PolygonLodHandler::PolygonLodHandler(std::string tileDirectory, std::string base
         lodTileSets[i] = nullptr;
 }
 
-PolygonLodHandler::~PolygonLodHandler()
+
+LodHandler::~LodHandler()
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
         delete lodTileSets[i];
-    
 }
 
 
-void PolygonLodHandler::cleanupFiles() const
+void LodHandler::cleanupFiles() const
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
     {
@@ -40,12 +39,12 @@ void PolygonLodHandler::cleanupFiles() const
 
 }
 
-const void* const* PolygonLodHandler::getZoomLevels() const
+const void* const* LodHandler::getZoomLevels() const
 {
     return (const void* const*)lodTileSets;
 }
 
-void PolygonLodHandler::store (const GenericGeometry &geometry, const Envelope &env, int zoomLevel)
+void LodHandler::store (const GenericGeometry &geometry, const Envelope &env, int zoomLevel)
 {
     MUST(zoomLevel >= 0 && zoomLevel <= MAX_ZOOM_LEVEL, "out of bounds");
     
@@ -53,12 +52,12 @@ void PolygonLodHandler::store (const GenericGeometry &geometry, const Envelope &
     lodTileSets[zoomLevel]->add(geometry, env);
 }
 
-void PolygonLodHandler::store (const GenericGeometry &geometry, const Envelope &env)
+void LodHandler::store (const GenericGeometry &geometry, const Envelope &env)
 {
     baseTileSet.add(geometry, env);
 }
 
-void PolygonLodHandler::closeFiles()
+void LodHandler::closeFiles()
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
         if (lodTileSets[i])
@@ -67,7 +66,7 @@ void PolygonLodHandler::closeFiles()
     baseTileSet.closeFiles();
 }
 
-void PolygonLodHandler::subdivide()
+void LodHandler::subdivide()
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
         if (lodTileSets[i])

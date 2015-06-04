@@ -80,7 +80,9 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/varInt.cc
-               src/lod/polygonLodHandler.cc
+               src/lod/lodHandler.cc
+               src/lod/roadLodHandler.cc
+               
                src/lod/buildingPolygonLodHandler.cc
                src/lod/landusePolygonLodHandler.cc
                src/lod/waterPolygonLodHandler.cc

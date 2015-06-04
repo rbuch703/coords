@@ -4,14 +4,15 @@
 
 #include <string>
 #include <set>
-#include "polygonLodHandler.h"
+#include "lodHandler.h"
 
-class LandusePolygonLodHandler: public PolygonLodHandler
+class LandusePolygonLodHandler: public LodHandler
 {
 
 public:
     LandusePolygonLodHandler(std::string tileDirectory, std::string baseName);
-    virtual bool applicable(TagDictionary &tags, bool isClosedRing) const;
+    virtual int applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const;
+    virtual bool isArea() const;
 
 public:
      static std::set<std::string> landuses, leisures, naturals, amenities;

@@ -2,7 +2,7 @@
 #include "buildingPolygonLodHandler.h"
 
 
-BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, std::string baseName): PolygonLodHandler(tileDirectory, baseName)
+BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
     for (int i : {10, 11, 12, 13, 14})
     {
@@ -13,21 +13,26 @@ BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, 
 }
 
 
-bool BuildingPolygonLodHandler::applicable(TagDictionary &tags, bool isClosedRing) const
+int BuildingPolygonLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const
 {
     if (!isClosedRing)
-        return false;
+        return -1;
         
-    if (tags.count("building"))
-        return true;
+    if (tags.count("building") && tags["building"] != "no")
+        return 0;
         
     if (tags.count("railway") && tags["railway"] == "station")
-        return true;
+        return 0;
         
     if (tags.count("aeroway") && tags["aeroway"] == "terminal")
-        return true;
+        return 0;
         
-    return false;
+    return -1;
     
+}
+
+bool BuildingPolygonLodHandler::isArea() const
+{
+    return true;
 }
 
