@@ -1,4 +1,7 @@
 
+#ifndef ROAD_LOD_HANDLER_H
+#define ROAD_LOD_HANDLER_H
+
 #include "lodHandler.h"
 
 class RoadLodHandler: public LodHandler {
@@ -9,3 +12,5 @@ public:
     virtual int applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const;
     virtual bool isArea() const;
 };
+
+#endif

@@ -82,7 +82,9 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/misc/varInt.cc
                src/lod/lodHandler.cc
                src/lod/roadLodHandler.cc
-               
+               src/lod/boundaryLodHandler.cc
+               src/lod/waterwayLodHandler.cc
+              
                src/lod/buildingPolygonLodHandler.cc
                src/lod/landusePolygonLodHandler.cc
                src/lod/waterPolygonLodHandler.cc

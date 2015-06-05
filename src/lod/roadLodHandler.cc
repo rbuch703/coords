@@ -4,12 +4,7 @@
 
 RoadLodHandler::RoadLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
-    for (int i : {10, 9, 6})
-    {
-        char num[4];
-        MUST( snprintf(num, 4, "%d", i) < 4, "overflow");
-        lodTileSets[i] = new FileBackedTile(tileDirectory + baseName + "_" + num + "_", mercatorWorldBounds, MAX_META_NODE_SIZE);  
-    }
+    enableLods({10, 9, 6});
 }
 
 
@@ -48,6 +43,18 @@ int RoadLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosed
         if (type != "construction" && type != "proposed" && type != "no" &&
             type != "byway" && type != "unsurfaced")
             std::cout << "unknown road type '" << type << "'." << std::endl;
+    }
+    
+    if (tags.count("railway"))
+    {
+        const std::string &type = tags.at("railway");
+
+        if (type == "rail") return 0;
+        
+        if (type == "abandoned"    || type == "tram"         || type == "disused"    || 
+            type == "subway"       || type == "narrow_gauge" || type == "light_rail" || 
+            type == "preserved"    || type == "monorail"     || type == "funicular" )
+            return 10;
     }
     
 

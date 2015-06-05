@@ -4,12 +4,7 @@
 
 BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
-    for (int i : {10, 11, 12, 13, 14})
-    {
-        char num[4];
-        MUST( snprintf(num, 4, "%d", i) < 4, "overflow");
-        lodTileSets[i] = new FileBackedTile(tileDirectory + baseName + "_" + num + "_", mercatorWorldBounds, MAX_META_NODE_SIZE);  
-    }
+    enableLods({10, 11, 12, 13, 14});
 }
 
 

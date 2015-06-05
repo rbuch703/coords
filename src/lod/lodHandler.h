@@ -16,18 +16,18 @@ public:
     LodHandler(std::string tileDirectory, std::string baseName);
     
     // non-copyable for now
-    LodHandler( LodHandler &other);
-    LodHandler& operator=(LodHandler &other);
+    LodHandler( LodHandler &other) = delete;
+    LodHandler& operator=(LodHandler &other) = delete;
     
     virtual ~LodHandler();
     const void* const* getZoomLevels() const;
     virtual int applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const = 0;
     virtual bool isArea() const = 0;
     
-    void cleanupFiles() const;
+    //void cleanupFiles() const;
 
     void store (const GenericGeometry &geometry, const Envelope &env, int zoomLevel);
-    void store (const GenericGeometry &geometry, const Envelope &env);
+    //void store (const GenericGeometry &geometry, const Envelope &env);
     void closeFiles();
     void subdivide();
 
@@ -38,12 +38,13 @@ public:
     static const uint64_t MAX_NODE_SIZE      =   5ll * 1000 * 1000;
 
 protected:
+    void enableLods( std::vector<int> lods);
 
     std::string tileDirectory;
     std::string baseName;
     FileBackedTile* lodTileSets[MAX_ZOOM_LEVEL+1];
     //std::vector<FileBackedTile*> lodTileSets;
-    FileBackedTile baseTileSet;
+    //FileBackedTile baseTileSet;
 };
 
 #endif

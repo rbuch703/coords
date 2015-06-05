@@ -27,6 +27,8 @@
 #include "lod/landusePolygonLodHandler.h"
 #include "lod/waterPolygonLodHandler.h"
 #include "lod/roadLodHandler.h"
+#include "lod/boundaryLodHandler.h"
+#include "lod/waterwayLodHandler.h"
 
 using namespace std;
 
@@ -81,7 +83,7 @@ int parseArguments(int argc, char** argv)
     return optind;
 }
 
-static const std::set<std::string> lineIndicatorTags {
+/*static const std::set<std::string> lineIndicatorTags {
     "highway", "waterway", "boundary", "power", "barrier", "railway" };
 
 template <typename T>
@@ -100,8 +102,10 @@ static const std::set<std::string> l12Highways = {
     "primary",  "primary_link",
     "secondary","secondary_link",
     "tertiary", "tertiary_link"};
+*/
 
-uint64_t getPositiveIntIfOnlyDigits(const char* s)
+/*
+static uint64_t getPositiveIntIfOnlyDigits(const char* s)
 {
     bool onlyDigits = true;
     int numDigits = 0;
@@ -115,8 +119,9 @@ uint64_t getPositiveIntIfOnlyDigits(const char* s)
     }
     
     return onlyDigits ? num : 0;
-}
+}*/
 
+/*
 template <typename T>
 bool hasL12LineTag( const T &tags)
 {
@@ -142,7 +147,7 @@ bool hasL12LineTag( const T &tags)
         
     return false;
 }
-
+*/
 
 template <typename T>
 std::set<T> getSetFromFileEntries(std::string filename)
@@ -198,8 +203,8 @@ void addToTileSet(geos::geom::Geometry* &geometry,
     if (coarsestZoomLevel < 0)
         return;
         
-    GenericGeometry gen = serialize( geometry, entityId, tags);
-    handler->store(gen, gen.getBounds());
+    //GenericGeometry gen = serialize( geometry, entityId, tags);
+    //handler->store(gen, gen.getBounds());
 
     const void* const* storeAtLevel = handler->getZoomLevels();
     for (int zoomLevel = LodHandler::MAX_ZOOM_LEVEL; zoomLevel >= coarsestZoomLevel; zoomLevel--)
@@ -236,10 +241,8 @@ int main(int argc, char** argv)
     polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
     polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
     polygonLodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
-
-    for (const LodHandler* handler : polygonLodHandlers)
-        handler->cleanupFiles();
-    
+    polygonLodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
+    polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
 
     uint64_t numWays = 0;
     uint64_t pos = 0;

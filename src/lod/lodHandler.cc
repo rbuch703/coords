@@ -7,11 +7,21 @@ const Envelope LodHandler::mercatorWorldBounds = {
     .yMin = -2003750834, .yMax = 2003750834}; 
 
 LodHandler::LodHandler(std::string tileDirectory, std::string baseName): 
-    tileDirectory(tileDirectory), baseName(baseName),
-    baseTileSet(tileDirectory + baseName+"_", mercatorWorldBounds , MAX_META_NODE_SIZE)
+    tileDirectory(tileDirectory), baseName(baseName)
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
+    {
+        char num[4];
+        
+        MUST( snprintf(num, 4, "%d", i) < 4, "overflow");
+        
+        deleteNumberedFiles(tileDirectory, baseName + "_" + num + "_", "");
+        deleteIfExists(tileDirectory, baseName + "_" + num + "_");
+
         lodTileSets[i] = nullptr;
+    }
+
+    enableLods( {MAX_ZOOM_LEVEL});
 }
 
 
@@ -21,22 +31,18 @@ LodHandler::~LodHandler()
         delete lodTileSets[i];
 }
 
-
-void LodHandler::cleanupFiles() const
+void LodHandler::enableLods( std::vector<int> lods)
 {
-    for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
+    for (int level : lods)
     {
+        MUST( level >= 0 && level <= MAX_ZOOM_LEVEL, "LoD out of bounds");
+        
         char num[4];
-        
-        MUST( snprintf(num, 4, "%d", i) < 4, "overflow");
-        
-        deleteNumberedFiles(tileDirectory, baseName + "_" + num + "_", "");
-        //deleteIfExists(tileDirectory, baseName + "_" + num + "_");
+        MUST( snprintf(num, 4, "%d", level) < 4, "overflow");
+        lodTileSets[level] = 
+            new FileBackedTile( tileDirectory + baseName + "_" + num + "_", 
+                                mercatorWorldBounds, MAX_META_NODE_SIZE);
     }
-
-    deleteNumberedFiles(tileDirectory, baseName + "_", "");
-    //deleteIfExists(tileDirectory, baseName + "_");
-
 }
 
 const void* const* LodHandler::getZoomLevels() const
@@ -51,19 +57,17 @@ void LodHandler::store (const GenericGeometry &geometry, const Envelope &env, in
     MUST(lodTileSets[zoomLevel], "writing to non-existent level of detail");
     lodTileSets[zoomLevel]->add(geometry, env);
 }
-
+/*
 void LodHandler::store (const GenericGeometry &geometry, const Envelope &env)
 {
     baseTileSet.add(geometry, env);
-}
+}*/
 
 void LodHandler::closeFiles()
 {
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
         if (lodTileSets[i])
             lodTileSets[i]->closeFiles();
-    
-    baseTileSet.closeFiles();
 }
 
 void LodHandler::subdivide()
@@ -71,7 +75,5 @@ void LodHandler::subdivide()
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
         if (lodTileSets[i])
             lodTileSets[i]->subdivide(MAX_NODE_SIZE);
-    
-    baseTileSet.subdivide(MAX_NODE_SIZE);
 }
 
