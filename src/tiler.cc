@@ -222,8 +222,12 @@ void addToTileSet(geos::geom::Geometry* &geometry,
         simp.setDistanceTolerance(pixelWidthInCm);
         geos::geom::Geometry *simplifiedGeometry = simp.getResultGeometry()->clone();
         
-        GenericGeometry gen = serialize( simplifiedGeometry, entityId, tags);
-        handler->store(gen, gen.getBounds(), zoomLevel);
+        //is still bigger than a single pixel after the simplification
+        if (!handler->isArea() || simplifiedGeometry->getArea() >= pixelArea)
+        {
+            GenericGeometry gen = serialize( simplifiedGeometry, entityId, tags);
+            handler->store(gen, gen.getBounds(), zoomLevel);
+        }
         delete geometry;
         geometry = simplifiedGeometry;
     }
@@ -237,12 +241,12 @@ int main(int argc, char** argv)
     
 
     std::vector<LodHandler*> polygonLodHandlers;
-    polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
-    polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
-    polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
+    //polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
+    //polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
+    //polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
     polygonLodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
-    polygonLodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
-    polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
+    //polygonLodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
+    //polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
 
     uint64_t numWays = 0;
     uint64_t pos = 0;

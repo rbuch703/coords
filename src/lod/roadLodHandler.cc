@@ -40,9 +40,9 @@ int RoadLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosed
 
         //these types are known and judged as irrelevant for rendering;
         //all other types are unknown        
-        if (type != "construction" && type != "proposed" && type != "no" &&
+        /*if (type != "construction" && type != "proposed" && type != "no" &&
             type != "byway" && type != "unsurfaced")
-            std::cout << "unknown road type '" << type << "'." << std::endl;
+            std::cout << "unknown road type '" << type << "'." << std::endl;*/
     }
     
     if (tags.count("railway"))

@@ -4,7 +4,8 @@
 
 BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
-    enableLods({10, 11, 12, 13, 14});
+    // chosen based on measurements on a whole planet dump
+    enableLods({10, 11, 12, 13});
 }
 
 

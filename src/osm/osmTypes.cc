@@ -73,59 +73,60 @@ uint64_t OsmNode::getSerializedSize() const
 
 OsmNode::OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
 
-void OsmNode::serializeWithIndexUpdate( FILE* dataFile, mmap_t *index_map) const
-{
-    /** temporary nodes in OSM editors are allowed to have negative node IDs, 
-      * but those in the official maps are guaranteed to be positive.
-      * Also, negative ids would mess up the memory map (would lead to negative indices*/
-    assert (id > 0);  
-
-    uint64_t offset = ftello(dataFile);    //get offset at which the dumped node *starts*
-    int numBytes;
-    uint8_t bytes[10];
-    
-    numBytes = varUintToBytes(id, bytes);
-    fwrite( bytes, numBytes,   1, dataFile);
-    
-    numBytes = varUintToBytes(version, bytes);
-    fwrite( bytes, numBytes,   1, dataFile);
-    fwrite( &lat,  sizeof(lat),1, dataFile);
-    fwrite( &lon,  sizeof(lon),1, dataFile);
-
-    RawTags::serialize(tags, dataFile);
-
-    //std::cout << id << endl;    
-    ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-    uint64_t* ptr = (uint64_t*)index_map->ptr;
-    ptr[id] = offset;
-}
-
-void OsmNode::serializeWithIndexUpdate( ChunkedFile& dataFile, mmap_t *index_map) const
+void OsmNode::serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *vertex_data) const
 {
     /** temporary nodes in OSM editors are allowed to have negative node IDs, 
       * but those in the official maps are guaranteed to be positive.
       * Also, negative ids would mess up the memory map (would lead to negative indices*/
     MUST (id > 0, "Invalid non-positive node id in input file.");
-    
-    Chunk chunk = dataFile.createChunk( this->getSerializedSize());
 
-    int numBytes;
-    uint8_t bytes[10];
-    
-    numBytes = varUintToBytes(id, bytes);
-    chunk.put(bytes, numBytes);
+    //serialize lat/lng to vertex storage
+    ensure_mmap_size( vertex_data, (this->id+1) * 2 * sizeof(int32_t));
+    int32_t* vertex_ptr = (int32_t*)vertex_data->ptr;
+    vertex_ptr[2*this->id]   = this->lat;
+    vertex_ptr[2*this->id+1] = this->lon;
 
-    numBytes = varUintToBytes(version, bytes);
-    chunk.put(bytes, numBytes);
-    chunk.put(lat);
-    chunk.put(lon);
-
-    RawTags::serialize( tags, chunk );
-
-    //std::cout << id << endl;    
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-    uint64_t* ptr = (uint64_t*)index_map->ptr;
-    ptr[id] = chunk.getPositionInFile();
+    uint64_t* index_ptr = (uint64_t*)index_map->ptr;
+
+    /* if the whole node data (excluding lat/lng, which has been stored above already) would
+     * fit into the index entry that normally *points* to the node data, write the data
+     * into the index directly */
+    /* serialization format:
+     * bytes 0-6:
+     * -    varUint id
+     * -    varUint version
+     * byte 7: 0xFF
+     */
+    if (this->tags.size() == 0 && (varUintNumBytes(this->id) + varUintNumBytes(this->version) +1 <= 8))
+    {
+        uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0xFF};
+        int nRead = varUintToBytes( this->id, data);
+        nRead += varUintToBytes( this->version, data+nRead);
+        MUST( nRead < 8, "serialization overflow");
+        memcpy( &index_ptr[this->id], data, 8);
+    } else  //full serialization
+    {
+        Chunk chunk = dataFile.createChunk( this->getSerializedSize());
+
+        int numBytes;
+        uint8_t bytes[10];
+        
+        numBytes = varUintToBytes(id, bytes);
+        chunk.put(bytes, numBytes);
+
+        numBytes = varUintToBytes(version, bytes);
+        chunk.put(bytes, numBytes);
+        chunk.put(lat);
+        chunk.put(lon);
+
+        RawTags::serialize( tags, chunk );
+
+        //std::cout << id << endl;    
+        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
+        index_ptr[id] = chunk.getPositionInFile();
+    }
+
 }
 
 

@@ -247,8 +247,10 @@ std::set<uint64_t> getRenderableRelationIds(const string &storageDirectory)
     
     for (const OsmRelation & rel : RelationStore( storageDirectory + "relations"))
     {
-        // the only relation types that affect rendering are multipolygons and boundaries
-        if (rel.hasKey("type") && (rel["type"] == "multipolygon" || rel["type"] != "boundary"))
+        /* The only relation types that affect rendering are multipolygons and boundaries.
+         * And boundary parsing is done later as part of the tiling process, so only multipolygons
+		 * need to be considered here */
+        if (rel.hasKey("type") && rel["type"] == "multipolygon")
             res.insert(rel.id);
     }
     return res; 
@@ -262,7 +264,7 @@ int main(int /*argc*/, char** /*argv*/)
     if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
         storageDirectory += "/";
     
-    cout << "Stage 1: determining set of multipolygon and boundary relations" << endl;
+    cout << "Stage 1: determining set of multipolygon relations" << endl;
     /* Input: all relations
      * Output: set of relation IDs for relations that are either multipolygons or boundaries
      *         (and thus which may affect rendering)

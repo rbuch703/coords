@@ -112,12 +112,7 @@ void OsmConsumerDumper::consumeNode( OsmNode &node)
 {
     nNodes++;
     filterTags(node.tags);
-    node.serializeWithIndexUpdate(*nodeData, &node_index);
-    
-    ensure_mmap_size( &vertex_data, (node.id+1) * 2 * sizeof(int32_t));
-    int32_t* vertex_ptr = (int32_t*)vertex_data.ptr;
-    vertex_ptr[2*node.id]   = node.lat;
-    vertex_ptr[2*node.id+1] = node.lon;
+    node.serialize(*nodeData, &node_index, &vertex_data);
 }
 
 void OsmConsumerDumper::consumeWay ( OsmWay  &way)
