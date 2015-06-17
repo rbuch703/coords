@@ -24,8 +24,7 @@ using std::set;
 using std::pair;
 using std::map;
 
-template<typename T>
-bool comparePairsByFirst(const T &a, const T &b) 
+bool firstIsLess( const pair<uint64_t, uint64_t> &a, const pair<uint64_t, uint64_t> &b)
 {
     return a.first < b.first;
 }
@@ -49,7 +48,7 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
         cout << "resolving node locations for bucket " << (bucketId + 1) << "/" << nodeBuckets.getNumBuckets() << endl;
         
         vector<pair<uint64_t, uint64_t> > tuples = nodeBuckets.getContents(bucketId);
-        sort( tuples.begin(), tuples.end(), comparePairsByFirst<pair<uint64_t, uint64_t> >);
+        sort( tuples.begin(), tuples.end(), firstIsLess);
         
         for ( pair<uint64_t, uint64_t> &tuple: tuples)
         {
@@ -170,7 +169,7 @@ void registerWayRefsFromRelations(string storageDirectory)
     for (uint64_t i = 0; i < relationWayRefs.getNumBuckets(); i++)
     {
         vector< pair<uint64_t, uint64_t> > refs = relationWayRefs.getContents(i);
-        sort( refs.begin(), refs.end(), comparePairsByFirst< pair<uint64_t, uint64_t> >);
+        sort( refs.begin(), refs.end(), firstIsLess);
         
         for ( pair<uint64_t, uint64_t> kv : refs)
         {
@@ -191,7 +190,7 @@ void registerRelationRefsFromRelations(string storageDirectory)
     for (uint64_t i = 0; i < relationRelationRefs.getNumBuckets(); i++)
     {
         vector< pair<uint64_t, uint64_t> > refs = relationRelationRefs.getContents(i);
-        sort( refs.begin(), refs.end(), comparePairsByFirst< pair<uint64_t, uint64_t> >);
+        sort( refs.begin(), refs.end(), firstIsLess);
         
         for ( pair<uint64_t, uint64_t> kv : refs)
         {

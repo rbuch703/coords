@@ -174,7 +174,7 @@ int main(int argc, char** argv)
 {
     parseArguments(argc, argv);
     ensureDirectoryExists(tileDirectory);
-
+/*
     ChunkedFile nodes( storageDirectory + "nodes.data");
     uint64_t pos = 0;
     for (Chunk nodeChunk : nodes)
@@ -186,17 +186,7 @@ int main(int argc, char** argv)
         //cout << "BEEP" << endl;
     }
     cout << "total: " << pos << " nodes." << endl;
-    
-    /*int ch;
-    FILE* fNodes = fopen( (storageDirectory + "nodes.data").c_str(), "rb");
-    MUST( fNodes != nullptr, "cannot open 'nodes.data'");
-    while ( (ch = fgetc(fNodes)) != EOF)
-    {
-        ungetc(ch, fNodes);
-        OsmNode node(fNodes);
-        cout << node << endl;
-    }*/
-    exit(0);
+    */
 
     std::vector<LodHandler*> polygonLodHandlers;
     //polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
@@ -207,7 +197,7 @@ int main(int argc, char** argv)
     //polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
 
     uint64_t numWays = 0;
-    /*uint64_t*/ pos = 0;
+    uint64_t pos = 0;
     uint64_t numVertices = 0;
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
          << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;

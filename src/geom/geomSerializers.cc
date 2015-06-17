@@ -275,6 +275,42 @@ GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon)
     return GenericGeometry(outBuf, numBytes, true);
 }
 
+GenericGeometry serializeNode(const OsmNode &node)
+{
+    uint64_t numTagBytes = 0;
+    uint8_t* tagBytes = RawTags::serialize( node.tags, &numTagBytes);
+    
+    uint64_t numBytes = 
+        sizeof(uint8_t)  + // 'type' field
+        sizeof(uint64_t) + // 'id' field
+        sizeof(int32_t)  + // lat
+        sizeof(int32_t)  + // lng
+        numTagBytes +
+        varUintNumBytes(numTagBytes);
+        
+    uint8_t *outBuf = new uint8_t[numBytes];
+    uint8_t *outPos = outBuf;
+    
+    *(FEATURE_TYPE*)outPos = FEATURE_TYPE::POINT;
+    outPos += sizeof(FEATURE_TYPE);
+    
+    *(uint64_t*)outPos = node.id;
+    outPos += sizeof(uint64_t);
+
+    memcpy(outPos, tagBytes, numTagBytes);
+    outPos += numTagBytes;
+    delete [] tagBytes;
+
+    *(int32_t*)outPos = node.lat;
+    outPos += sizeof(int32_t);
+    
+    *(int32_t*)outPos = node.lng;
+    outPos += sizeof(int32_t);
+    
+    MUST( uint64_t(outPos - outBuf) == numBytes, "node size mismatch");
+    return GenericGeometry(outBuf, numBytes, true);
+}
+
 
 static geos::geom::CoordinateSequence* getCoordinateSequence(const uint8_t* &pos)
 {

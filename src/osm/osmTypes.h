@@ -39,7 +39,7 @@ struct OsmNode
     uint64_t id;
     uint32_t version;
     int32_t lat;    //needs to be signed! -180° < lat < 180°
-    int32_t lon;    //                     -90° < lon <  90°
+    int32_t lng;    //                     -90° < lon <  90°
     std::vector<OsmKeyValuePair> tags;
 };
 

@@ -51,7 +51,7 @@ OsmNode::OsmNode( const uint8_t* data_ptr)
     lat = *(int32_t*)data_ptr;
     data_ptr+=4;
 
-    lon = *(int32_t*)data_ptr;
+    lng = *(int32_t*)data_ptr;
     data_ptr+=4;
 
     for (std::pair<const char*, const char*> kv : RawTags(data_ptr))
@@ -63,7 +63,7 @@ OsmNode::OsmNode( FILE* f)
     id = varUintFromFile(f, nullptr);
     version = varUintFromFile(f, nullptr);
     MUST(fread(&lat, sizeof(lat), 1, f) == 1, "node read error");
-    MUST(fread(&lon, sizeof(lon), 1, f) == 1, "node read error");
+    MUST(fread(&lng, sizeof(lng), 1, f) == 1, "node read error");
     
     //size_t pos = ftell(f);
     uint64_t numTagBytes = varUintFromFile(f, nullptr);
@@ -88,12 +88,12 @@ uint64_t OsmNode::getSerializedSize() const
     return varUintNumBytes(id) + 
            varUintNumBytes(version) + 
            sizeof(lat) + 
-           sizeof(lon) + 
+           sizeof(lng) + 
            varUintNumBytes(tagsSize) +  //size of 'tags size' field
            tagsSize;                    //size of actual tags
 }
 
-OsmNode::OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lon(lon), tags(tags) {}
+OsmNode::OsmNode( int32_t lat, int32_t lng, uint64_t  id, uint32_t version, vector<OsmKeyValuePair> tags): id(id), version(version), lat(lat), lng(lng), tags(tags) {}
 
 void OsmNode::serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *vertex_data) const
 {
@@ -106,7 +106,7 @@ void OsmNode::serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *verte
     ensure_mmap_size( vertex_data, (this->id+1) * 2 * sizeof(int32_t));
     int32_t* vertex_ptr = (int32_t*)vertex_data->ptr;
     vertex_ptr[2*this->id]   = this->lat;
-    vertex_ptr[2*this->id+1] = this->lon;
+    vertex_ptr[2*this->id+1] = this->lng;
 
     ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
     uint64_t* index_ptr = (uint64_t*)index_map->ptr;
@@ -140,7 +140,7 @@ void OsmNode::serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *verte
         numBytes = varUintToBytes(version, bytes);
         chunk.put(bytes, numBytes);
         chunk.put(lat);
-        chunk.put(lon);
+        chunk.put(lng);
 
         RawTags::serialize( tags, chunk );
 
@@ -170,13 +170,13 @@ const string& OsmNode::getValue(string key) const
 }
 
 
-bool OsmNode::operator==(const OsmNode &other) const {return lat == other.lat && lon == other.lon;}
-bool OsmNode::operator!=(const OsmNode &other) const {return lat != other.lat || lon != other.lon;}
+bool OsmNode::operator==(const OsmNode &other) const {return lat == other.lat && lng == other.lng;}
+bool OsmNode::operator!=(const OsmNode &other) const {return lat != other.lat || lng != other.lng;}
 bool OsmNode::operator< (const OsmNode &other) const {return id < other.id;}
 
 ostream& operator<<(ostream &out, const OsmNode &node)
 {
-    out << "Node " << node.id <<" (" << (node.lat/10000000.0) << "°, " << (node.lon/10000000.0) << "°)";
+    out << "Node " << node.id <<" (" << (node.lat/10000000.0) << "°, " << (node.lng/10000000.0) << "°)";
     out << node.tags;
     return out;
 }
