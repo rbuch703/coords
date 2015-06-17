@@ -8,13 +8,13 @@
 
 #ifndef COORDS_MAPNIK_PLUGIN
     #include "misc/symbolicNames.h"
-    #include "containers/chunkedFile.h"
 #else
     #include "symbolicNames.h"
 #endif
 
 typedef std::vector< std::pair<std::string, std::string> > Tags;
 typedef std::map< std::string, std::string> TagDictionary;
+class Chunk;
 
 class RawTags 
 {

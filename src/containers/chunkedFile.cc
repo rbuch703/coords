@@ -236,3 +236,74 @@ bool ChunkedFile::isValidChunk(uint64_t pos) const
     uint64_t size = ChunkedFile::chunkSizes[sizeMarker];
     return pos + size <= (fileMap.size - getFreeSpaceAtEnd())  ;
 }
+
+
+ChunkedFile::Iterator::Iterator(
+    const ChunkedFile& host, uint8_t *chunkPtr):
+    host(host), chunkPtr(chunkPtr)
+{
+    std::cout << "initialized at " << (this->chunkPtr - (uint8_t*)host.fileMap.ptr) << std::endl;
+    uint8_t chunkHeader = *this->chunkPtr;
+    if ( chunkHeader & UNUSED_CHUNK)
+        this->moveToNextValidChunk();
+        
+    std::cout << "header is " << (int)chunkHeader << std::endl;
+}
+
+ChunkedFile::Iterator& ChunkedFile::Iterator::operator++()
+{
+    this->moveToNextValidChunk();
+    return *this;
+}
+
+bool ChunkedFile::Iterator::operator!=(const ChunkedFile::Iterator& other) const
+{
+    return chunkPtr != other.chunkPtr;
+}
+
+void ChunkedFile::Iterator::moveToNextValidChunk()
+{
+    uint8_t *beyond = ((uint8_t*)host.fileMap.ptr) + host.getStartPosOfFreeSpace();
+    
+    uint8_t chunkHeader = *this->chunkPtr;
+    MUST( (chunkHeader & INVALID_CHUNK) == 0, "invalid chunk");
+    uint64_t chunkSize = ChunkedFile::chunkSizes[ chunkHeader & CHUNK_SIZE_MASK];
+    
+    while (this->chunkPtr < beyond)
+    {
+        this->chunkPtr += chunkSize;
+
+        chunkHeader = *this->chunkPtr;
+        if (! (chunkHeader & (INVALID_CHUNK | UNUSED_CHUNK)))
+        {
+            //std::cout << "is now at " << (this->chunkPtr - (uint8_t*)host.fileMap.ptr) 
+            //          << std::endl;
+            return;
+        }
+        
+        chunkSize = ChunkedFile::chunkSizes[ chunkHeader & CHUNK_SIZE_MASK];
+            
+    }
+    MUST( this->chunkPtr == beyond, "overflow");
+}
+
+ChunkedFile::Iterator ChunkedFile::begin()
+{
+    //first chunk starts right after the uint64_t free space counter
+    return Iterator(*this, ((uint8_t*)this->fileMap.ptr)+sizeof(uint64_t));
+}
+
+ChunkedFile::Iterator ChunkedFile::end()
+{
+    return Iterator(*this, ((uint8_t*)this->fileMap.ptr)+this->getStartPosOfFreeSpace());
+}
+
+
+Chunk ChunkedFile::Iterator::operator*() const
+{
+    uint8_t chunkHeader = *this->chunkPtr;
+    MUST( (chunkHeader & INVALID_CHUNK) == 0, "invalid chunk");
+    uint64_t chunkSize = ChunkedFile::chunkSizes[ chunkHeader & CHUNK_SIZE_MASK];
+    return Chunk(this->chunkPtr+1, this->chunkPtr - (uint8_t*)host.fileMap.ptr + 1, chunkSize-1);
+}
+

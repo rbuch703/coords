@@ -1,7 +1,10 @@
 
-#include "osmConsumerIdRemapper.h"
-#include <iostream>
 #include <assert.h>
+
+#include <iostream>
+
+#include "config.h"
+#include "osmConsumerIdRemapper.h"
 
 using namespace std;
 

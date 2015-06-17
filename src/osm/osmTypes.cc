@@ -10,9 +10,11 @@
 #include <stdlib.h> //for exit()
 #include <stdint.h>
 
+#include "config.h"
 #include "osmTypes.h"
 #include "misc/rawTags.h"
 #include "misc/varInt.h"
+#include "containers/chunkedFile.h"
 //#include "symbolic_tags.h"
 
 #include <iostream>
@@ -52,13 +54,33 @@ OsmNode::OsmNode( const uint8_t* data_ptr)
     lon = *(int32_t*)data_ptr;
     data_ptr+=4;
 
-    RawTags rawTags(data_ptr);
-    
-    //data_ptr += rawTags.getSerializedSize();
-    
-    for (std::pair<const char*, const char*> kv : rawTags)
+    for (std::pair<const char*, const char*> kv : RawTags(data_ptr))
         tags.push_back( std::make_pair(kv.first, kv.second));
 }
+
+OsmNode::OsmNode( FILE* f)
+{
+    id = varUintFromFile(f, nullptr);
+    version = varUintFromFile(f, nullptr);
+    MUST(fread(&lat, sizeof(lat), 1, f) == 1, "node read error");
+    MUST(fread(&lon, sizeof(lon), 1, f) == 1, "node read error");
+    
+    //size_t pos = ftell(f);
+    uint64_t numTagBytes = varUintFromFile(f, nullptr);
+    
+    uint64_t numBytes = numTagBytes + varUintNumBytes(numTagBytes);
+    uint8_t *bytes = new uint8_t[numBytes];
+    
+    int nRead = varUintToBytes( numTagBytes, bytes);
+    MUST(fread( bytes+nRead, numTagBytes, 1, f) == 1, "node read error");
+    
+    for (std::pair<const char*, const char*> kv : RawTags(bytes))
+        tags.push_back( std::make_pair(kv.first, kv.second));
+    
+    delete [] bytes;
+    
+}
+
 
 uint64_t OsmNode::getSerializedSize() const
 {

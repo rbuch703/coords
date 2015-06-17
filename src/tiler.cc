@@ -18,8 +18,10 @@
 #include "geom/geomSerializers.h"
 #include "geom/srsConversion.h"
 #include "containers/osmWayStore.h"
+#include "containers/osmNodeStore.h"
 #include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
+#include "containers/chunkedFile.h"
 #include "misc/cleanup.h"
 #include "misc/escapeSequences.h"
 #include "lod/lodHandler.h"
@@ -82,72 +84,6 @@ int parseArguments(int argc, char** argv)
     
     return optind;
 }
-
-/*static const std::set<std::string> lineIndicatorTags {
-    "highway", "waterway", "boundary", "power", "barrier", "railway" };
-
-template <typename T>
-bool hasLineTag( const T &tags)
-{
-    for (const Tag &tag : tags)
-        if ( lineIndicatorTags.count(tag.first))
-            return true;
-            
-    return false;
-}
-
-static const std::set<std::string> l12Highways = {
-    "motorway", "motorway_link",
-    "trunk",    "trunk_link",
-    "primary",  "primary_link",
-    "secondary","secondary_link",
-    "tertiary", "tertiary_link"};
-*/
-
-/*
-static uint64_t getPositiveIntIfOnlyDigits(const char* s)
-{
-    bool onlyDigits = true;
-    int numDigits = 0;
-    int num = 0;
-    
-    for ( const char* pos = s; *pos != '\0'; pos++)
-    {
-        numDigits += 1;
-        onlyDigits &= (*pos >= '0' && *pos <= '9');
-        num = (num * 10) + (*pos - '0');
-    }
-    
-    return onlyDigits ? num : 0;
-}*/
-
-/*
-template <typename T>
-bool hasL12LineTag( const T &tags)
-{
-    bool isAdminBoundary = false;
-    int adminLevel = 0;
-    for (const Tag &tag : tags)
-    {
-        if (tag.first == "highway")
-            if ( l12Highways.count(tag.second)) return true;
-        if (tag.first == "boundary" && tag.second == "administrative")
-            isAdminBoundary = true;
-        if (tag.first == "admin_level")
-            adminLevel = getPositiveIntIfOnlyDigits(tag.second.c_str());
-        if (tag.first == "railway" && (tag.second == "rail" || tag.second == "narrow_gauge"))
-            return true;
-        if (tag.first == "waterway" && (tag.second == "river" || tag.second== "canal"))
-            return true;
-        
-    }
-
-    if (isAdminBoundary && adminLevel > 0 && adminLevel <= 6) 
-        return true;
-        
-    return false;
-}
-*/
 
 template <typename T>
 std::set<T> getSetFromFileEntries(std::string filename)
@@ -238,7 +174,29 @@ int main(int argc, char** argv)
 {
     parseArguments(argc, argv);
     ensureDirectoryExists(tileDirectory);
+
+    ChunkedFile nodes( storageDirectory + "nodes.data");
+    uint64_t pos = 0;
+    for (Chunk nodeChunk : nodes)
+    {
+        if (++pos % 1000000 == 0)
+            cout << (pos/1000000) << "M nodes read" << endl;
+        OsmNode node(nodeChunk.getDataPtr());
+        //cout << node << endl;
+        //cout << "BEEP" << endl;
+    }
+    cout << "total: " << pos << " nodes." << endl;
     
+    /*int ch;
+    FILE* fNodes = fopen( (storageDirectory + "nodes.data").c_str(), "rb");
+    MUST( fNodes != nullptr, "cannot open 'nodes.data'");
+    while ( (ch = fgetc(fNodes)) != EOF)
+    {
+        ungetc(ch, fNodes);
+        OsmNode node(fNodes);
+        cout << node << endl;
+    }*/
+    exit(0);
 
     std::vector<LodHandler*> polygonLodHandlers;
     //polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
@@ -249,7 +207,7 @@ int main(int argc, char** argv)
     //polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
 
     uint64_t numWays = 0;
-    uint64_t pos = 0;
+    /*uint64_t*/ pos = 0;
     uint64_t numVertices = 0;
     cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
          << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;

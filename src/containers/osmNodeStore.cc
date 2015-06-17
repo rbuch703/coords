@@ -1,79 +1,87 @@
 
+#include "osmNodeStore.h"
+#include <sys/mman.h>
 
-#include "containers/osmNodeStore.h"
+OsmNodeStore::OsmNodeStore(const char* indexFileName, const char* dataFileName, bool optimizeForStreaming) {
+    mapNodeIndex = init_mmap(indexFileName, true, false);
+    mapNodeData  = init_mmap(dataFileName, true, false);
 
-NodeStore::NodeStore(const char* indexFileName, const char* dataFileName) {
-    mapIndex = init_mmap(indexFileName, true, false);
-    mapData  = init_mmap(dataFileName, true, true);
-}
-
-NodeStore::NodeStore(std::string baseName): 
-    NodeStore( (baseName + ".idx").c_str(), (baseName + ".data").c_str())
-{ }
-
-
-OsmNode NodeStore::operator[](uint64_t nodeId) const
-{
-    uint64_t *index = (uint64_t*)mapIndex.ptr;
-    assert(index[nodeId] != 0 && "trying to access non-existent node");
-    uint64_t dataOffset = index[nodeId];
-    return OsmNode((uint8_t*)mapData.ptr + dataOffset);
+    if (optimizeForStreaming)
+    {
+        madvise( mapNodeData.ptr,  mapNodeData.size,  MADV_SEQUENTIAL);
+        madvise( mapNodeIndex.ptr, mapNodeIndex.size, MADV_SEQUENTIAL);
+    }
 
 }
 
-bool NodeStore::exists(uint64_t nodeId) const
+OsmNodeStore::OsmNodeStore(const std::string &baseName, bool optimizeForStreaming):
+    OsmNodeStore((baseName + ".idx").c_str(), (baseName +".data").c_str(), optimizeForStreaming)
+{}
+
+
+OsmNode OsmNodeStore::operator[](uint64_t nodeId)
 {
-    uint64_t *index = (uint64_t*)mapIndex.ptr;
+    uint64_t *nodeIndex = (uint64_t*)mapNodeIndex.ptr;
+    assert(nodeIndex[nodeId] != 0 && "trying to access non-existent node");
+    uint64_t nodePos = nodeIndex[nodeId];
+    return OsmNode((uint8_t*)mapNodeData.ptr + nodePos);
+}
+
+bool OsmNodeStore::exists(uint64_t nodeId) const
+{
+    uint64_t *nodeIndex = (uint64_t*)mapNodeIndex.ptr;
     if (nodeId >= getMaxNumNodes())
         return false;
         
-    return index[nodeId] != 0;
+    return nodeIndex[nodeId] != 0;
 }
 
-NodeStore::NodeIterator NodeStore::begin() 
+
+
+
+OsmNodeStore::NodeIterator OsmNodeStore::begin() 
 { 
     return NodeIterator(*this, 0);
 }
 
-NodeStore::NodeIterator NodeStore::end()   
+OsmNodeStore::NodeIterator OsmNodeStore::end()   
 { 
     return NodeIterator(*this, getMaxNumNodes());
 }
 
-uint64_t NodeStore::getMaxNumNodes() const 
+uint64_t OsmNodeStore::getMaxNumNodes() const 
 { 
-    return mapIndex.size / sizeof(uint64_t); 
+    return mapNodeIndex.size / sizeof(uint64_t); 
 }
 
 
-NodeStore::NodeIterator::NodeIterator( NodeStore &host, uint64_t pos): host(host), pos(pos) 
+OsmNodeStore::NodeIterator::NodeIterator( OsmNodeStore &host, uint64_t pos):
+    host(host), pos(pos) 
 {
     advanceToNextNode();
 }
 
-NodeStore::NodeIterator& NodeStore::NodeIterator::operator++() 
-{
+OsmNodeStore::NodeIterator& OsmNodeStore::NodeIterator::operator++() {
     pos++;
     advanceToNextNode();
     return *this;
 }
 
-OsmNode NodeStore::NodeIterator::operator *() 
-{
+OsmNode OsmNodeStore::NodeIterator::operator *() {
     return host[pos];
 }
 
-bool NodeStore::NodeIterator::operator !=( NodeIterator &other) const
+bool OsmNodeStore::NodeIterator::operator !=( NodeIterator &other) const
 { 
     return pos != other.pos;
 } 
 
-
-void NodeStore::NodeIterator::advanceToNextNode() {
+void OsmNodeStore::NodeIterator::advanceToNextNode() {
     uint64_t endPos = host.getMaxNumNodes();
-    uint64_t *index = (uint64_t*)host.mapIndex.ptr;
-    while (pos < endPos && index[pos] == 0)
+    if (pos >= endPos)
+        return;
+    uint64_t *nodeIndex = (uint64_t*)host.mapNodeIndex.ptr;
+    while ( (nodeIndex[pos] == 0 || (nodeIndex[pos] & 0x8000000000000000ull)) && pos < endPos)
         pos+=1;            
 }        
-
 

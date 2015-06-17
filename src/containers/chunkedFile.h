@@ -20,15 +20,15 @@
    It is intended for uses where chunk deletions and recreations are quite common. In these
    cases, allowing arbitrary chunk sizes would lead to wasted space whenever a chunk is deleted,
    as its space cannot easily be re-used for chunks of a different size. 
-   Instead, this class only allows certain chunk sizes that follow a power series (
-   starting at 27 bytes, and each successive size being 4/3 times as big as its 
-   predecessor, rounded down). When creation of a new chunk (of arbitrary size) is 
+   Instead, this class only allows certain chunk sizes that roughly follow a power series (
+   the actual chunk sizes where determined based on actual serialized OSM entity sizes). 
+   When creation of a new chunk (of arbitrary size) is 
    requested, the request is fulfilled by serving a new chunk of the closest size
    from the power series that is at least as big as requested. When a chunk is deleted,
    its actual chunk size (which may have been bigger than requested) is reclaimed,
-   and added to a 'free list'. Since the power series has only 62 distinct entries (up
+   and added to a 'free list'. Since the power series has only 63 distinct entries (up
    to a maximum chunk size of about 1,9GB), the free list simply consists of a list of 
-   free chunks for each of the 46 different possible sizes. So free space management is
+   free chunks for each of the 63 different possible sizes. So free space management is
    simplified. 
 */
 class Chunk;
@@ -41,7 +41,25 @@ public:
     //uint64_t createChunk(uint64_t size);
     Chunk createChunk(uint64_t size);
     void freeChunk(Chunk &chunk);
-    
+
+        
+    class Iterator 
+    {
+    public:
+        Iterator(const ChunkedFile& host, uint8_t *chunkPtr);
+        Iterator& operator++();
+        Chunk operator*() const;
+        bool operator!=(const Iterator& other) const;
+    private:
+        void moveToNextValidChunk();
+    private:
+        const ChunkedFile &host;
+        uint8_t *chunkPtr;
+    };
+
+    Iterator begin();
+    Iterator end();
+
     //uint8_t* getChunkDataPtr(uint64_t filePos);
 //private:
 public: //'public' for debugging
@@ -94,7 +112,9 @@ public:
         currentIndex += srcSize;
     }
     
-    
+    const uint8_t *getDataPtr() const {
+        return dataPtr;
+    }
     void resetPosition() {currentIndex = 0;}
 private:
     uint8_t* dataPtr;

@@ -4,6 +4,7 @@
 #include "varInt.h"
 #include "config.h"
 #include <string.h> //for strlen
+#include "containers/chunkedFile.h"
 
 /* ON-DISK LAYOUT FOR TAGS:
     varUInt numBytes, *NOT* including this field itself

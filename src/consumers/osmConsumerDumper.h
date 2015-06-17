@@ -9,8 +9,9 @@
 #include "misc/mem_map.h"
 #include "consumers/osmConsumer.h"
 #include "containers/radixTree.h"
-#include "containers/chunkedFile.h"
 #include "containers/bucketFileSet.h"
+
+class ChunkedFile;
 
 class OsmConsumerDumper: public OsmBaseConsumer
 {

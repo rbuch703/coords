@@ -1,25 +1,18 @@
 
-#define _FILE_OFFSET_BITS 64
-
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>   //for PRIu64
 #include <assert.h>
 #include <stdint.h>
-#include <fcntl.h>
-#include <unistd.h> //for _SC_PAGESIZE
-
-#include <sys/mman.h>   // for madvise
 
 #include <iostream>
 #include <string>
 #include <map>
 #include <list>
 
-#include "osm/osmParserXml.h"
+#include "config.h"
 #include "consumers/osmConsumerDumper.h"
+#include "containers/chunkedFile.h"
+#include "osm/osmParserXml.h"
 #include "osm/osmTypes.h"
 #include "osm/osm_tags.h"
-#include "config.h"
 
 using namespace std;
 

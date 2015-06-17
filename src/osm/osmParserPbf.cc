@@ -1,17 +1,18 @@
 
 
+
+
 #include <arpa/inet.h>  //for ntohl
+#include <assert.h>
+#include <stdio.h>
+#include <zlib.h>
 
 #include <iostream>
 
-#include <stdio.h>
-#include <zlib.h>
-#include <assert.h>
-
+#include "config.h"
 #include "osm/osmTypes.h"
 #include "osm/osmParserPbf.h"
 #include "consumers/osmConsumerCounter.h"
-//#include "osmConsumerOrderEnsurer.h"
 
 using namespace std;
 

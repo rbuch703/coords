@@ -72,6 +72,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/ring.cc
                src/geom/srsConversion.cc
                src/containers/chunkedFile.cc
+               src/containers/osmNodeStore.cc
                src/containers/osmWayStore.cc
                src/containers/osmRelationStore.cc
                src/containers/reverseIndex.cc
