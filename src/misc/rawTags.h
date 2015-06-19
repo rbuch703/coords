@@ -24,6 +24,8 @@ public:
     /* returns: a memory buffer to which the Tags have been serialized.
                 the caller takes ownership of the returned memory buffer. */
     static uint8_t* serialize( const Tags &tags, uint64_t *numBytesOut = nullptr);
+    static void serialize( const Tags &tags, uint64_t numBytes, 
+                           uint8_t *outputBuffer, uint64_t outputBufferSize);
     
     static void     serialize( const Tags &tags, FILE* fOut);
 #ifndef COORDS_MAPNIK_PLUGIN

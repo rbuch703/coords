@@ -33,7 +33,8 @@ static void truncateFile(string filename) {
 OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory): 
     nNodes(0), nWays(0), nRelations(0), node_data_synced_pos(0), node_index_synced_pos(0), 
     destinationDirectory( (destinationDirectory.back() == '/' || destinationDirectory.back() == '\\' ) ? destinationDirectory : destinationDirectory + "/"), 
-    nodeRefBuckets ( this->destinationDirectory + "nodeRefs", BUCKET_SIZE, false)
+    nodeRefBuckets ( this->destinationDirectory + "nodeRefs", BUCKET_SIZE, false),
+    wayBuckets( this->destinationDirectory+"ways", NODES_OF_WAYS_BUCKET_SIZE, false)
 {    
 
     nodesDataFilename      = this->destinationDirectory + "nodes.data";
@@ -53,8 +54,8 @@ OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory):
     truncateFile(nodesIndexFilename);
     truncateFile(nodesDataFilename);
     truncateFile(verticesDataFilename);
-    truncateFile(waysIndexFilename);
-    truncateFile(waysDataFilename);
+    //truncateFile(waysIndexFilename);
+    //truncateFile(waysDataFilename);
     truncateFile(relationsIndexFilename);
     truncateFile(relationsDataFilename);
 
@@ -63,8 +64,8 @@ OsmConsumerDumper::OsmConsumerDumper(std::string destinationDirectory):
     node_index = init_mmap( nodesIndexFilename.c_str() );
     nodeData = new ChunkedFile(nodesDataFilename.c_str());
 
-    way_index = init_mmap(waysIndexFilename.c_str());
-    wayData = new ChunkedFile(waysDataFilename.c_str());
+    //way_index = init_mmap(waysIndexFilename.c_str());
+    //wayData = new ChunkedFile(waysDataFilename.c_str());
 
     relation_index = init_mmap(relationsIndexFilename.c_str());
     relationData = new ChunkedFile(relationsDataFilename.c_str());
@@ -76,8 +77,8 @@ OsmConsumerDumper::~OsmConsumerDumper()
     free_mmap(&node_index);   
    
     free_mmap(&vertex_data);
-    free_mmap(&way_index);
-    delete wayData;
+    //free_mmap(&way_index);
+    //delete wayData;
 
     free_mmap(&relation_index);
     delete relationData;
@@ -112,17 +113,17 @@ void OsmConsumerDumper::consumeWay ( OsmWay  &way)
 {
     nWays++;
     filterTags(way.tags);
-    way.serialize(*wayData, &way_index);
+    way.serializeCompressed( wayBuckets.getFile(way.id));
     
     /* the following code dumps each (wayId, nodeId) tuple in a bucket file, where bucket 'i'
-       stores the tuples for all nodeIds in the range [i*10M, (i+1)*10M[. These bucket files are
-       later used to efficiently create reverse indices (mapping each node id to a list of way ids
-       that reference said node).
-       
-       For a 2015 planet dump,
-       the highest nodeId is about 3G, requiring about 300 buckets. Note that Linux has a soft
-       ulimit at 1024 open files per process. So the bucket size needs to be adjusted
-       once OSM reaches close to 10G node IDs, in order to not exceed the open file limit.
+     * stores the tuples for all nodeIds in the range [i*10M, (i+1)*10M[. These bucket files are
+     * later used to efficiently create reverse indices (mapping each node id to a list of way
+     * ids that reference said node).
+     *
+     * For a 2015 planet dump,
+     * the highest nodeId is about 3G, requiring about 300 buckets. Note that Linux has a soft
+     * ulimit at 1024 open files per process. So the bucket size needs to be adjusted
+     * once OSM reaches close to 10G node IDs, in order to not exceed the open file limit.
     */
     
     for (const OsmGeoPosition &ref : way.refs)

@@ -128,7 +128,17 @@ uint8_t* RawTags::serialize( const Tags &tags, uint64_t *numBytesOut)
         *numBytesOut = numBytesIncludingSizeField;
         
     uint8_t *outBuf = new uint8_t[numBytesIncludingSizeField];
-    uint8_t *outPos = outBuf;
+    
+    RawTags::serialize(tags, numBytes, outBuf, numBytesIncludingSizeField);
+
+    //MUST( outPos - outStart == (int64_t)numBytes, "tag set size mismatch");
+    return outBuf;
+}
+
+void RawTags::serialize( const Tags &tags, uint64_t numBytes, 
+                             uint8_t *outputBuffer, uint64_t outputBufferSize)
+{
+    uint8_t *outPos = outputBuffer;
     
     outPos += varUintToBytes(numBytes, outPos);
     uint8_t *outStart = outPos; //byte at which the memory area of size 'numBytes' starts
@@ -138,9 +148,9 @@ uint8_t* RawTags::serialize( const Tags &tags, uint64_t *numBytesOut)
     if ( tags.size() == 0)
     {
         MUST( outPos - outStart == (int64_t)numBytes, "tag set size mismatch");
-        MUST( outPos - outBuf   == (int64_t)numBytesIncludingSizeField, "tag set size mismatch");
+        MUST( outPos - outputBuffer == (int64_t)outputBufferSize, "tag set size mismatch");
 
-        return outBuf;
+        return;
     }
         
     uint64_t numNames = tags.size() * 2;    //one key, one value
@@ -185,10 +195,8 @@ uint8_t* RawTags::serialize( const Tags &tags, uint64_t *numBytesOut)
         idx += 2;
     }
 
-    MUST( outPos - outStart == (int64_t)numBytes, "tag set size mismatch");
-    MUST( outPos - outBuf   == (int64_t)numBytesIncludingSizeField, "tag set size mismatch");
+    MUST( outPos - outputBuffer   == (int64_t)outputBufferSize, "tag set size mismatch");
 
-    return outBuf;
 }
 
 RawTags::RawTagIterator::RawTagIterator(const uint8_t* symbolicNameBits, 

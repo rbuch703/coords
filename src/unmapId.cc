@@ -34,11 +34,19 @@ int main(int argc, const char** argv)
     //cout << "opening file " << filename << endl;
     FILE* f = fopen( filename.c_str(), "rb");
     uint64_t numItems;
-    fread(&numItems, sizeof(numItems), 1, f);
+    if (1 != fread(&numItems, sizeof(numItems), 1, f))
+    {
+        cout << "read error" << endl;
+        return EXIT_FAILURE;
+    }
     while (numItems--)
     {
         Tuple tpl;
-        fread(&tpl, sizeof(tpl), 1, f);
+        if (1 != fread(&tpl, sizeof(tpl), 1, f))
+        {
+            cout << "read error" << endl;
+            return EXIT_FAILURE;
+        }
         //cout << tpl.oldId << ", " << tpl.newId << endl;
         if (tpl.newId == relId)
         {

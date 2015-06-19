@@ -263,6 +263,77 @@ void OsmWay::serialize( FILE* data_file, mmap_t *index_map) const
     }
 }
 
+uint64_t OsmWay::getSerializedCompressedSize() const
+{
+    uint64_t nTagBytes = RawTags::getSerializedSize(tags);
+    
+    uint64_t nBytes = varUintNumBytes(this->id) + 
+                      varUintNumBytes(this->version) + 
+                      varUintNumBytes(this->refs.size()) +
+                      nTagBytes + 
+                      varUintNumBytes(nTagBytes);
+                      
+    int64_t prevRef = 0;
+    int64_t prevLat = 0;
+    int64_t prevLng = 0;
+    for (OsmGeoPosition pos : this->refs)
+    {
+        int64_t dRef = pos.id -  prevRef;
+        int64_t dLat = pos.lat - prevLat;
+        int64_t dLng = pos.lng - prevLng;
+        
+        nBytes += varIntNumBytes(dRef);
+        nBytes += varIntNumBytes(dLat);
+        nBytes += varIntNumBytes(dLng);
+        
+        prevRef = pos.id;
+        prevLat = pos.lat;
+        prevLng = pos.lng;
+    }
+    
+    return nBytes;
+}
+
+
+void OsmWay::serializeCompressed(FILE* f)
+{
+    
+    uint64_t nTagBytes = RawTags::getSerializedSize(this->tags);
+    uint64_t nBytes = this->getSerializedCompressedSize();
+    uint8_t *bytes = new uint8_t[nBytes];
+    uint8_t* pos = bytes;
+    
+    pos += varUintToBytes( this->id, pos);
+    pos += varUintToBytes( this->version, pos);
+    pos += varUintToBytes( this->refs.size(), pos);
+    
+    int64_t prevRef = 0;
+    int64_t prevLat = 0;
+    int64_t prevLng = 0;
+    for (OsmGeoPosition p : this->refs)
+    {
+        int64_t dRef = p.id -  prevRef;
+        int64_t dLat = p.lat - prevLat;
+        int64_t dLng = p.lng - prevLng;
+        
+        pos += varIntToBytes(dRef, pos);
+        pos += varIntToBytes(dLat, pos);
+        pos += varIntToBytes(dLng, pos);
+        
+        prevRef = p.id;
+        prevLat = p.lat;
+        prevLng = p.lng;
+    }
+    
+    RawTags::serialize(this->tags, nTagBytes, pos, nTagBytes + varUintNumBytes(nTagBytes));
+    pos += nTagBytes + varUintNumBytes(nTagBytes);
+    //std::cout << (pos - bytes) << ", " << nBytes << std::endl;
+    MUST( pos - bytes == (int64_t)nBytes, "compressed way serialization size mismatch");
+    
+    MUST( fwrite( bytes, nBytes, 1, f) == 1, "compresses way write error");
+    delete [] bytes;
+}
+
 void OsmWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
 {
     Chunk chunk = dataFile.createChunk(this->getSerializedSize());

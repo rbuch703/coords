@@ -3,6 +3,7 @@
 #include <getopt.h> //for getopt_long()
 #include <unistd.h> //for unlink()
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <google/protobuf/stubs/common.h>   //for ShutdownProtobufLibrary()
 #include <iostream>
 
@@ -77,6 +78,7 @@ void cleanupDestination(const std::string &storageDirectory)
     deleteNumberedFiles(storageDirectory, "nodeRefs", ".raw");
     deleteNumberedFiles(storageDirectory, "nodeRefsResolved", ".raw");
     deleteNumberedFiles(storageDirectory, "referencedWays", ".raw");
+    deleteNumberedFiles(storageDirectory, "ways", ".raw");
 }
 
 
@@ -133,7 +135,7 @@ int main(int argc, char** argv)
         std::cerr << "error: cannot open file '" << argv[nextArgumentIndex] << "'" << std::endl;
         exit(EXIT_FAILURE);
     }
-
+    posix_fadvise( fileno(f), 0, 0, POSIX_FADV_SEQUENTIAL);
     OsmBaseConsumer *dumper = new OsmConsumerDumper(destinationDirectory);
     OsmBaseConsumer* firstConsumer = remapIds ? 
         new OsmConsumerIdRemapper(destinationDirectory, dumper) : dumper;

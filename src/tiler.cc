@@ -189,12 +189,12 @@ int main(int argc, char** argv)
     */
 
     std::vector<LodHandler*> polygonLodHandlers;
-    //polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
-    //polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
-    //polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
+    polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
+    polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
+    polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
     polygonLodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
-    //polygonLodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
-    //polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
+    polygonLodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
+    polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
 
     uint64_t numWays = 0;
     uint64_t pos = 0;
@@ -287,7 +287,6 @@ int main(int argc, char** argv)
 
             delete geosGeom;
         }
-        //FIXME: re-add code to store lines
     }
     
     cout << "stage 3: subdividing meta nodes to individual nodes of no more than "

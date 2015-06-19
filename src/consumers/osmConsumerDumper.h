@@ -28,8 +28,8 @@ private:
     void filterTags(std::vector<OsmKeyValuePair> &tags) const;
 
 private:
-    mmap_t node_index, vertex_data, way_index, relation_index;
-    ChunkedFile *nodeData, *wayData, *relationData;
+    mmap_t node_index, vertex_data, relation_index;
+    ChunkedFile *nodeData, *relationData;
     RadixTree<int> ignore_key, ignoreKeyPrefixes;    //ignore key-value pairs that are irrelevant for most applications
     uint64_t nNodes, nWays, nRelations;
     uint64_t node_data_synced_pos, node_index_synced_pos;
@@ -38,6 +38,7 @@ private:
     std::string relationsDataFilename, relationsIndexFilename;
     std::string destinationDirectory;
     BucketFileSet<uint64_t> nodeRefBuckets;
+    BucketFileSet<void*>     wayBuckets;
 };
 
 #endif
