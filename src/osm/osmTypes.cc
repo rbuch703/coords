@@ -58,7 +58,7 @@ OsmNode::OsmNode( const uint8_t* data_ptr)
     for (std::pair<const char*, const char*> kv : RawTags(data_ptr))
         tags.push_back( std::make_pair(kv.first, kv.second));
 }
-
+/*
 OsmNode::OsmNode( FILE* f)
 {
     id = varUintFromFile(f, nullptr);
@@ -80,9 +80,8 @@ OsmNode::OsmNode( FILE* f)
         tags.push_back( std::make_pair(kv.first, kv.second));
     
     delete [] bytes;
-    
 }
-
+*/
 
 uint64_t OsmNode::getSerializedSize() const
 {
@@ -132,6 +131,7 @@ void OsmNode::serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *verte
     } else  //full serialization
     {
         Chunk chunk = dataFile.createChunk( this->getSerializedSize());
+        index_ptr[id] = chunk.getPositionInFile();
 
         int numBytes;
         uint8_t bytes[10];
@@ -148,7 +148,6 @@ void OsmNode::serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *verte
 
         //std::cout << id << endl;    
         ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-        index_ptr[id] = chunk.getPositionInFile();
     }
 
 }

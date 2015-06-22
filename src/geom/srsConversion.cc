@@ -11,7 +11,7 @@ static const double INT_TO_MERCATOR_METERS = 1/100.0;
 static const double HALF_EARTH_CIRCUMFERENCE = 20037508.3428; // ~ 20037km
 static const double PI = 3.141592653589793;
 
-static inline void convertWgs84ToWebMercator( int32_t &lat, int32_t &lng)
+void convertWgs84ToWebMercator( int32_t &lat, int32_t &lng)
 {
     MUST( lat >=  -900000000 && lat <=  900000000, "latitude out of range");
     MUST( lng >= -1800000000 && lng <= 1800000000, "longitude out of range");

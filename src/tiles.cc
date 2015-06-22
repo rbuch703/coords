@@ -67,8 +67,34 @@ void FileBackedTile::add(const OsmWay &way, const Envelope &wayBounds, bool asPo
         if (wayBounds.overlapsWith(bottomRightChild->bounds)) 
             bottomRightChild->add(way,  wayBounds, asPolygon);
     }
-    
 }
+
+void FileBackedTile::add(const OsmNode &node)
+{
+    if (fData)
+    {
+        assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
+        serializeNode(node).serialize(fData);
+        this->size = ftell(fData);
+
+        if ( this->size > maxNodeSize)
+            subdivide();
+    } else 
+    {
+        Envelope nodeBounds( node.lat, node.lng);
+        assert( topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
+        if (nodeBounds.overlapsWith(topLeftChild->bounds)) 
+            topLeftChild->add(node);
+        if (nodeBounds.overlapsWith(topRightChild->bounds)) 
+            topRightChild->add(node);
+
+        if (nodeBounds.overlapsWith(bottomLeftChild->bounds)) 
+            bottomLeftChild->add(node);
+        if (nodeBounds.overlapsWith(bottomRightChild->bounds)) 
+            bottomRightChild->add(node);
+    }
+}
+
 
 void FileBackedTile::add(const GenericGeometry &geom, const Envelope &bounds)
 {

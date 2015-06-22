@@ -7,6 +7,7 @@
 
 void convertWgs84ToWebMercator( OsmWay &way);
 void convertWgs84ToWebMercator( GenericGeometry &geom);
+void convertWgs84ToWebMercator( int32_t &lat, int32_t &lng);
 
 
 #endif

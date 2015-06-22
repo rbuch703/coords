@@ -165,44 +165,14 @@ void addToTileSet(geos::geom::Geometry* &geometry,
         delete geometry;
         geometry = simplifiedGeometry;
     }
-
 }
 
-int main(int argc, char** argv)
+void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory)
 {
-    parseArguments(argc, argv);
-    ensureDirectoryExists(tileDirectory);
-/*
-    ChunkedFile nodes( storageDirectory + "nodes.data");
-    uint64_t pos = 0;
-    for (Chunk nodeChunk : nodes)
-    {
-        if (++pos % 1000000 == 0)
-            cout << (pos/1000000) << "M nodes read" << endl;
-        OsmNode node(nodeChunk.getDataPtr());
-        //cout << node << endl;
-        //cout << "BEEP" << endl;
-    }
-    cout << "total: " << pos << " nodes." << endl;
-    */
-
-    std::vector<LodHandler*> polygonLodHandlers;
-    polygonLodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
-    polygonLodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
-    polygonLodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
-    polygonLodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
-    polygonLodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
-    polygonLodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
-
-    uint64_t numWays = 0;
-    uint64_t pos = 0;
-    uint64_t numVertices = 0;
-    cout << "stage 1: subdividing dataset to quadtree meta nodes of no more than "
-         << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
-
     FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
+    
     MUST(f, "cannot open file 'multipolygons.bin'. Did you forget to run the multipolygon reconstructor?");
-
+    int pos = 0;
     int ch;
     while ( (ch = fgetc(f)) != EOF)
     {
@@ -219,7 +189,7 @@ int main(int argc, char** argv)
         RawTags tags = geom.getTags();
         TagDictionary tagsDict = tags.asDictionary();
 
-        for (LodHandler* handler: polygonLodHandlers)
+        for (LodHandler* handler: lodHandlers)
         {
             int level = handler->applicableUpToZoomLevel(tagsDict, true);
             
@@ -233,20 +203,43 @@ int main(int argc, char** argv)
         }
 
         if (++pos % 10000 == 0)
-            cout << (pos/1000) << "k multipolygons read" << endl;
+            cout << "              " << (pos/1000) << "k polygons read" << endl;
     }
-    
     fclose(f);
+}
 
-    cerr << "stage 2: loading tags from boundary relations" << endl;
+void parseNodes(FileBackedTile &pointsStorage, std::string storageDirectory)
+{
+    ChunkedFile nodes( storageDirectory + "nodes.data");
+    uint64_t numNodesRead = 0;
+    for (Chunk nodeChunk : nodes)
+    {
+        if (++numNodesRead % 1000000 == 0)
+            cout << "\t          " << (numNodesRead/1000000) << "M nodes read" << endl;
+
+        OsmNode node(nodeChunk.getDataPtr());
+        convertWgs84ToWebMercator( node.lat, node.lng);
+        pointsStorage.add(node);
+    }
+    cerr << "\t          total: " << numNodesRead << " nodes." << endl;
+}
+
+void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory)
+{
+    uint64_t numWays = 0;
+    uint64_t pos = 0;
+    uint64_t numVertices = 0;
+
+    cerr << "\t          loading tags from boundary relations" << endl;
     map<uint64_t,TagDictionary> boundaryRelationTags= loadBoundaryRelationTags(storageDirectory);
         
     ReverseIndex wayReverseIndex(storageDirectory + "wayReverse", false);
-    cerr << "loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
+    cerr << "\t          loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
     
     // the IDs of ways that serve as outer ways of multipolygons.
     std::set<uint64_t> outerWayIds = getSetFromFileEntries<uint64_t>(storageDirectory + "outerWayIds.bin");
-    std::cout << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      
+    std::cout << "\t          " << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      
+
 
     pos = 0;
     for (const Chunk & chunk : ChunkedFile(storageDirectory + "ways.data"))
@@ -274,7 +267,7 @@ int main(int argc, char** argv)
         
 
         TagDictionary tagsDict( way.tags.begin(), way.tags.end());
-        for (LodHandler* handler: polygonLodHandlers)
+        for (LodHandler* handler: lodHandlers)
         {
             int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
             if (level < 0)
@@ -288,28 +281,61 @@ int main(int argc, char** argv)
             delete geosGeom;
         }
     }
+
+    cout << "stats: data set contains " << (numWays     / 1000000) << "M ways "
+         << "with " << (numVertices/1000000) << "M vertices " << endl;
+
+}
+
+
+int main(int argc, char** argv)
+{
+    parseArguments(argc, argv);
+    ensureDirectoryExists(tileDirectory);
+
+    std::vector<LodHandler*> lodHandlers;
+    lodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
+    lodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
+    lodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
+    lodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
+    lodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
+    lodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
+
+    FileBackedTile pointsStorage(tileDirectory + "points_24_", 
+                                 LodHandler::mercatorWorldBounds, 
+                                 LodHandler::MAX_META_NODE_SIZE );
+
+    cout << "stage 1/2: subdividing dataset to quadtree meta nodes of no more than "
+         << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
+
+    cout << "    stage 1a: parsing polygons" << endl;
+    parsePolygons(lodHandlers, storageDirectory);
+
+    cerr << "    stage 1b: parsing points" << endl;
+    parseNodes(pointsStorage, storageDirectory);
+
+    cerr << "    stage 1c: parsing ways" << endl;
+    parseWays(lodHandlers, storageDirectory);
     
-    cout << "stage 3: subdividing meta nodes to individual nodes of no more than "
+    cout << endl << "stage 2/2: subdividing meta nodes to individual nodes of no more than "
          << (LodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;
     /* the number of concurrently open files for a given process is limited by the OS (
        e.g. to ~1000 for normal user accounts on Linux. Keeping all node files open
        concurrently may easily exceed that limit. But in stage 2, we only need to keep
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
-       
-    for (LodHandler *handler : polygonLodHandlers)
+   
+    pointsStorage.closeFiles();
+    for (LodHandler *handler : lodHandlers)
         handler->closeFiles();
     
-
-    for (LodHandler *handler : polygonLodHandlers)
+    pointsStorage.subdivide(LodHandler::MAX_NODE_SIZE);
+    for (LodHandler *handler : lodHandlers)
     {
         handler->subdivide();
         delete handler;
     }
  
-    cout << "done." << endl;
 
-    cout << "stats: data set contains " << (numWays     / 1000000) << "M ways "
-         << "with " << (numVertices/1000000) << "M vertices " << endl;
     return EXIT_SUCCESS;
 }

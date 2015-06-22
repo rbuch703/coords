@@ -292,8 +292,7 @@ GenericGeometry serializeNode(const OsmNode &node)
         sizeof(uint64_t) + // 'id' field
         sizeof(int32_t)  + // lat
         sizeof(int32_t)  + // lng
-        numTagBytes +
-        varUintNumBytes(numTagBytes);
+        numTagBytes;
         
     uint8_t *outBuf = new uint8_t[numBytes];
     uint8_t *outPos = outBuf;
@@ -314,6 +313,7 @@ GenericGeometry serializeNode(const OsmNode &node)
     *(int32_t*)outPos = node.lng;
     outPos += sizeof(int32_t);
     
+    //std::cout << (outPos - outBuf) << ", " << numBytes << std::endl;
     MUST( uint64_t(outPos - outBuf) == numBytes, "node size mismatch");
     return GenericGeometry(outBuf, numBytes, true);
 }

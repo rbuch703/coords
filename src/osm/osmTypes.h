@@ -24,7 +24,7 @@ struct OsmNode
 {
     OsmNode( int32_t lat, int32_t lon, uint64_t  id, uint32_t version, std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
     OsmNode( const uint8_t* data_ptr);
-    OsmNode( FILE* f);
+    //OsmNode( FILE* f);
         
     void serialize( ChunkedFile &dataFile, mmap_t *index_map, mmap_t *vertex_data) const;
 

@@ -160,7 +160,7 @@ uint64_t GenericGeometry::getEntityId() const
 
 Envelope GenericGeometry::getBounds() const 
 {
-    const int32_t *pos = (const int32_t*)(bytes + sizeof(uint8_t) + sizeof(uint64_t));
+    const int32_t *pos = (const int32_t*) getGeometryPtr();
     switch (getFeatureType())
     {
         case FEATURE_TYPE::POINT: return Envelope( pos[0], pos[1]);
