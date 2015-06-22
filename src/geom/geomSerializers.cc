@@ -199,28 +199,32 @@ static uint64_t getSerializedSize(const geos::geom::LineString *ring, bool rever
     return size;
 }
 
-GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon)
+GenericGeometry serializeWay(const OsmWay &way, bool asPolygon)
 {
-    OsmGeoPosition v0 = way.vertices[0];
-    OsmGeoPosition vn = way.vertices[way.numVertices-1];
+    OsmGeoPosition v0 = way.refs.front();
+    OsmGeoPosition vn = way.refs.back();
     
     if (asPolygon)
         MUST( v0.lat == vn.lat && v0.lng == vn.lng, "polygon ring is not closed");
         
+    uint64_t numTagBytes = 0;
+    uint8_t *tagBytes = RawTags::serialize(way.tags, &numTagBytes);
+        
     uint64_t sizeTmp = 
         sizeof(uint8_t)  + // 'type' field
         sizeof(uint64_t) + // 'id' field
-        way.numTagBytes +
-        varUintNumBytes(way.numVertices);
+        numTagBytes +
+        varUintNumBytes(way.refs.size());
         
     int64_t prevLat = 0;
     int64_t prevLng = 0;
-    for (uint64_t i = 0; i < way.numVertices; i++)
+    for (const OsmGeoPosition &pos : way.refs)
+    //for (uint64_t i = 0; i < way.numVertices; i++)
     {
-        int64_t dLat = way.vertices[i].lat - prevLat;
-        int64_t dLng = way.vertices[i].lng - prevLng;
-        prevLat = way.vertices[i].lat;
-        prevLng = way.vertices[i].lng;
+        int64_t dLat = pos.lat - prevLat;
+        int64_t dLng = pos.lng - prevLng;
+        prevLat = pos.lat;
+        prevLng = pos.lng;
         
         sizeTmp += varIntNumBytes(dLat);
         sizeTmp += varIntNumBytes(dLng);
@@ -249,23 +253,25 @@ GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon)
     *(uint64_t*)outPos = way.id;
     outPos += sizeof(uint64_t);
 
-    memcpy(outPos, way.tagBytes, way.numTagBytes);
-    outPos += way.numTagBytes;
+    memcpy(outPos, tagBytes, numTagBytes);
+    delete [] tagBytes;
+    outPos += numTagBytes;
 
     if (asPolygon)
         // ways only consist of a single outer ring (no inner rings)
         outPos += varUintToBytes(1, outPos); 
 
-    outPos += varUintToBytes(way.numVertices, outPos);
+    outPos += varUintToBytes( way.refs.size(), outPos);
     
     prevLat = 0;
     prevLng = 0;
-    for (uint64_t i = 0; i < way.numVertices; i++)
+    for (const OsmGeoPosition &pos : way.refs)
+    //for (uint64_t i = 0; i < way.numVertices; i++)
     {
-        int64_t dLat = way.vertices[i].lat - prevLat;
-        int64_t dLng = way.vertices[i].lng - prevLng;
-        prevLat = way.vertices[i].lat;
-        prevLng = way.vertices[i].lng;
+        int64_t dLat = pos.lat - prevLat;
+        int64_t dLng = pos.lng - prevLng;
+        prevLat = pos.lat;
+        prevLng = pos.lng;
         
         outPos += varIntToBytes( dLat, outPos);
         outPos += varIntToBytes( dLng, outPos);
@@ -487,19 +493,19 @@ geos::geom::Geometry* createGeosGeometry( const GenericGeometry &geom)
     }
 }
 
-geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom)
+geos::geom::Geometry* createGeosGeometry( const OsmWay &geom)
 {
     geos::geom::CoordinateSequence *seq = 
         factory.getCoordinateSequenceFactory()->create( (size_t)0, 2);    //start with 0 members; each member will have 2 dimensions
 
     
-    MUST( geom.numVertices <= 2000, "overflow"); //OSM hard limit for nodes per way
-    for (int i = 0; i < geom.numVertices; i++)
-        seq->add( geos::geom::Coordinate( geom.vertices[i].lat, geom.vertices[i].lng));
+    MUST( geom.refs.size() <= 2000, "overflow"); //OSM hard limit for nodes per way
+    for (const OsmGeoPosition &pos : geom.refs)
+        seq->add( geos::geom::Coordinate( pos.lat, pos.lng));
 
-    if (geom.vertices[0].lat == geom.vertices[geom.numVertices-1].lat &&
-        geom.vertices[0].lng == geom.vertices[geom.numVertices-1].lng &&
-        geom.numVertices >= 4)
+    if (geom.refs.front().lat == geom.refs.back().lat &&
+        geom.refs.front().lng == geom.refs.back().lng &&
+        geom.refs.size() >= 4)
         return factory.createPolygon( factory.createLinearRing(seq), nullptr);
     else
         return factory.createLineString( seq );

@@ -17,7 +17,6 @@
 #include "geom/envelope.h"
 #include "geom/geomSerializers.h"
 #include "geom/srsConversion.h"
-#include "containers/osmWayStore.h"
 #include "containers/osmNodeStore.h"
 #include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
@@ -251,23 +250,23 @@ int main(int argc, char** argv)
     std::cout << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      
 
     pos = 0;
-    for (OsmLightweightWay way: LightweightWayStore(storageDirectory + "ways", true))
+    for (const Chunk & chunk : ChunkedFile(storageDirectory + "ways.data"))
     {
+        const uint8_t* ptr = chunk.getDataPtr();
+        OsmWay way(ptr);
         pos += 1;
         if (pos % 1000000 == 0)
             cout << (pos / 1000000) << "M ways read" << endl;
 
-        if (way.numVertices < 2)
+        if (way.refs.size() < 2)
         {
             cout << ESC_FG_YELLOW << "[WARN] way " << way.id 
                  << " has less than two vertices. Skipping." << ESC_RESET << endl;
              continue;
         }
 
-
-        way.unmap();
         numWays += 1;
-        numVertices += way.numVertices;
+        numVertices += way.refs.size();
         convertWgs84ToWebMercator(way);
 
         if (wayReverseIndex.isReferenced(way.id))
@@ -275,7 +274,7 @@ int main(int argc, char** argv)
                                               boundaryRelationTags);
         
 
-        TagDictionary tagsDict = way.getTags().asDictionary();
+        TagDictionary tagsDict( way.tags.begin(), way.tags.end());
         for (LodHandler* handler: polygonLodHandlers)
         {
             int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
@@ -283,7 +282,9 @@ int main(int argc, char** argv)
                 continue;
 
             geos::geom::Geometry *geosGeom = createGeosGeometry(way);
-            addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, way.getTags(), handler, level);
+            uint8_t *tags = RawTags::serialize(way.tags);
+            addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, RawTags(tags), handler, level);
+            delete [] tags;
 
             delete geosGeom;
         }

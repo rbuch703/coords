@@ -1,5 +1,6 @@
 
 #include "landusePolygonLodHandler.h"
+#include "config.h"
 
 std::set<std::string> LandusePolygonLodHandler::landuses = {
     "park", "forest", "residential", "retail", "commercial", "industrial", "railway",

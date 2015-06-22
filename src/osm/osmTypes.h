@@ -56,17 +56,24 @@ struct OsmWay
             std::vector<OsmGeoPosition> refs, 
             std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
             
-    OsmWay( const uint8_t* data_ptr);
+    OsmWay( const uint8_t* &data_ptr);
 
-    uint64_t getSerializedSize() const;
-    void serialize( FILE* data_file, mmap_t *index_map) const;
-    void serialize( ChunkedFile& dataFile, mmap_t *index_map) const;
-    void serializeCompressed(FILE* f);
-    uint64_t getSerializedCompressedSize() const;
+    uint64_t getSerializedSize(uint64_t *numTagBytesOut = nullptr) const;
+    void serialize(FILE* f);
+    uint8_t* serialize(uint64_t *numBytes);
     bool hasKey(std::string key) const;
     const std::string &getValue(std::string key) const;
     const std::string &operator[](std::string key) const {return getValue(key);}
 
+    void addTagsFromBoundaryRelations(
+        std::vector<uint64_t> referringRelationIds,
+        const std::map<uint64_t, std::map<std::string, std::string> > &boundaryRelationTags);
+    bool isClosed() const;
+    
+private:
+    void     serialize(uint8_t* dest, uint64_t serializedSize, uint64_t nTagBytes);
+    
+public:
     uint64_t id;
     uint32_t version;
     std::vector<OsmGeoPosition> refs;

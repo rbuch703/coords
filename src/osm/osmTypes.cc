@@ -24,6 +24,7 @@ using std::ostream;
 using std::string;
 //using namespace std;
 
+
 ostream& operator<<(ostream &out, const vector<OsmKeyValuePair> &tags)
 {
     out << "[";
@@ -74,7 +75,8 @@ OsmNode::OsmNode( FILE* f)
     int nRead = varUintToBytes( numTagBytes, bytes);
     MUST(fread( bytes+nRead, numTagBytes, 1, f) == 1, "node read error");
     
-    for (std::pair<const char*, const char*> kv : RawTags(bytes))
+    const uint8_t *tmp = bytes;
+    for (std::pair<const char*, const char*> kv : RawTags(tmp))
         tags.push_back( std::make_pair(kv.first, kv.second));
     
     delete [] bytes;
@@ -195,77 +197,57 @@ OsmWay::OsmWay( uint64_t id, uint32_t version,
                 id(id), version(version), refs(refs), tags(tags) { }
 
 
-OsmWay::OsmWay( const uint8_t* data_ptr)
+OsmWay::OsmWay( const uint8_t* &data)
 {
-    this->id = *(uint64_t*)data_ptr;
-    data_ptr += sizeof( uint64_t );
     
-    this->version = *(uint32_t*)data_ptr;
-    data_ptr += sizeof( uint32_t );
+    int nRead = 0;
+    this->id = varUintFromBytes(data, &nRead);
+    data += nRead;
     
-    uint16_t num_node_refs = *(uint16_t*)data_ptr;
-    data_ptr+= sizeof(uint16_t);
+    this->version = varUintFromBytes(data, &nRead);
+    data += nRead;
     
-    while (num_node_refs--)
+    uint64_t numNodes = varUintFromBytes(data, &nRead);
+    data += nRead;
+    
+    MUST( numNodes <= 2000, "More node refs in way than specification allows");
+    
+    this->refs.reserve(numNodes);
+    
+    int64_t prevId  = 0;
+    int32_t prevLat = 0;
+    int32_t prevLng = 0;    
+    
+    
+    while (numNodes--)
     {
-        refs.push_back( (OsmGeoPosition){ .id = *(uint64_t*)data_ptr, 
-                                          .lat = ((int32_t*)data_ptr)[2],
-                                          .lng = ((int32_t*)data_ptr)[3]} );
-        data_ptr+= (sizeof(uint64_t) + 2* sizeof(int32_t));
+        prevId += varIntFromBytes(data, &nRead);
+        data += nRead;
+        
+        prevLat += varIntFromBytes(data, &nRead);
+        data += nRead;
+
+        prevLng += varIntFromBytes(data, &nRead);
+        data += nRead;
+    
+        this->refs.push_back( (OsmGeoPosition){ .id = (uint64_t)prevId, 
+                              .lat = prevLat,
+                              .lng = prevLng} );
     }
     
-    RawTags rawTags(data_ptr);
+    uint64_t nTagBytes = 0;
+    RawTags rawTags(data, &nTagBytes);
+    data += nTagBytes;
     
     for ( const std::pair< const char*, const char*> &kv : rawTags)
         tags.push_back( std::make_pair(kv.first, kv.second));
-        
 }
 
-uint64_t OsmWay::getSerializedSize() const
-{
-    uint64_t tagsSize = RawTags::getSerializedSize(tags);
-    return sizeof(uint64_t) + //id
-           sizeof(uint32_t) + //version
-           sizeof(uint16_t) + // numRefs
-           sizeof(OsmGeoPosition) * refs.size() + //node refs
-           varUintNumBytes( tagsSize ) + 
-           tagsSize;
-}
-
-        
-
-void OsmWay::serialize( FILE* data_file, mmap_t *index_map) const
-{
-    assert (id > 0);  
-    //get offset at which the dumped way *starts*
-    uint64_t offset = index_map ? ftello(data_file) : 0;
-
-    MUST( 1 == fwrite(&this->id, sizeof(this->id), 1, data_file), "write error");
-    MUST( 1 == fwrite(&this->version, sizeof(this->version), 1, data_file), "write error");
-
-    
-    MUST(refs.size() <= 2000, "#refs in way is beyond what's allowed by OSM spec");
-    uint16_t num_node_refs = refs.size();
-    fwrite(&num_node_refs, sizeof(num_node_refs), 1, data_file);
-
-    assert(sizeof(OsmGeoPosition) == sizeof(uint64_t) + 2* sizeof(uint32_t));
-    
-    for (OsmGeoPosition pos : refs)
-        fwrite(&pos, sizeof(pos), 1, data_file);
-    
-    RawTags::serialize(tags, data_file);
-
-    if (index_map)
-    {
-        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-        uint64_t* ptr = (uint64_t*)index_map->ptr;
-        ptr[id] = offset;
-    }
-}
-
-uint64_t OsmWay::getSerializedCompressedSize() const
+uint64_t OsmWay::getSerializedSize(uint64_t *numTagBytesOut) const
 {
     uint64_t nTagBytes = RawTags::getSerializedSize(tags);
+    if (numTagBytesOut)
+        *numTagBytesOut = nTagBytes;    
     
     uint64_t nBytes = varUintNumBytes(this->id) + 
                       varUintNumBytes(this->version) + 
@@ -290,18 +272,23 @@ uint64_t OsmWay::getSerializedCompressedSize() const
         prevLat = pos.lat;
         prevLng = pos.lng;
     }
-    
+
     return nBytes;
 }
 
 
-void OsmWay::serializeCompressed(FILE* f)
+void OsmWay::serialize(FILE* f)
 {
+    uint64_t nBytes = 0;
+    uint8_t * bytes = this->serialize(&nBytes);
     
-    uint64_t nTagBytes = RawTags::getSerializedSize(this->tags);
-    uint64_t nBytes = this->getSerializedCompressedSize();
-    uint8_t *bytes = new uint8_t[nBytes];
-    uint8_t* pos = bytes;
+    MUST( fwrite( bytes, nBytes, 1, f) == 1, "compresses way write error");
+    delete [] bytes;
+}
+
+void OsmWay::serialize(uint8_t* dest, uint64_t serializedSize, uint64_t nTagBytes)
+{
+    uint8_t* pos = dest;
     
     pos += varUintToBytes( this->id, pos);
     pos += varUintToBytes( this->version, pos);
@@ -328,32 +315,23 @@ void OsmWay::serializeCompressed(FILE* f)
     RawTags::serialize(this->tags, nTagBytes, pos, nTagBytes + varUintNumBytes(nTagBytes));
     pos += nTagBytes + varUintNumBytes(nTagBytes);
     //std::cout << (pos - bytes) << ", " << nBytes << std::endl;
-    MUST( pos - bytes == (int64_t)nBytes, "compressed way serialization size mismatch");
-    
-    MUST( fwrite( bytes, nBytes, 1, f) == 1, "compresses way write error");
-    delete [] bytes;
+    MUST( pos - dest == (int64_t)serializedSize, "compressed way serialization size mismatch");
+
 }
 
-void OsmWay::serialize( ChunkedFile& dataFile, mmap_t *index_map) const
+uint8_t* OsmWay::serialize(uint64_t *numBytes)
 {
-    Chunk chunk = dataFile.createChunk(this->getSerializedSize());
-    chunk.put<uint64_t>(this->id);
-    chunk.put<uint32_t>(this->version);
-    MUST(refs.size() <= 2000, "#refs in way is beyond what's allowed by OSM spec");
-    chunk.put<uint16_t>(this->refs.size());
-    for (const OsmGeoPosition &pos: this->refs)
-        chunk.put(&pos, sizeof(OsmGeoPosition));
-
-    RawTags::serialize(this->tags, chunk);
-    if (index_map)
-    {
-        ensure_mmap_size( index_map, (id+1)*sizeof(uint64_t));
-        uint64_t* ptr = (uint64_t*)index_map->ptr;
-        ptr[id] = chunk.getPositionInFile();
-    }
+    uint64_t nTagBytes = RawTags::getSerializedSize(this->tags);
+    uint64_t nBytes = this->getSerializedSize();
+    uint8_t *bytes = new uint8_t[nBytes];
     
-}
+    this->serialize(bytes, nBytes, nTagBytes);
 
+    if (numBytes)    
+        *numBytes = nBytes;
+        
+    return bytes;
+}
 
 bool OsmWay::hasKey(string key) const
 {
@@ -371,6 +349,109 @@ const string& OsmWay::getValue(string key) const
 
     return empty;
 }
+
+static uint64_t tryParse(const char* s, uint64_t defaultValue)
+{
+    uint64_t res = 0;
+    for ( ; *s != '\0'; s++)
+    {
+        if ( *s < '0' || *s > '9') return defaultValue;
+        res = (res * 10) + ( *s - '0');
+        
+    }
+    return res;
+}
+
+/* addBoundaryTags() adds tags from boundary relations that refer to a way to said way.
+   Since a way may be part of multiple boundary relations (e.g. country boundaries are usually
+   also the boundaries of a state inside that country), care must be taken when multiple referring
+   relations are about to add the same tags to a way.
+   
+   Algorithm: the admin_level of the way is determined (if it has one itself, otherwise
+              the dummy value 0xFFFF is used). Afterwards,
+              the tags from all boundary relations are added as follows: when a relation
+              has a numerically smaller (or equal) admin level to that of the way
+              (i.e. it is a more important boundary), all of its tags are added to the way
+              (even if that means overwriting existing tags) and the way's admin level is
+              updated. If the relation has a less important admin level, only those of its
+              tags are added to the way that do not overwrite existing tags.
+
+  */
+
+static void addBoundaryTags( TagDictionary &tags, 
+                             const std::vector<uint64_t> &referringRelations, 
+                             const std::map<uint64_t, TagDictionary> &boundaryTags)
+{
+
+    uint64_t adminLevel = tags.count("admin_level") ? tryParse(tags["admin_level"].c_str(), 0xFFFF) : 0xFFFF;
+    //cout << "admin level is " << adminLevel << endl;
+
+    for ( uint64_t relId : referringRelations)
+    {
+        if (!boundaryTags.count(relId))
+            continue;
+            
+        const TagDictionary &relationTags = boundaryTags.at(relId);
+        uint64_t relationAdminLevel = relationTags.count("admin_level") ?
+                                      tryParse(relationTags.at("admin_level").c_str(), 0xFFFF) :
+                                      0xFFFF;
+        
+        for ( const OsmKeyValuePair &kv : relationTags)
+        {
+            /* is only the relation type marking the relation as a boundary. This was already
+             * processed when creating the boundaryTags map, and need not be considered further*/
+            if (kv.first == "type")
+                continue;
+                
+            if ( ! tags.count(kv.first))    //add if not already exists
+                tags.insert( kv);
+            else if (relationAdminLevel <= adminLevel)  //overwrite only if from a more important boundary
+                tags[kv.first] = kv.second;
+            
+        }
+
+        if (relationAdminLevel < adminLevel)
+        {
+            adminLevel = relationAdminLevel;
+            //cout << "\tadmin level is now " << adminLevel << endl;
+            //assert(adminLevel != 1024);
+        }
+    }
+}
+
+
+void OsmWay::addTagsFromBoundaryRelations(
+    std::vector<uint64_t> referringRelationIds,
+    const std::map<uint64_t, TagDictionary> &boundaryRelationTags)
+{
+    uint64_t i = 0;
+    while (i < referringRelationIds.size())
+    {
+        if (! boundaryRelationTags.count(referringRelationIds[i]))
+        {
+            referringRelationIds[i] = referringRelationIds.back();
+            referringRelationIds.pop_back();
+        } else
+            i++;
+    }
+    
+    if (referringRelationIds.size() == 0)
+        return;
+
+    TagDictionary tagDict(this->tags.begin(), this->tags.end());
+    addBoundaryTags( tagDict, referringRelationIds, boundaryRelationTags );
+
+    this->tags = Tags(tagDict.begin(), tagDict.end());
+}
+
+bool OsmWay::isClosed() const
+{
+    return (refs.size() > 3) && 
+           (refs.front().lat == refs.back().lat) &&
+           (refs.front().lng == refs.back().lng);
+}
+
+
 
 ostream& operator<<(ostream &out, const OsmWay &way)
 {

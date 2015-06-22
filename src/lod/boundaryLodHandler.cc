@@ -1,6 +1,6 @@
 
 #include "boundaryLodHandler.h"
-#include <iostream>
+#include "config.h"
 
 BoundaryLodHandler::BoundaryLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {

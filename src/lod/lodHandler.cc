@@ -1,6 +1,7 @@
 
 #include "lodHandler.h"
 #include "misc/cleanup.h"
+#include "config.h"
 
 const Envelope LodHandler::mercatorWorldBounds = { 
     .xMin = -2003750834, .xMax = 2003750834, 

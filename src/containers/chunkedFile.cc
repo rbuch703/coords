@@ -239,15 +239,20 @@ bool ChunkedFile::isValidChunk(uint64_t pos) const
 
 
 ChunkedFile::Iterator::Iterator(
-    const ChunkedFile& host, uint8_t *chunkPtr):
+    const ChunkedFile& host, uint8_t *chunkPtr, bool isBeyond):
     host(host), chunkPtr(chunkPtr)
 {
-    std::cout << "initialized at " << (this->chunkPtr - (uint8_t*)host.fileMap.ptr) << std::endl;
+    //std::cout << "initialized at " << (this->chunkPtr - (uint8_t*)host.fileMap.ptr) << std::endl;
+    /* points directly beyond the last valid entry (e.g. is the result of end()),
+     * so do not attempt to dereference anything */
+    if (isBeyond)
+        return;
+    
     uint8_t chunkHeader = *this->chunkPtr;
     if ( chunkHeader & UNUSED_CHUNK)
         this->moveToNextValidChunk();
         
-    std::cout << "header is " << (int)chunkHeader << std::endl;
+    //std::cout << "header is " << (int)chunkHeader << std::endl;
 }
 
 ChunkedFile::Iterator& ChunkedFile::Iterator::operator++()
@@ -295,7 +300,7 @@ ChunkedFile::Iterator ChunkedFile::begin()
 
 ChunkedFile::Iterator ChunkedFile::end()
 {
-    return Iterator(*this, ((uint8_t*)this->fileMap.ptr)+this->getStartPosOfFreeSpace());
+    return Iterator(*this, ((uint8_t*)this->fileMap.ptr)+this->getStartPosOfFreeSpace(), true);
 }
 
 

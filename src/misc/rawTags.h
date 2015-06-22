@@ -19,9 +19,11 @@ class Chunk;
 class RawTags 
 {
 public:
-    RawTags(const uint8_t* src);
+    //RawTags(const uint8_t* src);
+    RawTags(const uint8_t* src, uint64_t *nBytesRead = nullptr);
 
-    /* returns: a memory buffer to which the Tags have been serialized.
+    //static RawTags fromRawData(const uint8_t* src);
+    /* returns: a memory buffer into which the 'tags' have been serialized.
                 the caller takes ownership of the returned memory buffer. */
     static uint8_t* serialize( const Tags &tags, uint64_t *numBytesOut = nullptr);
     static void serialize( const Tags &tags, uint64_t numBytes, 

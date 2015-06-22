@@ -6,7 +6,7 @@
 #include "misc/escapeSequences.h"
 #include "ringAssembler.h"
 
-void RingAssembler::addWay( const OsmLightweightWay &way) 
+void RingAssembler::addWay( const OsmWay &way) 
 {
     ringSegments.push_back( RingSegment(way));
     
@@ -176,7 +176,7 @@ bool RingAssembler::hasOpenRingSegments() const
     return openEndPoints.size() > 0; 
 }
 
-double RingAssembler::getAABBDiameter( std::map<uint64_t, OsmLightweightWay> wayStore) const 
+double RingAssembler::getAABBDiameter( std::map<uint64_t, OsmWay> wayStore) const 
 {
     MUST(ringSegments.size() > 0, "cannot determine diameter of empty RingSegment set");
     
@@ -195,14 +195,14 @@ double RingAssembler::getAABBDiameter( std::map<uint64_t, OsmLightweightWay> way
         if (!wayStore.count(wayId))
             continue;
             
-        OsmLightweightWay way = wayStore[wayId];
-        for (int i = 0; i < way.numVertices; i++)
+        const OsmWay &way = wayStore.at(wayId);
+        for (uint64_t i = 0; i < way.refs.size(); i++)
         {
-            if (way.vertices[i].lat > latMax) latMax = way.vertices[i].lat;
-            if (way.vertices[i].lat < latMin) latMin = way.vertices[i].lat;
+            if (way.refs[i].lat > latMax) latMax = way.refs[i].lat;
+            if (way.refs[i].lat < latMin) latMin = way.refs[i].lat;
 
-            if (way.vertices[i].lng > lngMax) lngMax = way.vertices[i].lng;
-            if (way.vertices[i].lng < lngMin) lngMin = way.vertices[i].lng;
+            if (way.refs[i].lng > lngMax) lngMax = way.refs[i].lng;
+            if (way.refs[i].lng < lngMin) lngMin = way.refs[i].lng;
         }
     }
     
@@ -212,7 +212,7 @@ double RingAssembler::getAABBDiameter( std::map<uint64_t, OsmLightweightWay> way
     return sqrt( dLat*dLat + dLng*dLng);
 }
 
-static bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const std::map<uint64_t, OsmLightweightWay> &ways)
+static bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const std::map<uint64_t, OsmWay> &ways)
 {
     if (mbr.type != OSM_ENTITY_TYPE::WAY)
     {
@@ -231,7 +231,7 @@ static bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const std::ma
     }
     
 
-    if (ways.at(mbr.ref).numVertices < 1)
+    if (ways.at(mbr.ref).refs.size() < 1)
     {
         std::cerr << "[WARN] way " << mbr.ref << " has no member nodes; ignoring it" 
                   << std::endl;
@@ -243,11 +243,11 @@ static bool isValidWay(OsmRelationMember mbr, uint64_t relationId, const std::ma
 
 
 RingAssembler RingAssembler::fromRelation( OsmRelation &rel, 
-            const std::map<uint64_t, OsmLightweightWay> &ways, 
+            const std::map<uint64_t, OsmWay> &ways, 
             std::map<std::string, std::string> &outerTagsOut)
 {
     RingAssembler ringAssembler;
-    
+    std::vector<OsmKeyValuePair> outerTags;
     std::set<uint64_t> waysAdded;
     uint64_t numOuterWays = 0;
 
@@ -262,18 +262,22 @@ RingAssembler RingAssembler::fromRelation( OsmRelation &rel,
                 continue;
             }
             
-            OsmLightweightWay way = ways.at(mbr.ref);
+            OsmWay way = ways.at(mbr.ref);
             if (mbr.role == "outer")
             {
-                outerTagsOut = way.getTags().asDictionary();
+                outerTags = way.tags;
                 numOuterWays += 1;
             }
             ringAssembler.addWay(way);
             waysAdded.insert(mbr.ref);
         }
 
-    if (numOuterWays > 1)
-        outerTagsOut.clear(); // no unique outer way
+    outerTagsOut.clear();
+    if (numOuterWays == 1) //got a unique outer way
+    {
+        for (const OsmKeyValuePair &kv : outerTags)
+            outerTagsOut.insert(kv);
+    }
         
     return ringAssembler;
 }

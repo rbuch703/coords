@@ -135,7 +135,7 @@ using namespace std;
 
 
 
-static void flattenRingSegmentHierarchy(const RingSegment &closedRing, map<uint64_t, OsmLightweightWay> &ways,
+static void flattenRingSegmentHierarchy(const RingSegment &closedRing, map<uint64_t, OsmWay> &ways,
                     std::vector<OsmGeoPosition> &verticesOut, 
                     std::vector<uint64_t> &wayIds, bool globalReversal = false)
 {
@@ -144,8 +144,8 @@ static void flattenRingSegmentHierarchy(const RingSegment &closedRing, map<uint6
         
         assert( !closedRing.getFirstChild() && !closedRing.getSecondChild());
         assert( ways.count(closedRing.getWayId()) );
-        OsmLightweightWay way = ways.at(closedRing.getWayId());
-        MUST( way.numVertices > 0, "way without nodes");
+        OsmWay way = ways.at(closedRing.getWayId());
+        MUST( way.refs.size() > 0, "way without nodes");
 
         bool effectiveReversal = closedRing.isReversed() ^ globalReversal;
         
@@ -154,23 +154,23 @@ static void flattenRingSegmentHierarchy(const RingSegment &closedRing, map<uint6
         if (!effectiveReversal)
         {
             uint64_t i = 0;
-            MUST( !verticesOut.size() || (verticesOut.back() == way.vertices[0]), "trying to connect segments that do not share an endpoint");
-            if (verticesOut.size() && verticesOut.back() == way.vertices[0])
+            MUST( !verticesOut.size() || (verticesOut.back() == way.refs[0]), "trying to connect segments that do not share an endpoint");
+            if (verticesOut.size() && verticesOut.back() == way.refs.front())
                 i += 1; //skip duplicate starting vertex
                 
-            for (; i < way.numVertices; i++)
-                verticesOut.push_back( way.vertices[i] );
+            for (; i < way.refs.size(); i++)
+                verticesOut.push_back( way.refs[i] );
         }
         else
         {
-            uint64_t i = way.numVertices;
-            MUST( !verticesOut.size() || (verticesOut.back() == way.vertices[way.numVertices-1]), "trying to connect segments that do not share an endpoint");
+            uint64_t i = way.refs.size();
+            MUST( !verticesOut.size() || (verticesOut.back() == way.refs.back()), "trying to connect segments that do not share an endpoint");
 
-            if (verticesOut.size() && verticesOut.back() == way.vertices[way.numVertices - 1])
+            if (verticesOut.size() && verticesOut.back() == way.refs.back())
                 i-= 1; //skip duplicate (effective) starting vertex
                 
             for (; i > 0; i--)
-                verticesOut.push_back( way.vertices[i-1]);
+                verticesOut.push_back( way.refs[i-1]);
         }
         
     } else if (closedRing.getWayId() == -2)
@@ -372,7 +372,7 @@ void joinAdjacentRings( vector<Ring*> &rings, uint64_t relId)
    can also lead to outer ways being tagged instead of the whole multipolygon relation.
 */
 TagDictionary getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map<uint64_t, 
-                            OsmLightweightWay> &ways, const TagDictionary &outerTags)
+                            OsmWay> &ways, const TagDictionary &outerTags)
 {
     TagDictionary tags;
     for (const OsmKeyValuePair &kv : rel.tags)
@@ -401,8 +401,8 @@ TagDictionary getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map
              
         MUST( ways.count(outerWayId) == 1, "cannot access outer way");
         
-        const OsmLightweightWay &way = ways.at(outerWayId);
-        for (const OsmKeyValuePair &kv : way.getTags())
+        const OsmWay &way = ways.at(outerWayId);
+        for (const OsmKeyValuePair &kv : way.tags)
             tags.insert( make_pair(kv.first, kv.second));
         
         return tags;
@@ -430,7 +430,7 @@ TagDictionary getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map
         MUST( ways.count(outerWayId) > 0, "cannot access outer way");
 
         TagDictionary ts;
-        for (const OsmKeyValuePair &kv : ways.at(outerWayId).getTags())
+        for (const OsmKeyValuePair &kv : ways.at(outerWayId).tags)
             ts.insert( make_pair(kv.first, kv.second));
         
         outerWayTagSets.push_back(ts);
@@ -477,16 +477,24 @@ int main()
         std::cout << "reading way bucket " << (bucketId+1) << "/" << relationWaysBuckets.getNumBuckets() << std::endl;
         FILE* f = relationWaysBuckets.getFile(bucketId* WAYS_OF_RELATIONS_BUCKET_SIZE);
         MUST(f != nullptr, "cannot open bucket file");
+        fseek(f, 0, SEEK_END);
+        uint64_t numBytes = ftell(f);
+        uint8_t *waysBytes = new uint8_t[numBytes];
+        rewind(f);
+        MUST( fread( waysBytes, numBytes, 1, f) == 1, "read error");
+        const uint8_t *waysPos = waysBytes;
+        const uint8_t *waysBeyond = waysBytes + numBytes;
         
-        map<uint64_t, OsmLightweightWay> ways;
+        map<uint64_t, OsmWay> ways;
         
-        int ch;
-        while ( (ch = fgetc(f)) != EOF )
+        while (waysPos < waysBeyond)
         {
-            ungetc(ch, f);
-            OsmLightweightWay way(f);
-            ways.insert(make_pair( way.id, way));
+            OsmWay way(waysPos);
+            ways.insert( make_pair(way.id, way));
         }
+        MUST( waysPos == waysBeyond, "way bucket read overflow")
+        
+        delete [] waysBytes;
 
         //for( uint64_t relId = 37436; relId == 37436; relId++)
 

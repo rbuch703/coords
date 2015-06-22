@@ -1,7 +1,8 @@
 
-#include "srsConversion.h"
-
 #include <math.h>
+
+#include "srsConversion.h"
+#include "config.h"
 #include "misc/varInt.h"
 
 static const double INT_TO_LAT_LNG = 1/10000000.0;
@@ -30,10 +31,10 @@ static inline void convertWgs84ToWebMercator( int32_t &lat, int32_t &lng)
 }
 
 
-void convertWgs84ToWebMercator( OsmLightweightWay &way)
+void convertWgs84ToWebMercator( OsmWay &way)
 {
-    for (uint64_t i = 0; i < way.numVertices; i++)
-        convertWgs84ToWebMercator( way.vertices[i].lat, way.vertices[i].lng);
+    for (OsmGeoPosition &pos : way.refs)
+        convertWgs84ToWebMercator( pos.lat, pos.lng);
 }
 
 void convertWgs84ToWebMercator( GenericGeometry &geom)

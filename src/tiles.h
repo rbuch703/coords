@@ -4,7 +4,7 @@
 #include <iostream>
 #include <list>
 #include <string>
-#include "osm/osmMappedTypes.h"
+#include "osm/osmTypes.h"
 #include "geom/envelope.h"
 #include "geom/genericGeometry.h"
 
@@ -14,7 +14,7 @@ public:
     FileBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize);
     FileBackedTile(const std::string &fileName, const Envelope &bounds, uint64_t maxNodeSize);
    ~FileBackedTile();
-    void add(const OsmLightweightWay &way, const Envelope &wayBounds, bool asPolygon);
+    void add(const OsmWay &way, const Envelope &wayBounds, bool asPolygon);
     void add(const GenericGeometry &geom, const Envelope &wayBounds);
     void closeFiles();
     void subdivide(uint64_t maxSubdivisionNodeSize);

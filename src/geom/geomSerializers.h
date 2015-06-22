@@ -2,7 +2,7 @@
 #ifndef GEOM_SERIALIZATION
 #define GEOM_SERIALIZATION
 
-#include "osm/osmMappedTypes.h"
+#include "osm/osmTypes.h"
 #include "geom/ring.h"
 #include "geom/genericGeometry.h"
 #include "misc/rawTags.h"
@@ -17,14 +17,14 @@ namespace geos { namespace geom { class Geometry; } }
 
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut);
 
-GenericGeometry serializeWay(const OsmLightweightWay &way, bool asPolygon);
+GenericGeometry serializeWay(const OsmWay &way, bool asPolygon);
 GenericGeometry serializeNode(const OsmNode &node);
 
 
 GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags);
 
 geos::geom::Geometry* createGeosGeometry( const GenericGeometry   &geom);
-geos::geom::Geometry* createGeosGeometry( const OsmLightweightWay &geom);
+geos::geom::Geometry* createGeosGeometry( const OsmWay &geom);
 
 /* ON-DISK LAYOUT FOR GEOMETRY
 :

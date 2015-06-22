@@ -1,6 +1,6 @@
 
 #include "roadLodHandler.h"
-#include <iostream>
+#include "config.h"
 
 RoadLodHandler::RoadLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {

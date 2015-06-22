@@ -10,12 +10,12 @@ RingSegment::RingSegment(const OsmGeoPosition &start, const OsmGeoPosition &end,
 {
 }
 
-RingSegment::RingSegment( const OsmLightweightWay &way ):
+RingSegment::RingSegment( const OsmWay &way ):
     wayId(way.id), child1(nullptr), child2(nullptr), isSegmentReversed(false)
 {
-    MUST(way.numVertices > 0, "trying to create ring segment from empty way");
-    start = way.vertices[0];
-    end   = way.vertices[way.numVertices - 1];
+    MUST(way.refs.size() > 0, "trying to create ring segment from empty way");
+    start = way.refs.front();
+    end   = way.refs.back();
 }
 
 RingSegment::RingSegment( RingSegment *pChild1, RingSegment *pChild2):

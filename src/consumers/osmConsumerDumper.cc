@@ -113,7 +113,7 @@ void OsmConsumerDumper::consumeWay ( OsmWay  &way)
 {
     nWays++;
     filterTags(way.tags);
-    way.serializeCompressed( wayBuckets.getFile(way.id));
+    way.serialize( wayBuckets.getFile(way.id));
     
     /* the following code dumps each (wayId, nodeId) tuple in a bucket file, where bucket 'i'
      * stores the tuples for all nodeIds in the range [i*10M, (i+1)*10M[. These bucket files are

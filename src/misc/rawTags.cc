@@ -16,11 +16,15 @@
     2. if is not symbolic --> zero-terminated string
 */
 
-RawTags::RawTags(const uint8_t* src)
+RawTags::RawTags(const uint8_t* src, uint64_t *nBytesRead)
 {
     int nRead = 0;
     
     uint32_t totalNumBytes = varUintFromBytes(src, &nRead);
+
+    if (nBytesRead)
+        *nBytesRead = totalNumBytes + nRead;
+    
     //std::cout << "\thas " << numTagBytes << "b of tags."<< std::endl;
     src += nRead;
     
@@ -34,7 +38,10 @@ RawTags::RawTags(const uint8_t* src)
     this->numTagBytes = totalNumBytes - numSymbolicNameBytes - varUintNumBytes(numTags);
     this->symbolicNameBits = src;
     this->tagsStart = src + numSymbolicNameBytes;
+    
 }
+
+
 
 uint64_t RawTags::getSerializedSize(const Tags &tags)
 {

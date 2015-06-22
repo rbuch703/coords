@@ -7,7 +7,7 @@
 #include <map>
 #include <string>
 
-#include "osm/osmMappedTypes.h"
+#include "osm/osmTypes.h"
 #include "geom/ringSegment.h"
 
 class RingAssembler {
@@ -15,16 +15,16 @@ class RingAssembler {
     
 public:
 
-    void addWay( const OsmLightweightWay &way);
+    void addWay( const OsmWay &way);
     void warnUnconnectedNodes(uint64_t relId) const;
     void tryCloseOpenSegments( double maxConnectionDistance);
     const std::vector<RingSegment*> &getClosedRings() const;
     
     bool hasOpenRingSegments() const;
-    double getAABBDiameter( std::map<uint64_t, OsmLightweightWay> wayStore) const;
+    double getAABBDiameter( std::map<uint64_t, OsmWay> wayStore) const;
     
     static RingAssembler fromRelation( OsmRelation &rel, 
-            const std::map<uint64_t, OsmLightweightWay> &ways, 
+            const std::map<uint64_t, OsmWay> &ways, 
             std::map<std::string, std::string> &outerTagsOut);
     
 private:

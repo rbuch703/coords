@@ -1,5 +1,6 @@
 
 #include "buildingPolygonLodHandler.h"
+#include "config.h"
 
 
 BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)

@@ -10,9 +10,9 @@
 
 #include "misc/mem_map.h"
 #include "osm/osmMappedTypes.h"
+#include "containers/chunkedFile.h"
 #include "containers/reverseIndex.h"
 #include "containers/bucketFileSet.h"
-#include "containers/osmWayStore.h"
 #include "containers/osmRelationStore.h"
 
 //using namespace std;
@@ -77,6 +77,7 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 
 }
 
+//FIXME: this method uses ~60% of the whole CPU time of this program.
 map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > buildReferencesMap(
     const vector< pair<uint64_t, OsmGeoPosition> > &resolvedReferences)
 {
@@ -101,12 +102,12 @@ map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > buildReferencesMap(
     return refs;
 }
 
-void resolveNodeLocations(OsmLightweightWay &way, const map<uint64_t, pair<int32_t, int32_t> > &nodeRefs)
+void resolveNodeLocations(OsmWay &way, const map<uint64_t, pair<int32_t, int32_t> > &nodeRefs)
 {
-    assert(way.isDataMapped && "is noop for unmapped data");
-    for (int i = 0; i < way.numVertices; i++)
+    //assert(way.isDataMapped && "is noop for unmapped data");
+    for (uint64_t i = 0; i < way.refs.size(); i++)
     {
-        uint64_t nodeId = way.vertices[i].id;
+        uint64_t nodeId = way.refs[i].id;
         if (! nodeRefs.count(nodeId))
         {
             cout << "[WARN] reference to node " << nodeId << " could not be resolved in way " << way.id << endl;
@@ -114,8 +115,8 @@ void resolveNodeLocations(OsmLightweightWay &way, const map<uint64_t, pair<int32
         }
         
         const pair<int32_t, int32_t> &pos = nodeRefs.at(nodeId);
-        way.vertices[i].lat = pos.first;
-        way.vertices[i].lng = pos.second;
+        way.refs[i].lat = pos.first;
+        way.refs[i].lng = pos.second;
     }
 
 }
@@ -123,12 +124,24 @@ void resolveNodeLocations(OsmLightweightWay &way, const map<uint64_t, pair<int32
 void resolveWayNodeRefsAndCreateRelationBuckets(const string storageDirectory, 
                         const set<uint64_t> &rendereableRelationIds)
 {
-    ReverseIndex reverseWayIndex(storageDirectory +"wayReverse");
-    LightweightWayStore wayStore( storageDirectory + "ways", true);
-    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(storageDirectory +"nodeRefsResolved", NODES_OF_WAYS_BUCKET_SIZE, true);
 
-    BucketFileSet<uint64_t> waysReferencedByRelationsBuckets(storageDirectory + "referencedWays", WAYS_OF_RELATIONS_BUCKET_SIZE, false);
+    ReverseIndex reverseWayIndex(storageDirectory +"wayReverse");
     
+    BucketFileSet<OsmGeoPosition> resolvedNodeBuckets(
+                storageDirectory +"nodeRefsResolved",
+                NODES_OF_WAYS_BUCKET_SIZE, true);
+    
+    BucketFileSet<void*> wayBuckets( 
+                storageDirectory + "ways", 
+                NODES_OF_WAYS_BUCKET_SIZE, true);
+
+    BucketFileSet<uint64_t> waysReferencedByRelationsBuckets(
+                storageDirectory + "referencedWays", 
+                WAYS_OF_RELATIONS_BUCKET_SIZE, false);
+    
+    ChunkedFile waysStorage(storageDirectory + "ways.data");
+    mmap_t waysIndex = init_mmap( (storageDirectory + "ways.idx").c_str(), true, true, true);
+    MUST( resolvedNodeBuckets.getNumBuckets() == wayBuckets.getNumBuckets(), "bucket count mismatch")
     for (uint64_t i = 0; i < resolvedNodeBuckets.getNumBuckets(); i++)
     {
         cout << "resolving node references for bucket "<< (i+1) << "/" << resolvedNodeBuckets.getNumBuckets() << endl;
@@ -139,25 +152,48 @@ void resolveWayNodeRefsAndCreateRelationBuckets(const string storageDirectory,
         //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
         map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs = buildReferencesMap( resolvedNodeBuckets.getContents(i) );
         
-        for (uint64_t wayId =  i    * NODES_OF_WAYS_BUCKET_SIZE; 
-                      wayId < (i+1) * NODES_OF_WAYS_BUCKET_SIZE; wayId++)
+        
+        FILE* f = wayBuckets.getFile( i * NODES_OF_WAYS_BUCKET_SIZE);
+        fseek (f, 0, SEEK_END);
+        uint64_t numWayBytes = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        uint8_t *waysRaw = new uint8_t[numWayBytes];
+        MUST( fread( waysRaw, numWayBytes, 1, f) == 1, "way bucket read error");
+
+        const uint8_t* waysPos = waysRaw;
+        const uint8_t* waysBeyond = waysRaw + numWayBytes;
+        
+        while (waysPos < waysBeyond)
         {
-            if (! wayStore.exists(wayId))
-                continue;
-                
-            OsmLightweightWay way = wayStore[wayId];
-            resolveNodeLocations(way, refs[wayId]);
-            
-            for (uint64_t relId : reverseWayIndex.getReferencingRelations(wayId))
+            OsmWay way(waysPos);
+            MUST( way.id >=  i   * NODES_OF_WAYS_BUCKET_SIZE &&
+                  way.id <  (i+1)* NODES_OF_WAYS_BUCKET_SIZE, "Way in wrong bucket file");
+
+            resolveNodeLocations(way, refs[way.id]);
+
+            for (uint64_t relId : reverseWayIndex.getReferencingRelations(way.id))
                 if (rendereableRelationIds.count(relId))
                     way.serialize( waysReferencedByRelationsBuckets.getFile(relId));
+
+            ensure_mmap_size( &waysIndex, sizeof(uint64_t) * (way.id+1));
+            uint64_t *index = (uint64_t*)waysIndex.ptr;
+                    
+            uint64_t numBytes = 0;
+            uint8_t* wayBytes = way.serialize( &numBytes);
+            Chunk chunk = waysStorage.createChunk( numBytes);
+            index[way.id] = chunk.getPositionInFile();
+            chunk.put( wayBytes, numBytes);
+
+            delete [] wayBytes;
         }
-        
-        //clear bucket contents to save disk space
+        MUST( waysPos == waysBeyond, "overflow");
+        delete [] waysRaw;
         resolvedNodeBuckets.clearBucket(i); 
+        wayBuckets.clearBucket(i);
     }
     
     resolvedNodeBuckets.clear(); // no longer needed, remove files;
+    wayBuckets.clear();
 
 }
 

@@ -11,7 +11,7 @@ class RingSegment
 {
 public:
     RingSegment( const OsmGeoPosition &start, const OsmGeoPosition &end, int64_t wayId = -1);
-    RingSegment( const OsmLightweightWay &way);
+    RingSegment( const OsmWay &way);
     RingSegment( RingSegment *pChild1, RingSegment *pChild2);
     bool isClosed() const;
     OsmGeoPosition getStartPosition() const;

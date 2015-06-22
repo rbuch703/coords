@@ -1,6 +1,6 @@
 
 #include "waterwayLodHandler.h"
-#include <iostream>
+#include "config.h"
 
 WaterwayLodHandler::WaterwayLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {

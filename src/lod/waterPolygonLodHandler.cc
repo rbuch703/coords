@@ -1,5 +1,6 @@
 
 #include "waterPolygonLodHandler.h"
+#include "config.h"
 
 /*std::set<std::string> LandusePolygonLodHandler::naturals =
 {

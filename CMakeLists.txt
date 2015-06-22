@@ -56,7 +56,6 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/geom/envelope.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
-               src/containers/osmWayStore.cc
                src/containers/osmRelationStore.cc
                )
 
@@ -73,7 +72,6 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/srsConversion.cc
                src/containers/chunkedFile.cc
                src/containers/osmNodeStore.cc
-               src/containers/osmWayStore.cc
                src/containers/osmRelationStore.cc
                src/containers/reverseIndex.cc
                src/misc/cleanup.cc

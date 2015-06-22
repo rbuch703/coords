@@ -46,7 +46,7 @@ public:
     class Iterator 
     {
     public:
-        Iterator(const ChunkedFile& host, uint8_t *chunkPtr);
+        Iterator(const ChunkedFile& host, uint8_t *chunkPtr, bool isBeyond = false);
         Iterator& operator++();
         Chunk operator*() const;
         bool operator!=(const Iterator& other) const;
