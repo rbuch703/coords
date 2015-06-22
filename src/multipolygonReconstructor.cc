@@ -17,11 +17,9 @@
 #include <geos/geom/CoordinateSequenceFactory.h>*/
 
 #include "config.h"
-
 #include "containers/bucketFileSet.h"
 #include "containers/osmRelationStore.h"
 
-#include "osm/osmMappedTypes.h"
 #include "geom/ringSegment.h"
 #include "geom/ring.h"
 #include "geom/ringAssembler.h"

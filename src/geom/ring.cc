@@ -11,6 +11,7 @@
 #include <geos/geom/PrecisionModel.h>
 #include <geos/geom/IntersectionMatrix.h>
 
+#include "config.h"
 #include "ring.h"
 #include "misc/escapeSequences.h"
 #include "misc/varInt.h"

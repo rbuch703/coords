@@ -1,10 +1,12 @@
 
+#include <unistd.h> //for ftruncate()
+#include <sys/mman.h>
+
+#include "config.h"
 #include "tiles.h"
 #include "geom/envelope.h"
 #include "geom/geomSerializers.h"
 
-#include <unistd.h> //for ftruncate()
-#include <sys/mman.h>
 using std::cout;
 using std::endl;
 

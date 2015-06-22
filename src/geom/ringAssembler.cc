@@ -3,6 +3,7 @@
 #include <iostream>
 #include <set>
 
+#include "config.h"
 #include "misc/escapeSequences.h"
 #include "ringAssembler.h"
 

@@ -1,6 +1,7 @@
 
 #include <iostream>
 
+#include "config.h"
 #include "ringSegment.h"
 
 

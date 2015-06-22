@@ -1,6 +1,7 @@
 
 #include <math.h>
 
+#include "config.h"
 #include "geomSerializers.h"
 #include "genericGeometry.h"
 #include "misc/symbolicNames.h"

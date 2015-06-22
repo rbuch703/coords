@@ -9,7 +9,6 @@
 #include <algorithm> //for sort()
 
 #include "misc/mem_map.h"
-#include "osm/osmMappedTypes.h"
 #include "containers/chunkedFile.h"
 #include "containers/reverseIndex.h"
 #include "containers/bucketFileSet.h"

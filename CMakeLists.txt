@@ -20,7 +20,6 @@ ADD_EXECUTABLE(coordsCreateStorage
     src/conv_osm.cc 
     src/misc/mem_map.cc 
     src/osm/osmTypes.cc 
-#    src/osm/osmMappedTypes.cc 
     src/osm/osmBaseTypes.cc
     src/osm/osm_tags.cc 
     src/osm/osmParserXml.cc
@@ -49,7 +48,6 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/misc/mem_map.cc
                src/osm/osmTypes.cc 
                src/osm/osmBaseTypes.cc 
-               src/osm/osmMappedTypes.cc 
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/varInt.cc
@@ -63,7 +61,6 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/tiler.cc 
                src/tiles.cc 
                src/osm/osmTypes.cc 
-               src/osm/osmMappedTypes.cc 
                src/osm/osmBaseTypes.cc
                src/geom/envelope.cc
                src/geom/genericGeometry.cc
@@ -99,7 +96,6 @@ ADD_EXECUTABLE(multipolygonReconstructor
                src/geom/geomSerializers.cc
                src/osm/osmBaseTypes.cc
                src/osm/osmTypes.cc 
-               src/osm/osmMappedTypes.cc
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/mem_map.cc
@@ -119,7 +115,6 @@ ADD_EXECUTABLE(geomReader
 #               src/mem_map.cc
 #               src/osm/osmTypes.cc 
 #               src/osm/osmBaseTypes.cc 
-#               src/osm/osmMappedTypes.cc
 #               src/containers/chunkedFile.cc               
                )
 

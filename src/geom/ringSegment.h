@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "osm/osmTypes.h"
-#include "osm/osmMappedTypes.h"
 
 class RingSegment
 {
