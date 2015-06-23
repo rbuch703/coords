@@ -22,15 +22,15 @@ ADD_EXECUTABLE(coordsCreateStorage
     src/osm/osmTypes.cc 
     src/osm/osmBaseTypes.cc
     src/osm/osm_tags.cc 
-    src/osm/osmParserXml.cc
+#    src/osm/osmParserXml.cc
     src/osm/osmParserPbf.cc 
-    src/geom/envelope.cc
+#    src/geom/envelope.cc
     src/misc/rawTags.cc
     src/misc/symbolicNames.cc
     src/misc/varInt.cc
     src/misc/cleanup.cc
     src/consumers/osmConsumer.cc 
-    src/consumers/osmConsumerCounter.cc
+#    src/consumers/osmConsumerCounter.cc
     src/consumers/osmConsumerDumper.cc 
     src/consumers/osmConsumerIdRemapper.cc
     src/containers/chunkedFile.cc
@@ -51,7 +51,7 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/varInt.cc
-               src/geom/envelope.cc
+#               src/geom/envelope.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
                src/containers/osmRelationStore.cc
@@ -80,7 +80,6 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/lod/roadLodHandler.cc
                src/lod/boundaryLodHandler.cc
                src/lod/waterwayLodHandler.cc
-              
                src/lod/buildingPolygonLodHandler.cc
                src/lod/landusePolygonLodHandler.cc
                src/lod/waterPolygonLodHandler.cc

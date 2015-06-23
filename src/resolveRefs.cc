@@ -28,6 +28,12 @@ bool firstIsLess( const pair<uint64_t, uint64_t> &a, const pair<uint64_t, uint64
     return a.first < b.first;
 }
 
+/* TODO: 1. the stored wayIds in the nodeRefsResolved buckets are not used anymore, so do not
+ *          write them to the file in the first place.
+ *       2. the huge number of fwrite() calls to create the bucket files is rather inefficient.
+ *          Create a buffered file class that collects some bucket contents (e.g. 16k) in memory
+ *          before writing them out all at once.
+ */
 void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 {
     ReverseIndex reverseNodeIndex(storageDirectory + "nodeReverse", true);
@@ -76,46 +82,49 @@ void buildReverseIndexAndResolvedNodeBuckets(const string storageDirectory)
 
 }
 
-//FIXME: this method uses ~60% of the whole CPU time of this program.
-map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > buildReferencesMap(
+inline bool hasSmallerNodeId( const OsmGeoPosition &a, const OsmGeoPosition &b)
+{
+    return a.id < b.id;
+}
+
+inline bool isSmallerNodeId( const OsmGeoPosition &a, const uint64_t &nodeId)
+{
+    return a.id < nodeId;
+}
+
+vector<OsmGeoPosition> buildReferencesMap(
     const vector< pair<uint64_t, OsmGeoPosition> > &resolvedReferences)
 {
-    //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
-    map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs; 
-
+    vector<OsmGeoPosition> refs;
+    refs.reserve( resolvedReferences.size());
     for ( const pair<uint64_t, OsmGeoPosition> &tuple : resolvedReferences)
-    {
-        uint64_t wayId = tuple.first;
-        uint64_t nodeId= tuple.second.id;
-
-        if (! refs.count(wayId))
-            refs.insert( std::make_pair(wayId, map<uint64_t, pair<int32_t, int32_t> >()));
-            
-        if (! refs[wayId].count(nodeId))
-            refs[wayId].insert( std::make_pair(nodeId, std::make_pair( tuple.second.lat, tuple.second.lng)));
-        else 
-            assert( refs[wayId][nodeId].first  == tuple.second.lat  && 
-                    refs[wayId][nodeId].second == tuple.second.lng);
-    }
-
+        refs.push_back(tuple.second);
+    
+    sort( refs.begin(), refs.end(), hasSmallerNodeId);
+    
     return refs;
 }
 
-void resolveNodeLocations(OsmWay &way, const map<uint64_t, pair<int32_t, int32_t> > &nodeRefs)
+void resolveNodeLocations(OsmWay &way, const vector<OsmGeoPosition> &nodeRefs)
 {
     //assert(way.isDataMapped && "is noop for unmapped data");
     for (uint64_t i = 0; i < way.refs.size(); i++)
     {
         uint64_t nodeId = way.refs[i].id;
-        if (! nodeRefs.count(nodeId))
+        
+        /* returns the first element in the sorted 'nodeRefs' vector that is not
+         * smaller than 'nodeId'. This will be an entry containing 'nodeId', if such
+         * an entry exists, and one with a higher id than 'nodeId' otherwise */
+        auto notSmaller = lower_bound( nodeRefs.begin(), nodeRefs.end(), nodeId, isSmallerNodeId);
+        
+        if ( notSmaller == nodeRefs.end() || notSmaller->id != nodeId)
         {
             cout << "[WARN] reference to node " << nodeId << " could not be resolved in way " << way.id << endl;
             continue;
         }
         
-        const pair<int32_t, int32_t> &pos = nodeRefs.at(nodeId);
-        way.refs[i].lat = pos.first;
-        way.refs[i].lng = pos.second;
+        way.refs[i].lat = notSmaller->lat;
+        way.refs[i].lng = notSmaller->lng;
     }
 
 }
@@ -149,7 +158,7 @@ void resolveWayNodeRefsAndCreateRelationBuckets(const string storageDirectory,
                 during that time. */
 
         //for each wayId, mapping its nodeIds to the corresponding lat/lng pair
-        map<uint64_t, map<uint64_t, pair<int32_t, int32_t> > > refs = buildReferencesMap( resolvedNodeBuckets.getContents(i) );
+        vector<OsmGeoPosition> refs = buildReferencesMap( resolvedNodeBuckets.getContents(i) );
         
         
         FILE* f = wayBuckets.getFile( i * NODES_OF_WAYS_BUCKET_SIZE);
@@ -168,7 +177,7 @@ void resolveWayNodeRefsAndCreateRelationBuckets(const string storageDirectory,
             MUST( way.id >=  i   * NODES_OF_WAYS_BUCKET_SIZE &&
                   way.id <  (i+1)* NODES_OF_WAYS_BUCKET_SIZE, "Way in wrong bucket file");
 
-            resolveNodeLocations(way, refs[way.id]);
+            resolveNodeLocations(way, refs);
 
             for (uint64_t relId : reverseWayIndex.getReferencingRelations(way.id))
                 if (rendereableRelationIds.count(relId))
