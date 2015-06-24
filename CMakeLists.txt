@@ -77,6 +77,8 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/misc/symbolicNames.cc
                src/misc/varInt.cc
                src/lod/lodHandler.cc
+               src/lod/addressLodHandler.cc
+               src/lod/placeLodHandler.cc
                src/lod/roadLodHandler.cc
                src/lod/boundaryLodHandler.cc
                src/lod/waterwayLodHandler.cc

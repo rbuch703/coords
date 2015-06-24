@@ -13,32 +13,49 @@ int RoadLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosed
     if (tags.count("highway"))
     {
         const std::string &type = tags.at("highway");
-        if (type == "motorway" || type == "motorway_link" || 
-            type == "trunk"    || type == "trunk_link")
-            return 0;
-        
-        if (type == "primary" || type == "primary_link")
-            return 7;
-            
-        if (type == "secondary" || type == "secondary_link")
-            return 9;
-            
-        if (type == "tertiary" || type == "tertiary_link")
-            return 10;
-            
-        if (type == "residential" || type == "unclassified" || type == "road")
-            return 10;
-        
-        if (type == "living_street" || type == "service" || type == "pedestrian" ||
-            type == "raceway")
-            return 12;
-            
-        if (type == "platform" || type == "steps" || type == "bridleway" || 
-            type == "footway"  || type == "path"  || type == "track"     ||
-            type == "cycleway")
-            return 13;
+        tags.insert(std::make_pair("type", type));
 
-        //these types are known and judged as irrelevant for rendering;
+        if (type == "motorway" || type == "trunk")
+        {
+            tags.insert(std::make_pair("stylegroup", "motorway"));
+            return 0;
+        }
+        
+        if (type == "primary" || type == "secondary")
+        {
+            tags.insert(std::make_pair("stylegroup", "mainroad"));
+            return 7;
+        }
+            
+        if ( type == "motorway_link" || type == "trunk_link" || type == "primary_link" ||
+             type == "secondary_link" || type == "tertiary" || type == "tertiary_link" ||
+             type == "residential" || type == "unclassified" || type == "road" ||
+             type == "living_street")
+        {
+            tags.insert(std::make_pair("stylegroup", "minorroad"));
+            
+            return 10;
+        }
+            
+        
+        if ( type == "service" || type == "track")
+        { 
+            tags.insert(std::make_pair("stylegroup", "service"));
+            return 12;
+        }   
+            
+            /*type == "raceway")
+        if (type == "platform" ||  || */
+       if (type == "path"  || type == "cycleway" || type == "footway"  ||
+           type == "pedestrian" || type == "steps" || type == "bridleway")
+       {
+            tags.insert(std::make_pair("noauto", "service"));
+            
+            return 13;
+       }
+
+
+        //these types are known, and judged as irrelevant for rendering;
         //all other types are unknown        
         /*if (type != "construction" && type != "proposed" && type != "no" &&
             type != "byway" && type != "unsurfaced")
@@ -48,6 +65,8 @@ int RoadLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosed
     if (tags.count("railway"))
     {
         const std::string &type = tags.at("railway");
+        tags.insert(std::make_pair("type", type));
+        tags.insert(std::make_pair("stylegroup", "railway"));
 
         if (type == "rail") return 0;
         

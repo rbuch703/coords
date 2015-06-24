@@ -27,6 +27,7 @@ public:
     //void cleanupFiles() const;
 
     void store (const GenericGeometry &geometry, const Envelope &env, int zoomLevel);
+    void store (const OsmNode &node, int zoomLevel);
     //void store (const GenericGeometry &geometry, const Envelope &env);
     void closeFiles();
     void subdivide();

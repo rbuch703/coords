@@ -23,6 +23,8 @@
 #include "misc/cleanup.h"
 #include "misc/escapeSequences.h"
 #include "lod/lodHandler.h"
+#include "lod/addressLodHandler.h"
+#include "lod/placeLodHandler.h"
 #include "lod/buildingPolygonLodHandler.h"
 #include "lod/landusePolygonLodHandler.h"
 #include "lod/waterPolygonLodHandler.h"
@@ -208,18 +210,41 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
     fclose(f);
 }
 
-void parseNodes(FileBackedTile &pointsStorage, std::string storageDirectory)
+void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory)
 {
     ChunkedFile nodes( storageDirectory + "nodes.data");
     uint64_t numNodesRead = 0;
     for (Chunk nodeChunk : nodes)
     {
         if (++numNodesRead % 1000000 == 0)
-            cout << "\t          " << (numNodesRead/1000000) << "M nodes read" << endl;
+            cout << "\t      " << (numNodesRead/1000000) << "M nodes read" << endl;
 
         OsmNode node(nodeChunk.getDataPtr());
+        TagDictionary tagsDict( node.tags.begin(), node.tags.end());
+        
         convertWgs84ToWebMercator( node.lat, node.lng);
-        pointsStorage.add(node);
+        
+        for (LodHandler* handler : lodHandlers)
+        {
+            int coarsestZoomLevel = handler->applicableUpToZoomLevel(tagsDict, true);
+            
+            if (coarsestZoomLevel < 0) //not applicable at all
+                continue;
+
+            const void* const* storeAtLevel = handler->getZoomLevels();
+            for (int zoomLevel = LodHandler::MAX_ZOOM_LEVEL; 
+                     zoomLevel >= coarsestZoomLevel; 
+                     zoomLevel--)
+            {
+                if (!storeAtLevel[zoomLevel])
+                    continue;
+                    
+                handler->store(node, zoomLevel);   
+            }
+            //addToTileSet(geosGeom, geom.getEntityId(), tags, handler, level);
+            //pointsStorage.add(node);
+            
+        }
     }
     cerr << "\t          total: " << numNodesRead << " nodes." << endl;
 }
@@ -272,7 +297,7 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
             int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
             if (level < 0)
                 continue;
-
+            way.tags = vector<OsmKeyValuePair>(tagsDict.begin(), tagsDict.end());
             geos::geom::Geometry *geosGeom = createGeosGeometry(way);
             uint8_t *tags = RawTags::serialize(way.tags);
             addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, RawTags(tags), handler, level);
@@ -300,10 +325,10 @@ int main(int argc, char** argv)
     lodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
     lodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
     lodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
-
-    FileBackedTile pointsStorage(tileDirectory + "points_24_", 
-                                 LodHandler::mercatorWorldBounds, 
-                                 LodHandler::MAX_META_NODE_SIZE );
+    
+    std::vector<LodHandler*> pointLodHandlers;
+    pointLodHandlers.push_back( new AddressLodHandler(tileDirectory, "address"));
+    pointLodHandlers.push_back( new PlaceLodHandler(tileDirectory, "place"));
 
     cout << "stage 1/2: subdividing dataset to quadtree meta nodes of no more than "
          << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
@@ -312,7 +337,7 @@ int main(int argc, char** argv)
     parsePolygons(lodHandlers, storageDirectory);
 
     cerr << "    stage 1b: parsing points" << endl;
-    parseNodes(pointsStorage, storageDirectory);
+    parseNodes(pointLodHandlers, storageDirectory);
 
     cerr << "    stage 1c: parsing ways" << endl;
     parseWays(lodHandlers, storageDirectory);
@@ -325,12 +350,20 @@ int main(int argc, char** argv)
        open the file descriptors of the current meta node we are subdividing and its 
        children. So we can close all other file descriptors for now. */
    
-    pointsStorage.closeFiles();
     for (LodHandler *handler : lodHandlers)
         handler->closeFiles();
+
+    for (LodHandler *handler : pointLodHandlers)
+        handler->closeFiles();
+
     
-    pointsStorage.subdivide(LodHandler::MAX_NODE_SIZE);
     for (LodHandler *handler : lodHandlers)
+    {
+        handler->subdivide();
+        delete handler;
+    }
+
+    for (LodHandler *handler : pointLodHandlers)
     {
         handler->subdivide();
         delete handler;

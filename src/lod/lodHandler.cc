@@ -58,6 +58,15 @@ void LodHandler::store (const GenericGeometry &geometry, const Envelope &env, in
     MUST(lodTileSets[zoomLevel], "writing to non-existent level of detail");
     lodTileSets[zoomLevel]->add(geometry, env);
 }
+
+void LodHandler::store (const OsmNode &node, int zoomLevel)
+{
+    MUST(zoomLevel >= 0 && zoomLevel <= MAX_ZOOM_LEVEL, "out of bounds");
+    
+    MUST(lodTileSets[zoomLevel], "writing to non-existent level of detail");
+    lodTileSets[zoomLevel]->add(node);
+}
+
 /*
 void LodHandler::store (const GenericGeometry &geometry, const Envelope &env)
 {
