@@ -11,46 +11,25 @@
 #endif
 
 
-/* ON-DISK LAYOUT FOR GEOMETRY
-:
-    uint32_t size in bytes (not counting the size field itself)
-    uint8_t  type ( 0 --> POINT, 1 --> LINE, 2 --> POLYGON)
-    uint64_t id ( POINT--> nodeId; LINE--> wayId;
-                  POLYGON:  MSB set --> wayId; MSB unset --> relationId)
-    <tags>
-    <type-specific data>:
-    
-   1. type == POINT
-        int32_t lat;
-        int32_t lng;
-        
-   2. type == LINE
-        varUint numPoints;
-        'numPoints' times:
-            varInt lat; //delta-encoded
-            varInt lng; //delta-encoded
-    
-   3. type == POLYGON
-        varUint numRings;
-        'numRings' times:
-            varUint numPoints;
-            'numPoints' times:
-                varInt lat;
-                varInt lng;
-    
-*/
+/* NOTE: for the on-disk layout of GenericGeometry, see geomSerializers.h */
 
 RawTags GenericGeometry::getTags() const
 {
-    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
+    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(int8_t);
+    int nRead = 0;
+    varUintFromBytes( tagsStart, &nRead);
+    tagsStart += nRead;
+    
     return RawTags(tagsStart);
 }
 
 const uint8_t* GenericGeometry::getGeometryPtr() const
 {
-    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(uint64_t);
-    
+    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(int8_t);
     int nRead = 0;
+    varUintFromBytes( tagsStart, &nRead);
+    tagsStart += nRead;
+    
     uint32_t numTagBytes = varUintFromBytes(tagsStart, &nRead);
     uint8_t* geomStart = tagsStart + nRead + numTagBytes;
     MUST( geomStart < this->bytes + this->numBytes, "overflow");
@@ -124,25 +103,41 @@ GenericGeometry::~GenericGeometry()
 FEATURE_TYPE GenericGeometry::getFeatureType() const 
 {
     MUST( numBytes > 0, "corrupted on-disk geometry");
-    return (FEATURE_TYPE)bytes[0];
+    int8_t flags = (*(int8_t*)bytes) & 0x03; //lower two bits determine type
+    
+    switch ( (GEOMETRY_FLAGS)flags)
+    {
+        case GEOMETRY_FLAGS::POINT:return FEATURE_TYPE::POINT;
+        case GEOMETRY_FLAGS::LINE: return FEATURE_TYPE::LINE;
+        case GEOMETRY_FLAGS::WAY_POLYGON: return FEATURE_TYPE::POLYGON;
+        case GEOMETRY_FLAGS::RELATION_POLYGON: return FEATURE_TYPE::POLYGON;
+        default:
+            MUST(false, "logic error");
+            return (FEATURE_TYPE)-1;
+    }
 }
 
 OSM_ENTITY_TYPE GenericGeometry::getEntityType() const 
 {
-    MUST( numBytes >= 9, "corrupted on-disk geometry");
-    uint64_t id = *((uint64_t*)(bytes+1));
-    switch (getFeatureType())
+    MUST( numBytes > 0, "corrupted on-disk geometry");
+    int8_t flags = (*(int8_t*)bytes) & 0x03; //lower two bits determine type
+    
+    switch ( (GEOMETRY_FLAGS)flags)
     {
-        case FEATURE_TYPE::POINT: return OSM_ENTITY_TYPE::NODE;
-        case FEATURE_TYPE::LINE:  return OSM_ENTITY_TYPE::WAY;
-        case FEATURE_TYPE::POLYGON:
-            return (id & IS_WAY_REFERENCE) ? OSM_ENTITY_TYPE::WAY :
-                                             OSM_ENTITY_TYPE::RELATION;
-            break;
+        case GEOMETRY_FLAGS::POINT:return OSM_ENTITY_TYPE::NODE;
+        case GEOMETRY_FLAGS::LINE: return OSM_ENTITY_TYPE::WAY;
+        case GEOMETRY_FLAGS::WAY_POLYGON: return OSM_ENTITY_TYPE::WAY;
+        case GEOMETRY_FLAGS::RELATION_POLYGON: return OSM_ENTITY_TYPE::RELATION;
         default:
-            MUST(false, "invalid FEATURE_TYPE");
-            break;
+            MUST(false, "logic error");
+            return (OSM_ENTITY_TYPE)-1;
     }
+}
+
+GEOMETRY_FLAGS GenericGeometry::getGeometryFlags() const 
+{
+    MUST( numBytes > 0, "corrupted on-disk geometry");
+    return *(GEOMETRY_FLAGS*)bytes;
 }
 
 void GenericGeometry::serialize(FILE* f) const
@@ -153,20 +148,20 @@ void GenericGeometry::serialize(FILE* f) const
 
 uint64_t GenericGeometry::getEntityId() const 
 {
-    MUST( numBytes >= 9, "corrupted on-disk geometry");
-    uint64_t id = *((uint64_t*)(bytes+1));
-    return id & ~IS_WAY_REFERENCE;
+    return varUintFromBytes(bytes + sizeof(uint8_t) + sizeof(int8_t), nullptr);
 }
 
 Envelope GenericGeometry::getBounds() const 
 {
     const int32_t *pos = (const int32_t*) getGeometryPtr();
-    switch (getFeatureType())
+    switch (GEOMETRY_FLAGS((int8_t)getGeometryFlags() & 0x03))
     {
-        case FEATURE_TYPE::POINT: return Envelope( pos[0], pos[1]);
-        case FEATURE_TYPE::LINE:  return getLineBounds();
-        case FEATURE_TYPE::POLYGON: return getPolygonBounds();
-        default: MUST(false, "invalid feature type"); break;
+        case GEOMETRY_FLAGS::POINT: return Envelope( pos[0], pos[1]);
+        case GEOMETRY_FLAGS::LINE:  return getLineBounds();
+        case GEOMETRY_FLAGS::WAY_POLYGON:
+        case GEOMETRY_FLAGS::RELATION_POLYGON:
+            return getPolygonBounds();
+        default: MUST(false, "invalid feature type"); return Envelope();
     }
 }
 
@@ -174,8 +169,8 @@ Envelope GenericGeometry::getLineBounds() const {
     uint8_t *beyond = bytes + numBytes;
     
     const uint8_t *lineStart = getGeometryPtr();
-    int nBytes = 0;
 
+    int nBytes = 0;
     uint64_t numPoints = varUintFromBytes(lineStart, &nBytes);
     lineStart += nBytes;
     
@@ -234,14 +229,15 @@ Envelope GenericGeometry::getPolygonBounds() const
 
 }
 
+/*
 bool GenericGeometry::hasMultipleRings() const
 {
     if (this->getFeatureType() != FEATURE_TYPE::POLYGON)
         return false;
         
     const uint8_t* geo = getGeometryPtr();
-    return varUintFromBytes( geo, nullptr);
-}
+    return varUintFromBytes( geo, nullptr) > 1;
+}*/
 
 
 std::ostream& operator<<(std::ostream& os, FEATURE_TYPE ft)

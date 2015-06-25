@@ -562,7 +562,7 @@ int main()
                 
                 #pragma omp critical
                 {
-                    serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, fOut);
+                    serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, 0, fOut);
                     
                     for (uint64_t wayId : poly->wayIds)
                         MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, 

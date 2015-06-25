@@ -15,23 +15,23 @@
 //forward declaration
 namespace geos { namespace geom { class Geometry; } }
 
-void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut);
+void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, int8_t zIndex, FILE* fOut);
 
-GenericGeometry serializeWay(const OsmWay &way, bool asPolygon);
-GenericGeometry serializeNode(const OsmNode &node);
+GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex);
+GenericGeometry serializeNode(const OsmNode &node, int8_t zIndex);
 
 
-GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags);
+GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, GEOMETRY_FLAGS flags, int8_t zIndex, const RawTags &tags);
 
 geos::geom::Geometry* createGeosGeometry( const GenericGeometry   &geom);
-geos::geom::Geometry* createGeosGeometry( const OsmWay &geom);
+geos::geom::Geometry* createGeosGeometry( const OsmWay &geom, bool asPolygon );
 
 /* ON-DISK LAYOUT FOR GEOMETRY
 :
     uint32_t size in bytes (not counting the size field itself)
-    uint8_t  type ( 0 --> POINT, 1 --> LINE, 2 --> POLYGON)
-    uint64_t id ( POINT--> nodeId; LINE--> wayId;
-                  POLYGON:  MSB set --> wayId; MSB unset --> relationId)
+    uint8_t  geometryFlags
+    int8_t   zIndex
+    varUint  id (POINT--> nodeId; LINE/WAY_POLYGON--> wayId; RELATION_POLYGON --> relationId)
     <tags>
     <type-specific data>:
     

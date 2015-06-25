@@ -44,12 +44,12 @@ FileBackedTile::~FileBackedTile()
     fData = NULL;
 }
 
-void FileBackedTile::add(const OsmWay &way, const Envelope &wayBounds, bool asPolygon)
+void FileBackedTile::add(const OsmWay &way, const Envelope &wayBounds, int8_t zIndex, bool asPolygon)
 {
     if (fData)
     {
         assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-        serializeWay(way, asPolygon).serialize(fData);
+        serializeWay(way, asPolygon, zIndex).serialize(fData);
         this->size = ftell(fData);
 
         if ( this->size > maxNodeSize)
@@ -58,23 +58,23 @@ void FileBackedTile::add(const OsmWay &way, const Envelope &wayBounds, bool asPo
     {
         assert( topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
         if (wayBounds.overlapsWith(topLeftChild->bounds)) 
-            topLeftChild->add(way, wayBounds, asPolygon);
+            topLeftChild->add( way, wayBounds, zIndex, asPolygon);
         if (wayBounds.overlapsWith(topRightChild->bounds)) 
-            topRightChild->add(way, wayBounds, asPolygon);
+            topRightChild->add(way, wayBounds, zIndex, asPolygon);
 
         if (wayBounds.overlapsWith(bottomLeftChild->bounds)) 
-            bottomLeftChild->add(way,  wayBounds, asPolygon);
+            bottomLeftChild->add(way,  wayBounds, zIndex, asPolygon);
         if (wayBounds.overlapsWith(bottomRightChild->bounds)) 
-            bottomRightChild->add(way,  wayBounds, asPolygon);
+            bottomRightChild->add(way,  wayBounds, zIndex, asPolygon);
     }
 }
 
-void FileBackedTile::add(const OsmNode &node)
+void FileBackedTile::add(const OsmNode &node, int8_t zIndex)
 {
     if (fData)
     {
         assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-        serializeNode(node).serialize(fData);
+        serializeNode(node, zIndex).serialize(fData);
         this->size = ftell(fData);
 
         if ( this->size > maxNodeSize)
@@ -84,14 +84,14 @@ void FileBackedTile::add(const OsmNode &node)
         Envelope nodeBounds( node.lat, node.lng);
         assert( topLeftChild && topRightChild && bottomLeftChild && bottomRightChild);
         if (nodeBounds.overlapsWith(topLeftChild->bounds)) 
-            topLeftChild->add(node);
+            topLeftChild->add(node, zIndex);
         if (nodeBounds.overlapsWith(topRightChild->bounds)) 
-            topRightChild->add(node);
+            topRightChild->add(node, zIndex);
 
         if (nodeBounds.overlapsWith(bottomLeftChild->bounds)) 
-            bottomLeftChild->add(node);
+            bottomLeftChild->add(node, zIndex);
         if (nodeBounds.overlapsWith(bottomRightChild->bounds)) 
-            bottomRightChild->add(node);
+            bottomRightChild->add(node, zIndex);
     }
 }
 
@@ -101,16 +101,10 @@ void FileBackedTile::add(const GenericGeometry &geom, const Envelope &bounds)
     if (fData)
     {
         assert( !topLeftChild && !topRightChild && !bottomLeftChild && !bottomRightChild);
-/*#ifndef NDEBUG
-        uint64_t posBefore = ftell(fData);
-#endif*/
         
         MUST( fwrite(&geom.numBytes, sizeof(geom.numBytes), 1, fData) == 1, "write error");
 
         MUST( fwrite(geom.bytes, geom.numBytes, 1, fData) == 1, "write error");
-        //serializeWay(way, false, fData);
-        //way.serialize(fData);
-        //assert( ftell(fData) - posBefore == way.size());
         size = ftell(fData);
 
         if ( this->size > maxNodeSize)
@@ -220,9 +214,8 @@ void FileBackedTile::subdivide()
         if (bounds.overlapsWith(topRightChild   ->bounds)) topRightChild->add(   geom, bounds);
         if (bounds.overlapsWith(bottomLeftChild ->bounds)) bottomLeftChild->add( geom, bounds);
         if (bounds.overlapsWith(bottomRightChild->bounds)) bottomRightChild->add(geom, bounds);
-        
     }
-    
+
     /* All contents of this node have been distributed to its four subnodes.
      * So the node itself can now be deleted.
      * Here, we only delete its contents and keep the empty file to act as a marker that

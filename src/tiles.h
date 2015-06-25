@@ -14,8 +14,8 @@ public:
     FileBackedTile(const char*fileName, const Envelope &bounds, uint64_t maxNodeSize);
     FileBackedTile(const std::string &fileName, const Envelope &bounds, uint64_t maxNodeSize);
    ~FileBackedTile();
-    void add(const OsmWay &way, const Envelope &wayBounds, bool asPolygon);
-    void add(const OsmNode &node);
+    void add(const OsmWay &way, const Envelope &wayBounds, int8_t zIndex, bool asPolygon);
+    void add(const OsmNode &node, int8_t zIndex = 0);
     void add(const GenericGeometry &geom, const Envelope &wayBounds);
     void closeFiles();
     void subdivide(uint64_t maxSubdivisionNodeSize);

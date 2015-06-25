@@ -87,7 +87,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/lod/waterPolygonLodHandler.cc
                )
 
-ADD_EXECUTABLE(multipolygonReconstructor
+ADD_EXECUTABLE(coordsResolvePolygons
                src/multipolygonReconstructor.cc
                src/geom/ringSegment.cc
                src/geom/ring.cc
@@ -129,7 +129,7 @@ TARGET_LINK_LIBRARIES( coordsCreateTiles -lgeos)
 
 
 
-TARGET_LINK_LIBRARIES( multipolygonReconstructor -lgeos )
+TARGET_LINK_LIBRARIES( coordsResolvePolygons -lgeos )
 
 
 ADD_CUSTOM_TARGET(man ALL)
@@ -171,5 +171,6 @@ INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateTiles.1      DESTINATION $
 
 INSTALL (TARGETS coordsCreateStorage DESTINATION /usr/bin )
 INSTALL (TARGETS coordsResolveStorage DESTINATION /usr/bin )
+INSTALL (TARGETS coordsResolvePolygons DESTINATION /usr/bin )
 INSTALL (TARGETS coordsCreateTiles DESTINATION /usr/bin )
 

@@ -30,7 +30,7 @@ static void serialize(const geos::geom::LineString *ring, bool reverseVertexOrde
 static uint64_t getSerializedSize(const geos::geom::LineString *ring, bool reverseVertexOrder);
 
 
-void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* fOut)
+void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, int8_t zIndex, FILE* fOut)
 {
     //cerr << "serializing relation " << relId << endl;
     uint32_t numRings = 1 + poly.children.size(); // 1 outer, plus the inner rings
@@ -39,7 +39,8 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
     uint64_t tagsSize = RawTags::getSerializedSize(tags);
     uint64_t sizeTmp = 
                     sizeof(uint8_t)  + // 'type' field
-                    sizeof(uint64_t) + // 'id' field
+                    sizeof(int8_t)   + // 'zIndex' field
+                    varUintNumBytes(relId) + // 'id' field
                     varUintNumBytes(tagsSize) + 
                     tagsSize + //tags size
                     varUintNumBytes(numRings) +   // 'numRings' field
@@ -56,9 +57,11 @@ void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, FILE* 
     MUST(fwrite( &numBytes, sizeof(numBytes), 1, fOut) == 1, "write error");
     uint64_t posBefore = ftell(fOut);
     
-    FEATURE_TYPE et = FEATURE_TYPE::POLYGON;
-    MUST(fwrite( &et,    sizeof(et),    1, fOut) == 1, "write error");
-    MUST(fwrite( &relId, sizeof(relId), 1, fOut) == 1, "write error");
+    GEOMETRY_FLAGS gf = GEOMETRY_FLAGS::RELATION_POLYGON;
+    MUST(fwrite( &gf,    sizeof(gf),    1, fOut) == 1, "write error");
+    MUST(fwrite( &zIndex,sizeof(zIndex),1, fOut) == 1, "write error");
+    
+    varUintToFile( relId, fOut);
     
     RawTags::serialize(tags, fOut);
     varUintToFile(numRings, fOut);
@@ -200,7 +203,7 @@ static uint64_t getSerializedSize(const geos::geom::LineString *ring, bool rever
     return size;
 }
 
-GenericGeometry serializeWay(const OsmWay &way, bool asPolygon)
+GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex)
 {
     OsmGeoPosition v0 = way.refs.front();
     OsmGeoPosition vn = way.refs.back();
@@ -213,7 +216,8 @@ GenericGeometry serializeWay(const OsmWay &way, bool asPolygon)
         
     uint64_t sizeTmp = 
         sizeof(uint8_t)  + // 'type' field
-        sizeof(uint64_t) + // 'id' field
+        sizeof( int8_t)   + // 'zIndex' field
+        varUintNumBytes(way.id) + // 'id' field
         numTagBytes +
         varUintNumBytes(way.refs.size());
         
@@ -246,13 +250,17 @@ GenericGeometry serializeWay(const OsmWay &way, bool asPolygon)
     
     uint8_t *outStart = outPos;
     
-    FEATURE_TYPE ft = asPolygon ? FEATURE_TYPE::POLYGON : FEATURE_TYPE::LINE;
+    GEOMETRY_FLAGS gf = asPolygon ? GEOMETRY_FLAGS::WAY_POLYGON : GEOMETRY_FLAGS::LINE;
     
-    *(FEATURE_TYPE*)outPos = ft;
-    outPos += sizeof(FEATURE_TYPE);
-    
-    *(uint64_t*)outPos = way.id;
-    outPos += sizeof(uint64_t);
+    *(GEOMETRY_FLAGS*)outPos = gf;
+    outPos += sizeof(GEOMETRY_FLAGS);
+
+    *(int8_t*)outPos = zIndex;
+    outPos += sizeof(int8_t);
+
+    outPos += varUintToBytes(way.id, outPos);
+    //*(uint64_t*)outPos = way.id;
+    //outPos += sizeof(uint64_t);
 
     memcpy(outPos, tagBytes, numTagBytes);
     delete [] tagBytes;
@@ -282,14 +290,15 @@ GenericGeometry serializeWay(const OsmWay &way, bool asPolygon)
     return GenericGeometry(outBuf, numBytes, true);
 }
 
-GenericGeometry serializeNode(const OsmNode &node)
+GenericGeometry serializeNode(const OsmNode &node, int8_t zIndex)
 {
     uint64_t numTagBytes = 0;
     uint8_t* tagBytes = RawTags::serialize( node.tags, &numTagBytes);
     
     uint64_t numBytes = 
         sizeof(uint8_t)  + // 'type' field
-        sizeof(uint64_t) + // 'id' field
+        sizeof(int8_t) + // geometry flags 
+        varUintNumBytes(node.id) + //'id' field
         sizeof(int32_t)  + // lat
         sizeof(int32_t)  + // lng
         numTagBytes;
@@ -297,11 +306,15 @@ GenericGeometry serializeNode(const OsmNode &node)
     uint8_t *outBuf = new uint8_t[numBytes];
     uint8_t *outPos = outBuf;
     
-    *(FEATURE_TYPE*)outPos = FEATURE_TYPE::POINT;
-    outPos += sizeof(FEATURE_TYPE);
+    *(GEOMETRY_FLAGS*)outPos = GEOMETRY_FLAGS::POINT;
+    outPos += sizeof(GEOMETRY_FLAGS);
     
-    *(uint64_t*)outPos = node.id;
-    outPos += sizeof(uint64_t);
+    *(int8_t*)outPos = zIndex;
+    outPos += sizeof(int8_t);
+
+    outPos += varUintToBytes( node.id, outPos);
+    //*(uint64_t*)outPos = node.id;
+    //outPos += sizeof(uint64_t);
 
     memcpy(outPos, tagBytes, numTagBytes);
     outPos += numTagBytes;
@@ -359,11 +372,13 @@ static uint64_t getSerializedSize( const geos::geom::Polygon *polygon)
 
 
 static GenericGeometry serializePolygon(const geos::geom::Polygon* poly, 
-                                 uint64_t id, const RawTags &tags)
+                                 uint64_t id, GEOMETRY_FLAGS flags, int8_t zIndex, 
+                                 const RawTags &tags)
 {
     uint64_t tagsSize = tags.getSerializedSize();
-    uint64_t size = sizeof(uint8_t) + //FEATURE_TYPE
-                    sizeof(uint64_t) + // id
+    uint64_t size = sizeof(uint8_t) + //GEOMETRY_FLAGS
+                    sizeof(int8_t)  + //zIndex
+                    varUintNumBytes(id) + // id
                     varUintNumBytes(tagsSize) +
                     tagsSize;
 
@@ -374,11 +389,15 @@ static GenericGeometry serializePolygon(const geos::geom::Polygon* poly,
     
     uint8_t *outputBuffer = new uint8_t[size];
     uint8_t *outPos = outputBuffer;
-    outputBuffer[0] = (uint8_t)FEATURE_TYPE::POLYGON;
+    outputBuffer[0] = (uint8_t)flags;
     outPos = outputBuffer + sizeof(uint8_t);
     
-    *(uint64_t*)outPos = id;
-    outPos += sizeof(uint64_t);
+    *(int8_t*)outPos = zIndex;
+    outPos += sizeof(int8_t);
+    
+    outPos += varUintToBytes(id, outPos);
+    //*(uint64_t*)outPos = id;
+    //outPos += sizeof(uint64_t);
     
     outPos += tags.serialize(outPos);
     
@@ -402,26 +421,32 @@ static GenericGeometry serializePolygon(const geos::geom::Polygon* poly,
 }
 
 static GenericGeometry serializeLineString(const geos::geom::LineString* line, 
-                                 uint64_t id, const RawTags &tags)
+                                 uint64_t id, GEOMETRY_FLAGS flags, int8_t zIndex, const RawTags &tags)
 {
     uint64_t tagsSize = tags.getSerializedSize();
-    uint64_t size = sizeof(uint8_t) + //FEATURE_TYPE
-                    sizeof(uint64_t) + // id
+    uint64_t size = sizeof(uint8_t) + //GEOMETRY_FLAGS
+                    sizeof(int8_t)  + // zIndex
+                    varUintNumBytes(id) + // id
                     varUintNumBytes(tagsSize) +
                     tagsSize;
 
     MUST(line, "invalid conversion");
+    MUST((int8_t)flags & (int8_t)GEOMETRY_FLAGS::LINE, "invalid line type");
     //std::cerr << "serializing id=" << id << std::endl;
     
     size += getSerializedSize( line, false );
     
     uint8_t *outputBuffer = new uint8_t[size];
     uint8_t *outPos = outputBuffer;
-    outputBuffer[0] = (uint8_t)FEATURE_TYPE::LINE;
+    outputBuffer[0] = (uint8_t)flags;
     outPos = outputBuffer + sizeof(uint8_t);
     
-    *(uint64_t*)outPos = id;
-    outPos += sizeof(uint64_t);
+    *(int8_t*)outPos = zIndex;
+    outPos += sizeof(int8_t);
+    
+    outPos += varUintToBytes(id, outPos);
+    //*(uint64_t*)outPos = id;
+    //outPos += sizeof(uint64_t);
     outPos += tags.serialize(outPos);
     outPos += serialize( line, false, outPos );
 
@@ -432,18 +457,26 @@ static GenericGeometry serializeLineString(const geos::geom::LineString* line,
 }
 
 
-GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, const RawTags &tags)
+GenericGeometry serialize(geos::geom::Geometry* geom, uint64_t id, GEOMETRY_FLAGS flags, int8_t zIndex, const RawTags &tags)
 {
-    switch ( geom->getGeometryTypeId() )
+    flags = GEOMETRY_FLAGS( 0x03 & (int8_t)flags);
+    
+    if (flags == GEOMETRY_FLAGS::RELATION_POLYGON || flags == GEOMETRY_FLAGS::WAY_POLYGON)
     {
-        case geos::geom::GeometryTypeId::GEOS_POLYGON: 
-            return serializePolygon(dynamic_cast<geos::geom::Polygon*>(geom), id, tags);
-        case geos::geom::GeometryTypeId::GEOS_LINESTRING:
-            return serializeLineString(dynamic_cast<geos::geom::LineString*>(geom), id, tags);
-        default:     
-            MUST( false , "serializing GEOS geometries other than polygons and line strings"
-                          " is not implemented");
+        MUST(  geom->getGeometryTypeId() == geos::geom::GeometryTypeId::GEOS_POLYGON, "geometry type mismatch");
+        return serializePolygon(dynamic_cast<geos::geom::Polygon*>(geom), id, 
+                                flags, zIndex, tags);
     }
+    
+    if (flags == GEOMETRY_FLAGS::LINE)
+    {
+        MUST( geom->getGeometryTypeId() == geos::geom::GeometryTypeId::GEOS_LINESTRING, "geometry type mismatch");
+        return serializeLineString(dynamic_cast<geos::geom::LineString*>(geom), id, 
+                                   flags, zIndex, tags);
+    }
+
+    MUST( false , "serializing GEOS geometries other than polygons and line strings"
+                          " is not implemented");
 }
 
 
@@ -494,7 +527,7 @@ geos::geom::Geometry* createGeosGeometry( const GenericGeometry &geom)
     }
 }
 
-geos::geom::Geometry* createGeosGeometry( const OsmWay &geom)
+geos::geom::Geometry* createGeosGeometry( const OsmWay &geom, bool asPolygon)
 {
     geos::geom::CoordinateSequence *seq = 
         factory.getCoordinateSequenceFactory()->create( (size_t)0, 2);    //start with 0 members; each member will have 2 dimensions
@@ -504,12 +537,15 @@ geos::geom::Geometry* createGeosGeometry( const OsmWay &geom)
     for (const OsmGeoPosition &pos : geom.refs)
         seq->add( geos::geom::Coordinate( pos.lat, pos.lng));
 
-    if (geom.refs.front().lat == geom.refs.back().lat &&
-        geom.refs.front().lng == geom.refs.back().lng &&
-        geom.refs.size() >= 4)
+    if (asPolygon)
+    {
+        MUST( geom.refs.front().lat == geom.refs.back().lat &&
+              geom.refs.front().lng == geom.refs.back().lng &&
+              geom.refs.size() >= 4, "not a polygon");
         return factory.createPolygon( factory.createLinearRing(seq), nullptr);
-    else
-        return factory.createLineString( seq );
+    }
+
+    return factory.createLineString( seq );
     
 }
 

@@ -37,6 +37,8 @@ using namespace std;
 std::string storageDirectory;
 std::string tileDirectory;
 
+static const int FIXME = -1;
+
 int parseArguments(int argc, char** argv)
 {
     const std::string usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
@@ -117,20 +119,25 @@ map<uint64_t, TagDictionary> loadBoundaryRelationTags(const string &storageDirec
 
 static const uint64_t MAP_WIDTH_IN_CM     = 2 * (uint64_t)2003750834;
 
-void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t wayId,
-                    FileBackedTile &target, double maxDeviation)
+void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t id, 
+                    GEOMETRY_FLAGS flags, FileBackedTile &target, double maxDeviation)
 {
     geos::simplify::TopologyPreservingSimplifier simp(geom);
     simp.setDistanceTolerance(maxDeviation);
 
     GenericGeometry gen = serialize( &(*simp.getResultGeometry()),
-                                     wayId | IS_WAY_REFERENCE, tags);
+                                     id, flags, FIXME, tags);
                                      
     target.add( gen, gen.getBounds());
 }
 
+/* FIXME: this method uses a slow topology-preserving simplifier. This is sensible for polygons,
+ *        where a simpler simplifier may cause topological errors (e.g. self-overlaps) that
+ *        may break rendering. But for simple line strings, a simpler and much faster algorithm
+ *        would be sufficient. */
 void addToTileSet(geos::geom::Geometry* &geometry,
-                  uint64_t entityId,
+                  uint64_t id,
+                  GEOMETRY_FLAGS flags,
                   RawTags tags,
                   LodHandler* handler,
                   int coarsestZoomLevel
@@ -161,7 +168,7 @@ void addToTileSet(geos::geom::Geometry* &geometry,
         //is still bigger than a single pixel after the simplification
         if (!handler->isArea() || simplifiedGeometry->getArea() >= pixelArea)
         {
-            GenericGeometry gen = serialize( simplifiedGeometry, entityId, tags);
+            GenericGeometry gen = serialize( simplifiedGeometry, id, flags, FIXME, tags);
             handler->store(gen, gen.getBounds(), zoomLevel);
         }
         delete geometry;
@@ -180,7 +187,8 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
     {
         ungetc(ch, f);
         GenericGeometry geom(f);
-        MUST( geom.getEntityType() == OSM_ENTITY_TYPE::RELATION, "found multipolygon that is not a relation");
+        MUST( geom.getEntityType() == OSM_ENTITY_TYPE::RELATION, 
+             "found multipolygon that is not a relation");
         convertWgs84ToWebMercator(geom);
 
         Envelope bounds = geom.getBounds();
@@ -199,7 +207,7 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
                 continue;
 
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
-            addToTileSet(geosGeom, geom.getEntityId(), tags, handler, level);
+            addToTileSet(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), tags, handler, level);
 
             delete geosGeom;
         }
@@ -262,8 +270,10 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
     cerr << "\t          loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
     
     // the IDs of ways that serve as outer ways of multipolygons.
-    std::set<uint64_t> outerWayIds = getSetFromFileEntries<uint64_t>(storageDirectory + "outerWayIds.bin");
-    std::cout << "\t          " << (outerWayIds.size()/1000) << "k ways are part of outer ways of multipolygons" << endl;      
+    std::set<uint64_t> outerWayIds = 
+        getSetFromFileEntries<uint64_t>( storageDirectory + "outerWayIds.bin");
+    std::cout << "\t          " << (outerWayIds.size()/1000) 
+              << "k ways are part of outer ways of multipolygons" << endl;      
 
 
     pos = 0;
@@ -297,10 +307,16 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
             int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
             if (level < 0)
                 continue;
+                
+            if (handler->isArea() && !way.isClosed())
+                continue;
+                
             way.tags = vector<OsmKeyValuePair>(tagsDict.begin(), tagsDict.end());
-            geos::geom::Geometry *geosGeom = createGeosGeometry(way);
+            geos::geom::Geometry *geosGeom = createGeosGeometry(way, handler->isArea());
             uint8_t *tags = RawTags::serialize(way.tags);
-            addToTileSet(geosGeom, way.id | IS_WAY_REFERENCE, RawTags(tags), handler, level);
+            addToTileSet(geosGeom, way.id, 
+                         handler->isArea() ? GEOMETRY_FLAGS::WAY_POLYGON : GEOMETRY_FLAGS::LINE,
+                         RawTags(tags), handler, level);
             delete [] tags;
 
             delete geosGeom;
