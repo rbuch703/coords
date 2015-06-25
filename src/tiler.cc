@@ -37,7 +37,6 @@ using namespace std;
 std::string storageDirectory;
 std::string tileDirectory;
 
-static const int FIXME = -1;
 
 int parseArguments(int argc, char** argv)
 {
@@ -119,18 +118,6 @@ map<uint64_t, TagDictionary> loadBoundaryRelationTags(const string &storageDirec
 
 static const uint64_t MAP_WIDTH_IN_CM     = 2 * (uint64_t)2003750834;
 
-void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t id, 
-                    GEOMETRY_FLAGS flags, FileBackedTile &target, double maxDeviation)
-{
-    geos::simplify::TopologyPreservingSimplifier simp(geom);
-    simp.setDistanceTolerance(maxDeviation);
-
-    GenericGeometry gen = serialize( &(*simp.getResultGeometry()),
-                                     id, flags, FIXME, tags);
-                                     
-    target.add( gen, gen.getBounds());
-}
-
 /* FIXME: this method uses a slow topology-preserving simplifier. This is sensible for polygons,
  *        where a simpler simplifier may cause topological errors (e.g. self-overlaps) that
  *        may break rendering. But for simple line strings, a simpler and much faster algorithm
@@ -138,6 +125,7 @@ void simplifyAndAdd(geos::geom::Geometry *geom, const RawTags &tags, uint64_t id
 void addToTileSet(geos::geom::Geometry* &geometry,
                   uint64_t id,
                   GEOMETRY_FLAGS flags,
+                  int8_t zIndex,
                   RawTags tags,
                   LodHandler* handler,
                   int coarsestZoomLevel
@@ -168,7 +156,7 @@ void addToTileSet(geos::geom::Geometry* &geometry,
         //is still bigger than a single pixel after the simplification
         if (!handler->isArea() || simplifiedGeometry->getArea() >= pixelArea)
         {
-            GenericGeometry gen = serialize( simplifiedGeometry, id, flags, FIXME, tags);
+            GenericGeometry gen = serialize( simplifiedGeometry, id, flags, zIndex, tags);
             handler->store(gen, gen.getBounds(), zoomLevel);
         }
         delete geometry;
@@ -207,7 +195,8 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
                 continue;
 
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
-            addToTileSet(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), tags, handler, level);
+            addToTileSet(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
+                         handler->getZIndex(tagsDict), tags, handler, level);
 
             delete geosGeom;
         }
@@ -247,7 +236,7 @@ void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirect
                 if (!storeAtLevel[zoomLevel])
                     continue;
                     
-                handler->store(node, zoomLevel);   
+                handler->store(node, zoomLevel, handler->getZIndex(tagsDict));
             }
             //addToTileSet(geosGeom, geom.getEntityId(), tags, handler, level);
             //pointsStorage.add(node);
@@ -316,7 +305,7 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
             uint8_t *tags = RawTags::serialize(way.tags);
             addToTileSet(geosGeom, way.id, 
                          handler->isArea() ? GEOMETRY_FLAGS::WAY_POLYGON : GEOMETRY_FLAGS::LINE,
-                         RawTags(tags), handler, level);
+                         handler->getZIndex(tagsDict), RawTags(tags), handler, level);
             delete [] tags;
 
             delete geosGeom;
@@ -343,7 +332,7 @@ int main(int argc, char** argv)
     lodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
     
     std::vector<LodHandler*> pointLodHandlers;
-    pointLodHandlers.push_back( new AddressLodHandler(tileDirectory, "address"));
+    //pointLodHandlers.push_back( new AddressLodHandler(tileDirectory, "address"));
     pointLodHandlers.push_back( new PlaceLodHandler(tileDirectory, "place"));
 
     cout << "stage 1/2: subdividing dataset to quadtree meta nodes of no more than "

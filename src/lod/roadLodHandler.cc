@@ -2,9 +2,64 @@
 #include "roadLodHandler.h"
 #include "config.h"
 
+#include <map>
+
 RoadLodHandler::RoadLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
     enableLods({10, 9, 6});
+}
+
+//taken from IMPOSM 3 source
+static const std::map<std::string, int64_t> highwayTypeZBias = { 
+    {"minor",          3},
+    {"road" ,          3},
+    {"unclassified",   3},
+	{"residential",    3},
+	{"tertiary_link",  3},
+	{"tertiary",       4},
+	{"secondary_link", 3},
+	{"secondary",      5},
+	{"primary_link",   3},
+	{"primary",        6},
+	{"trunk_link",     3},
+	{"trunk",          8},
+	{"motorway_link",  3},
+	{"motorway",       9},
+};
+
+int8_t RoadLodHandler::getZIndex(const TagDictionary &tags) const
+{
+    int64_t zIndex = 0;
+    if (tags.count("layer"))
+    {
+        zIndex += 10 * atoi( tags.at("layer").c_str());
+    }
+    
+    if (tags.count("highway"))
+    {
+        std::string type = tags.at("highway");
+        if ( highwayTypeZBias.count(type))
+            zIndex += highwayTypeZBias.at(type);
+    } else if (tags.count("railway"))
+    {
+        zIndex += 7;
+    }
+    
+    if (tags.count("tunnel"))
+    {
+        std::string val = tags.at("tunnel");
+        if (val == "true" || val == "yes" || val == "1")
+            zIndex -= 10;
+    }
+
+    if (tags.count("bridge"))
+    {
+        std::string val = tags.at("bridge");
+        if (val == "true" || val == "yes" || val == "1")
+            zIndex += 10;
+    }
+
+    return zIndex < -128 ? -128 : (zIndex > 127 ? 127 : zIndex);
 }
 
 

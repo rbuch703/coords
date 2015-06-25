@@ -151,6 +151,12 @@ uint64_t GenericGeometry::getEntityId() const
     return varUintFromBytes(bytes + sizeof(uint8_t) + sizeof(int8_t), nullptr);
 }
 
+int8_t GenericGeometry::getZIndex() const 
+{
+    return *(int8_t*)(bytes + sizeof(uint8_t));
+}
+
+
 Envelope GenericGeometry::getBounds() const 
 {
     const int32_t *pos = (const int32_t*) getGeometryPtr();

@@ -22,12 +22,13 @@ public:
     virtual ~LodHandler();
     const void* const* getZoomLevels() const;
     virtual int applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const = 0;
+    virtual int8_t getZIndex(const TagDictionary &tags) const;
     virtual bool isArea() const = 0;
     
     //void cleanupFiles() const;
 
     void store (const GenericGeometry &geometry, const Envelope &env, int zoomLevel);
-    void store (const OsmNode &node, int zoomLevel);
+    void store (const OsmNode &node, int zoomLevel, int8_t zIndex);
     //void store (const GenericGeometry &geometry, const Envelope &env);
     void closeFiles();
     void subdivide();

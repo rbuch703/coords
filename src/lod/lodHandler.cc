@@ -46,6 +46,12 @@ void LodHandler::enableLods( std::vector<int> lods)
     }
 }
 
+int8_t LodHandler::getZIndex(const TagDictionary &) const
+{
+    return 0;
+}
+
+
 const void* const* LodHandler::getZoomLevels() const
 {
     return (const void* const*)lodTileSets;
@@ -59,12 +65,12 @@ void LodHandler::store (const GenericGeometry &geometry, const Envelope &env, in
     lodTileSets[zoomLevel]->add(geometry, env);
 }
 
-void LodHandler::store (const OsmNode &node, int zoomLevel)
+void LodHandler::store (const OsmNode &node, int zoomLevel, int8_t zIndex)
 {
     MUST(zoomLevel >= 0 && zoomLevel <= MAX_ZOOM_LEVEL, "out of bounds");
     
     MUST(lodTileSets[zoomLevel], "writing to non-existent level of detail");
-    lodTileSets[zoomLevel]->add(node);
+    lodTileSets[zoomLevel]->add(node, zIndex);
 }
 
 /*
