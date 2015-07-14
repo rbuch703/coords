@@ -13,6 +13,7 @@
 #include "containers/reverseIndex.h"
 #include "containers/bucketFileSet.h"
 #include "containers/osmRelationStore.h"
+#include "geom/multipolygonReconstructor.h"
 
 //using namespace std;
 using std::string;
@@ -301,7 +302,6 @@ std::set<uint64_t> getRenderableRelationIds(const string &storageDirectory)
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    //622MB
     string storageDirectory = "intermediate/";
     
     if (storageDirectory.back() != '/' && storageDirectory.back() != '\\')
@@ -351,5 +351,19 @@ int main(int /*argc*/, char** /*argv*/)
      */
     resolveWayNodeRefsAndCreateRelationBuckets(storageDirectory, renderableRelations);
 
+
+    cout << "Stage 6: assembling multipolygons" << endl;
+    FILE* fOut = fopen( (storageDirectory + "multipolygons.bin").c_str(), "wb");
+    MUST( fOut, "cannot open output file");
+    
+    std::vector<uint64_t> vOuterWayIds = buildMultipolygonGeometry(storageDirectory, fOut);
+    fclose(fOut);
+    
+    fOut = fopen((storageDirectory + "outerWayIds.bin").c_str(), "wb");
+    MUST( fwrite( vOuterWayIds.data(), sizeof(uint64_t) * vOuterWayIds.size(), 1, fOut) == 1,
+          "write error");
+    fclose(fOut);
+    
+    
 }
 

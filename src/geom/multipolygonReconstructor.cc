@@ -456,18 +456,12 @@ TagDictionary getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map
     return tags;
 }
 
-int main()
+std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirectory, FILE* fOut)
 {
-    FILE* fOut = fopen("intermediate/multipolygons.bin", "wb");
-    MUST( fOut, "cannot open output file");
-    
-    FILE* fOuterWayIds = fopen("intermediate/outerWayIds.bin", "wb");
-    MUST( fOuterWayIds, "cannot open output file");
+    std::vector<uint64_t> outerWayIds;
 
-
-    const RelationStore relStore("intermediate/relations");
-    
-    BucketFileSet<int> relationWaysBuckets("intermediate/referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
+    const RelationStore relStore(storageDirectory + "relations");
+    BucketFileSet<int> relationWaysBuckets(storageDirectory + "referencedWays",  WAYS_OF_RELATIONS_BUCKET_SIZE, true);
 
     //for (uint64_t bucketId = 0; bucketId == 0; bucketId++)
     for (uint64_t bucketId = 0; bucketId < relationWaysBuckets.getNumBuckets(); bucketId++)
@@ -565,8 +559,7 @@ int main()
                     serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, 0, fOut);
                     
                     for (uint64_t wayId : poly->wayIds)
-                        MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, 
-                            "write error");
+                        outerWayIds.push_back(wayId);
                 }
             }
             //removeBoundaryOverlaps(roots, rel.id);
@@ -574,8 +567,32 @@ int main()
                 Ring::deleteRecursive(ring);
         }
     }
+    return outerWayIds;
+}
+
+#if 0
+int main()
+{
+    FILE* fOut = fopen("intermediate/multipolygons.bin", "wb");
+    MUST( fOut, "cannot open output file");
+    
+    std::vector<uint64_t> vOuterWayIds = 
+        buildMultipolygonGeometry("intermediate/", fOut);
+    
     fclose(fOut);
-    fclose(fOuterWayIds);
+    
+    fOut = fopen("intermediate/outerWayIds.bin", "wb");
+    MUST( fwrite( vOuterWayIds.data(), sizeof(uint64_t) * vOuterWayIds.size(), 1, fOut) == 1,
+          "write error");
+    fclose(fOut);
+    
+    /*FILE* fOuterWayIds = fopen("intermediate/outerWayIds.bin", "wb");
+    MUST( fOuterWayIds, "cannot open output file");
+    MUST( fwrite(&wayId, sizeof(wayId), 1, fOuterWayIds) == 1, 
+        "write error");
+    fclose(fOuterWayIds);*/
+
 
     return EXIT_SUCCESS;
 }
+#endif

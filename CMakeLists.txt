@@ -46,15 +46,21 @@ SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXX_FLAGS}" )
 ADD_EXECUTABLE(coordsResolveStorage
                src/resolveRefs.cc 
                src/misc/mem_map.cc
-               src/osm/osmTypes.cc 
-               src/osm/osmBaseTypes.cc 
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/varInt.cc
-#               src/geom/envelope.cc
+               src/osm/osmTypes.cc 
+               src/osm/osmBaseTypes.cc 
+               src/geom/envelope.cc
+               src/geom/ringSegment.cc
+               src/geom/ring.cc
+               src/geom/ringAssembler.cc
+               src/geom/geomSerializers.cc
+               src/geom/genericGeometry.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
                src/containers/osmRelationStore.cc
+               src/multipolygonReconstructor.cc
                )
 
 ADD_EXECUTABLE(coordsCreateTiles
@@ -87,23 +93,6 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/lod/waterPolygonLodHandler.cc
                )
 
-ADD_EXECUTABLE(coordsResolvePolygons
-               src/multipolygonReconstructor.cc
-               src/geom/ringSegment.cc
-               src/geom/ring.cc
-               src/geom/ringAssembler.cc
-               src/geom/envelope.cc
-               src/geom/genericGeometry.cc
-               src/geom/geomSerializers.cc
-               src/osm/osmBaseTypes.cc
-               src/osm/osmTypes.cc 
-               src/misc/rawTags.cc
-               src/misc/symbolicNames.cc
-               src/misc/mem_map.cc
-               src/misc/varInt.cc
-               src/containers/chunkedFile.cc               
-               src/containers/osmRelationStore.cc
-               )
 
 ADD_EXECUTABLE(geomReader
                src/geomReader.cc
@@ -126,10 +115,7 @@ ADD_EXECUTABLE(unmapId
 
 TARGET_LINK_LIBRARIES( geomReader -lgeos )
 TARGET_LINK_LIBRARIES( coordsCreateTiles -lgeos)
-
-
-
-TARGET_LINK_LIBRARIES( coordsResolvePolygons -lgeos )
+TARGET_LINK_LIBRARIES( coordsResolveStorage -lgeos )
 
 
 ADD_CUSTOM_TARGET(man ALL)
@@ -171,6 +157,5 @@ INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateTiles.1      DESTINATION $
 
 INSTALL (TARGETS coordsCreateStorage DESTINATION /usr/bin )
 INSTALL (TARGETS coordsResolveStorage DESTINATION /usr/bin )
-INSTALL (TARGETS coordsResolvePolygons DESTINATION /usr/bin )
 INSTALL (TARGETS coordsCreateTiles DESTINATION /usr/bin )
 

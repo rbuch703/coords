@@ -2,8 +2,6 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <stdio.h> //since MUST() needs printf()
-#include <stdlib.h> //since MUST() needs abort()
 #include <stdint.h>
 
 #ifndef MUST
@@ -25,6 +23,6 @@ const int32_t INVALID_LAT_LNG = 0x7FFFFFFF;
 
 static const uint64_t BUCKET_SIZE                   = 10000000;
 static const uint64_t NODES_OF_WAYS_BUCKET_SIZE     = 1000000;
-static const uint64_t WAYS_OF_RELATIONS_BUCKET_SIZE = 100000;
+static const uint64_t WAYS_OF_RELATIONS_BUCKET_SIZE = 200000;
 
 #endif
