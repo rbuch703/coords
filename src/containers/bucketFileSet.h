@@ -25,9 +25,12 @@ class BucketFileSet
 public:
     BucketFileSet(std::string baseName, uint64_t bucketSize, bool appendToExistingFiles);    
     ~BucketFileSet();
-    
+
+    //returns the bucket FILE* for item 'id' (not *bucket* 'id)    
     FILE*    getFile(uint64_t id);
+    // *truncates* a single bucket file to have size 0
     void     clearBucket(uint64_t bucketId);
+    // *deletes* all bucket files
     void     clear();
     void     write(uint64_t id, const ValueType& data);
     uint64_t getNumBuckets() const;

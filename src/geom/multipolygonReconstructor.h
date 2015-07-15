@@ -7,7 +7,7 @@
 #include <vector>
 #include <string>
 
-std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirectory, FILE* fMultipolygonsOut);
+std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirectory, FILE* fMultipolygonsOut, bool keepWayBucketFiles);
 
 
 #endif

@@ -456,7 +456,7 @@ TagDictionary getMultipolygonTags( Ring* ring, const OsmRelation &rel, const map
     return tags;
 }
 
-std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirectory, FILE* fOut)
+std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirectory, FILE* fOut, bool keepWayBucketFiles)
 {
     std::vector<uint64_t> outerWayIds;
 
@@ -567,6 +567,10 @@ std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirect
                 Ring::deleteRecursive(ring);
         }
     }
+
+    if (!keepWayBucketFiles)
+        relationWaysBuckets.clear();
+    
     return outerWayIds;
 }
 

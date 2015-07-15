@@ -49,6 +49,7 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/misc/rawTags.cc
                src/misc/symbolicNames.cc
                src/misc/varInt.cc
+               src/misc/cleanup.cc
                src/osm/osmTypes.cc 
                src/osm/osmBaseTypes.cc 
                src/geom/envelope.cc
@@ -57,10 +58,10 @@ ADD_EXECUTABLE(coordsResolveStorage
                src/geom/ringAssembler.cc
                src/geom/geomSerializers.cc
                src/geom/genericGeometry.cc
+               src/geom/multipolygonReconstructor.cc
                src/containers/chunkedFile.cc
                src/containers/reverseIndex.cc 
                src/containers/osmRelationStore.cc
-               src/multipolygonReconstructor.cc
                )
 
 ADD_EXECUTABLE(coordsCreateTiles
