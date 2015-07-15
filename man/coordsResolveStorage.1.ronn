@@ -1,35 +1,29 @@
-coordsResolveLocations(1) -- adds lat/lng information to all way references in a COORDS data storage.
+coordsResolveStorage(1) -- resolves references in a COORDS data storage.
 ============================================================================
 
 ## SYNOPSIS
 
-`coordsResolveLocations` --mode (RANDOM|BLOCK) (--lock <sizeInMB>) [--dryrun] [--yes] <storagePath>
+`coordsResolveStorage` [-m|--no-multipolygons] [-r|--no-resolve] [-u|--no-updates] <storage directory>
 
 ## DESCRIPTION
 
-OpenStreetMap ways have no geographic locations by themselves. They only consist of a list of node references, and the nodes in turn hold the geographic information (a latitude/longitude pair). Having to look up all referenced nodes whenever a way is processed would be extremely slow and inefficient. The tool `coordsResolveLocations` therefore looks up all nodes referenced by all ways in a COORDS data storage at once, and adds the nodes' geographic locations directly to the stored ways.
+The tool `coordsResolveStorage` resolves all references that are present in OSM data and need to be resolved for normal COORDS operations. This includes resolving way references to actual lat/lng coordinates, creating reverse indices (storing which node/way/relation is referred to by which way/relation) and assembling (and sanitizing) multipolygon geometry from multipolygon relations.
 
-  * `-m`, `--mode` (RANDOM|BLOCK):
-    The strategy through which node geographic information is looked up. RANDOM sequentially processes all ways and looks up the geographic information of any node reference it encounters. This will usually result in a random access lookup of nodes.
-    BLOCK keeps a block of node information of fixed size (selected by the parameter `--lock`) in memory, processes all ways, and adds the geographic information only of nodes in the current block to the way. When the node data is subdivided into `n` blocks, this process is repeated `n` times, until all node references have been resolved.  
-    The default mode is RANDOM.
-  * `-l`, `--lock` <sizeInMB>:
-    In BLOCK mode, this parameter determines the size of the node data blocks (in MB) that are kept in memory. This bigger this block size, the fewer does the list of ways have to be processes until and node references are resolved. The block size should be as big as possible, but needs to be smaller than the amount of physical RAM present - a good rule of thumb is about 1-2 GB less than that.  
-    Note that the memory for this data block needs to be locked in physical RAM. There is an operating system-defined limit on how much memory each user can lock - usually only about 64kB. Thus, to use BLOCK mode with a reasonable block size requires either root privileges, the special permissions `CAP_SYS_RESOURCE`, or increasing the ulimit for locked memory.  
-    This parameter is mandatory for BLOCK mode, and must not be used in RANDOM mode.
+  * `-m`, `--no-multipolygons`:
+    Omits the assembly of multipolygon geometry. Note that multipolygon assembly *is* necessary for a complete COORDS data storage. So the data storage will be incomplete when this option is used. This option mostly exists to defer multipolygon assembly to a more suitable time.
 
+  * `-r`, `--no-resolve`:
+    Omits all reference resolution steps. Note that a COORDS data storage is useless without reference resolution, so a COORDS data storage will not be usable unless `coordsResolveStorage` is run *without* this option at least once. This option mostly exists for when `coordsResolveStorage` has been run before (e.g. with the `-m` option), and thus all references have already been resolved.
 
-  * `-d`, `--dryrun` :
-    Do not actually resolve node references, but only print statistics on how many runs would be necessary to do so. Useful to determine a suitable block size in BLOCK mode.
-
-  * `-y`, `--yes` :
-    This tool refuses to use block sizes that would lead to excessively long processing times. Use this switch to override than behavior. Use at your own risk/boredom. You have been warned.
+  * `-u`, `--no-update` :
+    Omits the creation of all those data structures that are only necessary to support data storage updates via diff files, but are not necessary for normal operations. This mostly means not creating reverse indices for nodes and deleting the reverse indices for way and relations once they are no longer needed. Using this option noticebly reduces the amount of used disk space and computation time, but makes the data storage impossible to update.
     
-  * storagePath:
+    Note, that as of version 0.2.0 COORDS does not yet support updates. So using this option is the suggested and safe way of using coordsResolveStorage.
+
+  * <storage directory>:
     The location of a COORDS data storage created by coordsCreateStorage(1). This data storage will be modified in the process.
 
 ## NOTES
-It is safe to re-run this tool for a COORDS data source where node references have already been resolved. But only not yet resolved node references will be processed, so this is not useful for repairing corrupted geographic information.
 
 ## AUTHOR
 Written by Robert Buchholz
