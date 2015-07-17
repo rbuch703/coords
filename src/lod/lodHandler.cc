@@ -13,7 +13,6 @@ LodHandler::LodHandler(std::string tileDirectory, std::string baseName):
     for (int i = 0; i <= MAX_ZOOM_LEVEL; i++)
     {
         char num[4];
-        
         MUST( snprintf(num, 4, "%d", i) < 4, "overflow");
         
         deleteNumberedFiles(tileDirectory, baseName + "_" + num + "_", "");
@@ -43,6 +42,24 @@ void LodHandler::enableLods( std::vector<int> lods)
         lodTileSets[level] = 
             new FileBackedTile( tileDirectory + baseName + "_" + num + "_", 
                                 mercatorWorldBounds, MAX_META_NODE_SIZE);
+    }
+}
+
+void LodHandler::disableLods( std::vector<int> lods)
+{
+    for (int level : lods)
+    {
+        MUST( level >= 0 && level <= MAX_ZOOM_LEVEL, "LoD out of bounds");
+        MUST( level < MAX_ZOOM_LEVEL, "cannot disable the full detail LoD");
+
+        char levelStr[4];
+        MUST( snprintf(levelStr, 4, "%d", level) < 4, "overflow");
+        
+        delete lodTileSets[level];
+        lodTileSets[level] = nullptr;
+
+        deleteNumberedFiles(tileDirectory, baseName + "_" + levelStr + "_", "");
+        deleteIfExists(tileDirectory, baseName + "_" + levelStr + "_");
     }
 }
 

@@ -38,23 +38,26 @@ std::string storageDirectory;
 std::string tileDirectory;
 
 
-int parseArguments(int argc, char** argv)
+bool parseArguments(int argc, char** argv)
 {
-    const std::string usageLine = std::string("usage: ") + argv[0] + " --dest <tile destination directory> <storage directory>";
+    bool createLods = true;
+    const std::string usageLine = std::string("usage: ") + argv[0] + " [-l|--no-lod] --dest <tile destination directory> <storage directory>";
     
     static const struct option long_options[] =
     {
-        {"dest",  required_argument, NULL, 'd'},
+        {"dest",   required_argument, NULL, 'd'},
+        {"no-lod", no_argument,       NULL, 'l'},
         {0,0,0,0}
     };
 
     int opt_idx = 0;
     int opt;
-    while (-1 != (opt = getopt_long(argc, argv, "d:", long_options, &opt_idx)))
+    while (-1 != (opt = getopt_long(argc, argv, "ld:", long_options, &opt_idx)))
     {
         switch(opt) {
             //unknown option; getopt_long() already printed an error message
             case '?': exit(EXIT_FAILURE); break; 
+            case 'l': createLods = false; break;
             case 'd': tileDirectory = optarg; break;
             default: abort(); break;
         }
@@ -83,7 +86,7 @@ int parseArguments(int argc, char** argv)
     if (tileDirectory.back() != '/' && tileDirectory.back() != '\\')
         tileDirectory += "/";
     
-    return optind;
+    return createLods;
 }
 
 template <typename T>
@@ -128,14 +131,19 @@ void addToTileSet(geos::geom::Geometry* &geometry,
                   int8_t zIndex,
                   RawTags tags,
                   LodHandler* handler,
-                  int coarsestZoomLevel
+                  int coarsestZoomLevel,
+                  bool createLods
                   )
 {
     if (coarsestZoomLevel < 0)
         return;
-        
-    //GenericGeometry gen = serialize( geometry, entityId, tags);
-    //handler->store(gen, gen.getBounds());
+    
+    if (!createLods)
+    {
+        GenericGeometry gen = serialize( geometry, id, flags, zIndex, tags);
+        handler->store(gen, gen.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
+        return;
+    }
 
     const void* const* storeAtLevel = handler->getZoomLevels();
     for (int zoomLevel = LodHandler::MAX_ZOOM_LEVEL; zoomLevel >= coarsestZoomLevel; zoomLevel--)
@@ -164,7 +172,7 @@ void addToTileSet(geos::geom::Geometry* &geometry,
     }
 }
 
-void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory)
+void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory, bool createLods)
 {
     FILE* f = fopen( (storageDirectory + "multipolygons.bin").c_str(), "rb");
     
@@ -196,7 +204,7 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
 
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
             addToTileSet(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
-                         handler->getZIndex(tagsDict), tags, handler, level);
+                         handler->getZIndex(tagsDict), tags, handler, level, createLods);
 
             delete geosGeom;
         }
@@ -246,7 +254,7 @@ void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirect
     cerr << "\t          total: " << numNodesRead << " nodes." << endl;
 }
 
-void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory)
+void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory, bool createLods)
 {
     uint64_t numWays = 0;
     uint64_t pos = 0;
@@ -305,7 +313,7 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
             uint8_t *tags = RawTags::serialize(way.tags);
             addToTileSet(geosGeom, way.id, 
                          handler->isArea() ? GEOMETRY_FLAGS::WAY_POLYGON : GEOMETRY_FLAGS::LINE,
-                         handler->getZIndex(tagsDict), RawTags(tags), handler, level);
+                         handler->getZIndex(tagsDict), RawTags(tags), handler, level, createLods);
             delete [] tags;
 
             delete geosGeom;
@@ -320,7 +328,7 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
 
 int main(int argc, char** argv)
 {
-    parseArguments(argc, argv);
+    bool createLods = parseArguments(argc, argv);
     ensureDirectoryExists(tileDirectory);
 
     std::vector<LodHandler*> lodHandlers;
@@ -332,20 +340,33 @@ int main(int argc, char** argv)
     lodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
     
     std::vector<LodHandler*> pointLodHandlers;
-    //pointLodHandlers.push_back( new AddressLodHandler(tileDirectory, "address"));
+    pointLodHandlers.push_back( new AddressLodHandler(tileDirectory, "address"));
     pointLodHandlers.push_back( new PlaceLodHandler(tileDirectory, "place"));
+    
+    if (!createLods)
+    {
+        std::vector<int> simplifiedLods;
+        for (int i = 0; i < LodHandler::MAX_ZOOM_LEVEL; i++)
+            simplifiedLods.push_back(i);
+            
+        for (LodHandler* handler : lodHandlers)
+            handler->disableLods( simplifiedLods);
+            
+        for (LodHandler* handler: pointLodHandlers)
+            handler->disableLods( simplifiedLods);
+    }
 
     cout << "stage 1/2: subdividing dataset to quadtree meta nodes of no more than "
          << (LodHandler::MAX_META_NODE_SIZE/1000000) << "MB." << endl;
 
     cout << "    stage 1a: parsing polygons" << endl;
-    parsePolygons(lodHandlers, storageDirectory);
+    parsePolygons(lodHandlers, storageDirectory, createLods);
 
     cerr << "    stage 1b: parsing points" << endl;
     parseNodes(pointLodHandlers, storageDirectory);
 
     cerr << "    stage 1c: parsing ways" << endl;
-    parseWays(lodHandlers, storageDirectory);
+    parseWays(lodHandlers, storageDirectory, createLods);
     
     cout << endl << "stage 2/2: subdividing meta nodes to individual nodes of no more than "
          << (LodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;

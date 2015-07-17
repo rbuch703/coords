@@ -318,8 +318,10 @@ bool assembleMultipolygons = true;
 bool resolveReferences = true;
 bool keepWayBuckets = false;
 
-void parseArguments(int argc, char** argv, const std::string &usageLine)
+void parseArguments(int argc, char** argv)
 {
+    std::string usageLine = std::string("usage: ") + argv[0] + /*" [-k|--keep-way-buckets]*/" [-m|--no-multipolygons] [-r|--no-resolve] [-u|--no-updates] <storage directory>";
+
     static const struct option long_options[] =
     {
 //        {"keep-way-buckets", no_argument, NULL, 'k'},
@@ -367,8 +369,7 @@ void parseArguments(int argc, char** argv, const std::string &usageLine)
 
 int main(int argc, char** argv)
 {
-    std::string usageLine = std::string("usage: ") + argv[0] + /*" [-k|--keep-way-buckets]*/" [-m|--no-multipolygons] [-r|--no-resolve] [-u|--no-updates] <storage directory>";
-    parseArguments(argc, argv, usageLine);
+    parseArguments(argc, argv);
 
     if (resolveReferences)
     {
@@ -434,10 +435,12 @@ int main(int argc, char** argv)
 
     if (!keepReverseIndexFiles)
     {
+        /* Only delete the node and relation reverse indices. We need to keep the way reverse
+         * index even if we do not intend to perform storage updates, because the way reverse
+         * index is used by coordsCreateTiles to determine which ways are part of boundary
+         * relations and thus should inherit attributes from those relations. */
         deleteIfExists(storageDirectory, "nodeReverse.aux");
         deleteIfExists(storageDirectory, "nodeReverse.idx");
-        deleteIfExists(storageDirectory, "wayReverse.aux");
-        deleteIfExists(storageDirectory, "wayReverse.idx");
         deleteIfExists(storageDirectory, "relationReverse.aux");
         deleteIfExists(storageDirectory, "relationReverse.idx");
     }    

@@ -39,9 +39,10 @@ public:
     static const uint64_t MAX_META_NODE_SIZE = 500ll * 1000 * 1000;
     static const uint64_t MAX_NODE_SIZE      =   5ll * 1000 * 1000;
 
-protected:
+public:
     void enableLods( std::vector<int> lods);
-
+    void disableLods( std::vector<int> lods);
+protected:
     std::string tileDirectory;
     std::string baseName;
     FileBackedTile* lodTileSets[MAX_ZOOM_LEVEL+1];
