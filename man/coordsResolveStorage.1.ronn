@@ -15,8 +15,8 @@ The tool `coordsResolveStorage` resolves all references that are present in OSM 
   * `-r`, `--no-resolve`:
     Omits all reference resolution steps. Note that a COORDS data storage is useless without reference resolution, so a COORDS data storage will not be usable unless `coordsResolveStorage` is run *without* this option at least once. This option mostly exists for when `coordsResolveStorage` has been run before (e.g. with the `-m` option), and thus all references have already been resolved.
 
-  * `-u`, `--no-update` :
-    Omits the creation of all those data structures that are only necessary to support data storage updates via diff files, but are not necessary for normal operations. This mostly means not creating reverse indices for nodes and deleting the reverse indices for relations once they are no longer needed. In contrast, the reverse index for ways is created in any case, as it is required for tile creation. Using this option noticebly reduces the amount of used disk space and computation time, but makes the data storage impossible to update. 
+  * `-u`, `--no-updates` :
+    Omits the creation of all those data structures that are only necessary to support data storage updates via diff files, but are not necessary for normal operations. This mostly means not creating reverse indices for nodes and deleting the reverse indices for relations once they are no longer needed. The reverse index for ways, however, is created in any case, as it is required for tile creation. Using this option noticebly reduces the amount of used disk space and computation time, but makes the data storage impossible to update later on. 
     
     Note, that as of version 0.2.0 COORDS does not yet support updates. So using this option is the suggested and safe way of using coordsResolveStorage.
 

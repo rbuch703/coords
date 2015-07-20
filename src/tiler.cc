@@ -41,7 +41,7 @@ std::string tileDirectory;
 bool parseArguments(int argc, char** argv)
 {
     bool createLods = true;
-    const std::string usageLine = std::string("usage: ") + argv[0] + " [-l|--no-lod] --dest <tile destination directory> <storage directory>";
+    const std::string usageLine = std::string("usage: ") + argv[0] + " [-l|--no-lod] -d|--dest <DESTINATION> <SOURCE>";
     
     static const struct option long_options[] =
     {

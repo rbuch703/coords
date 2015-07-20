@@ -1,25 +1,31 @@
-coordsCreateTiles(1) -- creates geometry tiles for a locations-resolved COORDS storage
+coordsCreateTiles(1) -- creates geometry tiles from a location-resolved COORDS storage
 ============================================================================
 
 ## SYNOPSIS
 
-`coordsCreateTiles` --dest <DESTINATION> <SOURCE>
+`coordsCreateTiles` [-d|--dest <DESTINATION>] [-l|--no-lod] <SOURCE>
 
 ## DESCRIPTION
 
 This tool creates the actual COORDS geometry tiles that Mapnik can use to render maps from. It subdivides the whole set of OSM geometries into rectangular regions, varying their size to yield 
 regions with similar amount of content.  
-Note that this tool requires the COORDS storage to have the geographic locations of its ways resolved, so coordsResolveLocations(1) must have been run and completed prior to running this tool.
+Note that this tool requires the COORDS storage to have the geographic locations of its ways resolved, so coordsResolveStorage(1) must have been run and completed prior to running this tool.
 
   * `-d`, `--dest` <DESTINATION>:
-    The destination directory in which the geometry tiles are going to be created. It has to be writable by the current user. Existing files will be overwritten (and the current users needs to have the permissions to do so).
+    The destination directory in which the geometry tiles are to be created. It has to be writable by the current user. Existing files will be overwritten (and the current user needs to have the permissions to do so).
+
+  * `-l`, `--no-lod`:
+    Omits creation of simplified (aka "generalized") geometries for more coarse zoom levels. Using this option drastically reduces execution time and slightly reduces the output size of `coordsCreateTiles`. However, this also means that map renderers (e.g. Mapnik) will have to always consider the complete set of geometries. So gigabytes of data may have to be processed to render a single map tile for a coarse zoom level. 
+    
+    This option is mostly useful for quickly creating full detail geometry tiles from a recent data set to be used in conjunction with an older version of the simplified geometries.
     
   * <SOURCE>:
-    The COORDS data storage from which the geomtry tiles are going to be creates. This data storage has to have been initialized by coordsCreateStorage(1) and have been geo-resolved by coordsResolveLocations(1).
+    The COORDS data storage from which the geomtry tiles are to be created. This data storage has to have been initialized by coordsCreateStorage(1) and have been geo-resolved by coordsResolveStorage(1).
     
 
 ## NOTES
-It is safe to re-run this tool for the same <SOURCE> and <DESTINATION> and will simply overwrite the geometry tiles from the first pass. When executing this tool with the same <DESTINATION> but a different <SOURCE> than in a previous run, this tool will overwrite those tiles that are relevant to both sources, but will not touch those relevant to only the first run. These residual tiles may corrupt the created tile set. It is therefore suggested to manually remove all files from a <DESTINATION> before executing this tool whenever the <SOURCE> changes.
+The tool `coordsCreateTiles` will delete all old tiles from the <DESTINATION> directory. So if you wish to retain older generalized tiles (e.g. in conjunction with the `--no-lod` option) they must not be located in the <DESTINATION> directory.
+
 
 ## AUTHOR
 Written by Robert Buchholz
