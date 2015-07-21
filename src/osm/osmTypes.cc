@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h> //for exit()
 #include <stdint.h>
+#include <math.h> //for fabs()
 
 #include "config.h"
 #include "osmTypes.h"
@@ -450,6 +451,23 @@ bool OsmWay::isClosed() const
            (refs.front().lng == refs.back().lng);
 }
 
+double OsmWay::getArea() const
+{
+    if (refs.front().lat != refs.back().lat ||
+        refs.front().lng != refs.back().lng)
+        return 0.0; // not closed --> no area
+        
+    double area = 0.0;
+    
+    /* Usually, polygon area computations require modulus arithmetic on indices.
+     * But since refs.front() == refs.back(), this works without. */
+    
+    for (uint64_t i = 0; i+1 < refs.size(); i++)
+        area += refs[i].lat * refs[i+1].lng -
+                refs[i].lng * refs[i+1].lat;
+        
+    return fabs(area / 2.0);
+}
 
 
 ostream& operator<<(ostream &out, const OsmWay &way)

@@ -69,6 +69,7 @@ struct OsmWay
         std::vector<uint64_t> referringRelationIds,
         const std::map<uint64_t, std::map<std::string, std::string> > &boundaryRelationTags);
     bool isClosed() const;
+    double getArea() const;
     
 private:
     void     serialize(uint8_t* dest, uint64_t serializedSize, uint64_t nTagBytes);

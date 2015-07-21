@@ -52,8 +52,8 @@ uint64_t RawTags::getSerializedSize(const Tags &tags)
     uint64_t numTagBytes = 0;
     for (const std::pair<std::string, std::string> &kv: tags)
     {
-        numTagBytes += symbolicNameId.count(kv.first)  ? 1 : kv.first.length()  + 1;
-        numTagBytes += symbolicNameId.count(kv.second) ? 1 : kv.second.length() + 1;
+        numTagBytes += symbolicNameId.at(kv.first.c_str()) ? 1 : kv.first.length()  + 1;
+        numTagBytes += symbolicNameId.at(kv.second.c_str()) ? 1 : kv.second.length() + 1;
     }
     
     uint64_t numBytes = varUintNumBytes(numTags) +
@@ -172,10 +172,11 @@ void RawTags::serialize( const Tags &tags, uint64_t numBytes,
     {
         int byteIdx = idx / 8;
         int bitIdx  = 7 - (idx % 8);
-        if (symbolicNameId.count(kv.first))
+        const uint8_t *symbolicKey = symbolicNameId.at(kv.first.c_str());
+        if (symbolicKey)
         {
             isSymbolicName[byteIdx] |= (1 << bitIdx);
-            *(outPos++) = symbolicNameId.at(kv.first);
+            *(outPos++) =  *symbolicKey;
         } else
         {
             const char* key = kv.first.c_str();
@@ -187,10 +188,11 @@ void RawTags::serialize( const Tags &tags, uint64_t numBytes,
         MUST( bitIdx > 0, "logic error");
         bitIdx -= 1;
 
-        if (symbolicNameId.count(kv.second))
+        const uint8_t *symbolicValue = symbolicNameId.at(kv.second.c_str());
+        if (symbolicValue)
         {
             isSymbolicName[byteIdx] |= (1 << bitIdx);
-            *(outPos++) = symbolicNameId.at(kv.second);
+            *(outPos++) = *symbolicValue;
         } else
         {
             const char* val = kv.second.c_str();

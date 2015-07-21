@@ -3,12 +3,11 @@
 #define SYMBOLIC_NAMES_H
 
 #include <stdint.h>
-#include <string>
-#include <map>
+#include "containers/radixTree.h"
 
 extern const char* symbolicNames[];
 extern const uint64_t numSymbolicNames;
-extern const std::map<std::string, uint8_t> symbolicNameId;
+extern const RadixTree<uint8_t> symbolicNameId;
 
 #endif
 

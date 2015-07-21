@@ -1,6 +1,8 @@
 
 #include "symbolicNames.h"
 #include "config.h"
+#include "stdio.h"
+#include "stdlib.h"
 
 const char *symbolicNames[] = {
     "building",
@@ -263,16 +265,16 @@ const char *symbolicNames[] = {
 
 const uint64_t numSymbolicNames = sizeof(symbolicNames) / sizeof(const char*);
 
-std::map<std::string, uint8_t> createSymbolicNameMap()
+RadixTree<uint8_t> createSymbolicNameMap()
 {
     MUST( numSymbolicNames <= 256, "symbolic name overflow");
-    std::map<std::string, uint8_t> res;
+    RadixTree<uint8_t> res;
 
     for (uint64_t i = 0; i < numSymbolicNames; i++)
-        res.insert( std::make_pair( symbolicNames[i], i));
+        res.insert( symbolicNames[i], i);
 
     return res;
 }
 
-const std::map<std::string, uint8_t> symbolicNameId = createSymbolicNameMap();
+const RadixTree<uint8_t> symbolicNameId = createSymbolicNameMap();
 

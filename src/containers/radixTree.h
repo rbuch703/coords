@@ -2,9 +2,7 @@
 #ifndef RADIX_TREE_H
 #define RADIX_TREE_H
 
-#include <vector>
-#include <string.h>
-#include <iostream>
+#include <string.h> //for memset()
 
 /*  The template class RadixTree implements a specialized dictionary that maps 
     strings to values of arbitrary type (specified at compile time as the 
@@ -23,10 +21,27 @@
    
 */
 
+template<typename t> class RadixTreeNode;   //forward
+
+template<typename t>
+class RadixTree {
+
+public: 
+    ~RadixTree();
+    static void deleteChildren(RadixTreeNode<t> &node);
+    bool containsPrefixOf(const char* keyName) const;
+    void insert(const char* keyName, const t& value);
+    const t* at(const char* keyName) const;
+//    void traverse(RadixTreeNode<t> *pos, std::vector<char> &path, int depth = 0);
+
+private:
+    RadixTreeNode<t> root;  
+};
+
 template<typename t>
 class RadixTreeNode {
 public:
-    RadixTreeNode(): value(NULL) {
+    RadixTreeNode(): value(nullptr) {
         memset(children, 0, 256*sizeof(RadixTreeNode*));
         
     }
@@ -36,17 +51,15 @@ public:
 };
 
 template<typename t>
-class RadixTree {
-
-public: 
-
-~RadixTree() {
+RadixTree<t>::~RadixTree() {
     deleteChildren(root);
     if (root.value)
         delete root.value;
 }
 
-static void deleteChildren(RadixTreeNode<t> &node)
+
+template<typename t>
+void RadixTree<t>::deleteChildren(RadixTreeNode<t> &node)
 {
     
     for (int i = 0; i < 256; i++)
@@ -56,12 +69,13 @@ static void deleteChildren(RadixTreeNode<t> &node)
             
         deleteChildren(*node.children[i]);
         delete node.children[i];
-        node.children[i] = NULL;
+        node.children[i] = nullptr;
     }
     delete node.value;
 }
 
-bool containsPrefixOf(const char* keyName) const
+template<typename t>
+bool RadixTree<t>::containsPrefixOf(const char* keyName) const
 {
     const unsigned char* key = (const unsigned char*)keyName;
 
@@ -85,7 +99,8 @@ bool containsPrefixOf(const char* keyName) const
     return pos->value;    
 }
 
-void insert(const char* keyName, const t& value)
+template<typename t>
+void RadixTree<t>::insert(const char* keyName, const t& value)
 {
     const unsigned char* key = (const unsigned char*)keyName;
 
@@ -106,7 +121,9 @@ void insert(const char* keyName, const t& value)
     *(pos->value) = value;
 }
 
-void traverse(RadixTreeNode<t> *pos, std::vector<char> &path, int depth = 0)
+/*
+template<typename t>
+void RadixTree<t>::traverse(RadixTreeNode<t> *pos, std::vector<char> &path, int depth)
 {
     for (int i = 0; i < 256; i++)
         if (pos->children[i])
@@ -121,30 +138,28 @@ void traverse(RadixTreeNode<t> *pos, std::vector<char> &path, int depth = 0)
         
         traverse(pos->children[i], path, depth+1);
         path.pop_back();
-    }
-    
-}
+    }  
+}*/
 
-const t* at(const char* keyName) const
+template<typename t>
+const t* RadixTree<t>::at(const char* keyName) const
 {
     const unsigned char* key = (const unsigned char*)keyName;
     const RadixTreeNode<t> *pos = &root;
     while (*key)
     {
         if (!pos->children[(int)*key])
-            return NULL;
+            return nullptr;
             
         pos = pos->children[(int)*key];
         key++;
     }
     
     if (!pos->value)
-        return NULL;
+        return nullptr;
     return pos->value;
 }
 
-    RadixTreeNode<t> root;  
-};
 
 #endif
 

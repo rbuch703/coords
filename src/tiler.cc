@@ -126,7 +126,7 @@ static const uint64_t MAP_WIDTH_IN_CM     = 2 * (uint64_t)2003750834;
  *        where a simpler simplifier may cause topological errors (e.g. self-overlaps) that
  *        may break rendering. But for simple line strings, a simpler and much faster algorithm
  *        would be sufficient. */
-void addToTileSet(geos::geom::Geometry* &geometry,
+void addToTileSetPreserveTopology(geos::geom::Geometry* &geometry,
                   uint64_t id,
                   GEOMETRY_FLAGS flags,
                   int8_t zIndex,
@@ -169,10 +169,9 @@ void addToTileSet(geos::geom::Geometry* &geometry,
     delete [] tagBytes;
 }
 
-void addLineToTileSet(OsmWay way, int8_t zIndex, LodHandler* handler, 
-                      int coarsestZoomLevel)
+void addToTileSet(OsmWay way, bool isPolygon, int8_t zIndex, LodHandler* handler, 
+                  int coarsestZoomLevel)
 {
-    MUST( ! handler->isArea(), "logic error");
     if (coarsestZoomLevel < 0)
         return;
     
@@ -188,10 +187,15 @@ void addLineToTileSet(OsmWay way, int8_t zIndex, LodHandler* handler,
             continue;
             
         double pixelWidthInCm = MAP_WIDTH_IN_CM / double(256 * (1ull << zoomLevel));
-        //double pixelArea = pixelWidthInCm * pixelWidthInCm; // in [cm²]
+        double pixelArea = pixelWidthInCm * pixelWidthInCm; // in [cm²]
+
         simplifyLine( way.refs, pixelWidthInCm);
-        
-        GenericGeometry gen = serializeWay( way.id, way.refs, tagBytes, numTagBytes, false, zIndex);
+
+        if ( isPolygon && (way.getArea() < pixelArea))
+            break;
+                
+        GenericGeometry gen = serializeWay( way.id, way.refs, tagBytes, numTagBytes, 
+                                            isPolygon, zIndex);
         handler->store(gen, gen.getBounds(), zoomLevel);
     }
     
@@ -237,8 +241,8 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
             }
 
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
-            addToTileSet(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
-                         handler->getZIndex(tagsDict), tags, handler, level);
+            addToTileSetPreserveTopology(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
+                                        handler->getZIndex(tagsDict), tags, handler, level);
 
             delete geosGeom;
         }
@@ -349,16 +353,24 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
 
             if (handler->isArea() && !way.isClosed())
                 continue;
-                
-            if ( handler->isArea())
+            
+            /* we can use the non topology-preserving simplifier, if
+             * - the way does not represent a closed area, OR
+             * - the closed way has at most 5 refs (i.e. at most 4 actual vertices, as
+             *   first == last). In this case, any Douglas-Peucker simplification has at most
+             *   3 vertices, and thus cannot contain any self-intersections.
+             */   
+            if (! handler->isArea() || way.refs.size() <= 5)
             {
+                addToTileSet( way, handler->isArea(), zIndex, handler, level);
+            } else
+            {
+                //cerr << way.refs.size() << endl;
                 geos::geom::Geometry *geosGeom = createGeosGeometry(way, handler->isArea());
-                addToTileSet(geosGeom, way.id, GEOMETRY_FLAGS::WAY_POLYGON,
+                addToTileSetPreserveTopology(geosGeom, way.id, GEOMETRY_FLAGS::WAY_POLYGON,
                              zIndex, way.tags, handler, level);
 
                 delete geosGeom;
-            } else {
-                addLineToTileSet( way, zIndex, handler, level);
             }
 
         }
