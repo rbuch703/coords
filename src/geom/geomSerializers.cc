@@ -203,28 +203,24 @@ static uint64_t getSerializedSize(const geos::geom::LineString *ring, bool rever
     return size;
 }
 
-GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex)
+GenericGeometry serializeWay(uint64_t wayId, const std::vector<OsmGeoPosition> &vertices, const uint8_t *tagBytes, uint64_t numTagBytes, bool asPolygon, int8_t zIndex)
 {
-    OsmGeoPosition v0 = way.refs.front();
-    OsmGeoPosition vn = way.refs.back();
+    OsmGeoPosition v0 = vertices.front();
+    OsmGeoPosition vn = vertices.back();
     
     if (asPolygon)
         MUST( v0.lat == vn.lat && v0.lng == vn.lng, "polygon ring is not closed");
         
-    uint64_t numTagBytes = 0;
-    uint8_t *tagBytes = RawTags::serialize(way.tags, &numTagBytes);
-        
     uint64_t sizeTmp = 
         sizeof(uint8_t)  + // 'type' field
         sizeof( int8_t)   + // 'zIndex' field
-        varUintNumBytes(way.id) + // 'id' field
+        varUintNumBytes(wayId) + // 'id' field
         numTagBytes +
-        varUintNumBytes(way.refs.size());
+        varUintNumBytes(vertices.size());
         
     int64_t prevLat = 0;
     int64_t prevLng = 0;
-    for (const OsmGeoPosition &pos : way.refs)
-    //for (uint64_t i = 0; i < way.numVertices; i++)
+    for (const OsmGeoPosition &pos : vertices)
     {
         int64_t dLat = pos.lat - prevLat;
         int64_t dLng = pos.lng - prevLng;
@@ -240,13 +236,9 @@ GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex)
 
     MUST( sizeTmp < (1ull) <<  32, "polygon size overflow");
     uint32_t numBytes = sizeTmp;
-    //uint32_t numBytesIncludingSizeField = numBytes + sizeof(uint32_t);
     
     uint8_t *outBuf = new uint8_t[numBytes];
     uint8_t *outPos = outBuf;
-    
-    //*(uint32_t*)outPos = numBytes;
-    //outPos += sizeof(uint32_t);
     
     uint8_t *outStart = outPos;
     
@@ -258,24 +250,20 @@ GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex)
     *(int8_t*)outPos = zIndex;
     outPos += sizeof(int8_t);
 
-    outPos += varUintToBytes(way.id, outPos);
-    //*(uint64_t*)outPos = way.id;
-    //outPos += sizeof(uint64_t);
+    outPos += varUintToBytes(wayId, outPos);
 
     memcpy(outPos, tagBytes, numTagBytes);
-    delete [] tagBytes;
     outPos += numTagBytes;
 
     if (asPolygon)
         // ways only consist of a single outer ring (no inner rings)
         outPos += varUintToBytes(1, outPos); 
 
-    outPos += varUintToBytes( way.refs.size(), outPos);
+    outPos += varUintToBytes( vertices.size(), outPos);
     
     prevLat = 0;
     prevLng = 0;
-    for (const OsmGeoPosition &pos : way.refs)
-    //for (uint64_t i = 0; i < way.numVertices; i++)
+    for (const OsmGeoPosition &pos : vertices)
     {
         int64_t dLat = pos.lat - prevLat;
         int64_t dLng = pos.lng - prevLng;
@@ -288,6 +276,20 @@ GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex)
 
     MUST( outPos - outStart == numBytes, " polygon size mismatch");
     return GenericGeometry(outBuf, numBytes, true);
+
+}
+
+
+GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex)
+{
+    uint64_t numTagBytes = 0;
+    uint8_t *tagBytes = RawTags::serialize(way.tags, &numTagBytes);
+
+    GenericGeometry res = serializeWay(way.id, way.refs, tagBytes, numTagBytes, asPolygon, zIndex);
+    delete [] tagBytes;
+    
+    return res;
+    
 }
 
 GenericGeometry serializeNode(const OsmNode &node, int8_t zIndex)

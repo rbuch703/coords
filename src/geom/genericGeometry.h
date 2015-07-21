@@ -30,7 +30,9 @@ typedef std::pair<std::string, std::string> Tag;
 class GenericGeometry {
 public:
     GenericGeometry(FILE* f);
-    GenericGeometry(const GenericGeometry &other);
+    GenericGeometry(const GenericGeometry  &other); //copy constructor
+    GenericGeometry(      GenericGeometry &&other); //move constructor
+    
     GenericGeometry(uint8_t *bytes, uint32_t numBytes, bool takeOwnership);
 
 #ifdef COORDS_MAPNIK_PLUGIN
@@ -40,6 +42,8 @@ public:
     ~GenericGeometry();
     
     void init(FILE *f, bool avoidRealloc);
+    void replaceTags( const TagDictionary &newTags);
+    
     void serialize(FILE* f) const;
     
     FEATURE_TYPE    getFeatureType() const;    //POINT/LINE/POLYGON

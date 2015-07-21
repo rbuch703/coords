@@ -64,6 +64,36 @@ GenericGeometry::GenericGeometry(uint8_t *bytes, uint32_t numBytes, bool takeOwn
     }
 }
 
+GenericGeometry::GenericGeometry(const GenericGeometry &other)
+{
+    if (this == &other)
+        return;
+        
+    this->numBytes = other.numBytes;
+    this->bytes = new uint8_t[this->numBytes];
+    memcpy( this->bytes, other.bytes, this->numBytes);
+}
+
+GenericGeometry::GenericGeometry(GenericGeometry &&other)
+{
+    //std::cout << "move constructor used" << std::endl;
+    if (this == &other)
+        return;
+        
+    this->numBytes = other.numBytes;
+    this->bytes = other.bytes;
+    
+    other.numBytes = 0;
+    other.bytes = nullptr;
+}
+
+
+GenericGeometry::~GenericGeometry()
+{
+    delete [] this->bytes;
+}
+
+
 void GenericGeometry::init(FILE* f, bool avoidRealloc)
 {
     MUST(fread( &this->numBytes, sizeof(uint32_t), 1, f) == 1, "feature read error");
@@ -81,23 +111,45 @@ void GenericGeometry::init(FILE* f, bool avoidRealloc)
     MUST(fread( this->bytes, this->numBytes, 1, f) == 1, "feature read error");    
 }
 
-
-
-GenericGeometry::GenericGeometry(const GenericGeometry &other)
+void GenericGeometry::replaceTags( const TagDictionary &newTags)
 {
-    if (this == &other)
-        return;
-        
-    this->numBytes = other.numBytes;
-    this->bytes = new uint8_t[this->numBytes];
-    memcpy( this->bytes, other.bytes, this->numBytes);
-}
+    uint8_t* tagsStart = this->bytes + sizeof(uint8_t) + sizeof(int8_t);
+    int nRead = 0;
+    varUintFromBytes( tagsStart, &nRead);   //read past 'id' field
+    tagsStart += nRead;
+    
+    uint32_t numTagBytes = varUintFromBytes(tagsStart, &nRead);
+    uint8_t* geomStart = tagsStart + nRead + numTagBytes;
+    MUST( geomStart < this->bytes + this->numBytes, "overflow");
+    
+    uint64_t numNewTagBytes = 0;
+    Tags tagsTmp( newTags.begin(), newTags.end());
+    uint8_t *newTagBytes = RawTags::serialize(tagsTmp, &numNewTagBytes);
+    
+    uint64_t newNumBytes = numBytes - (numTagBytes    + varUintNumBytes(numTagBytes))
+                                    + (numNewTagBytes); //includes the size field itself
+    
+    uint8_t *newBytes = new uint8_t[newNumBytes];
+    memcpy( newBytes, this->bytes, (tagsStart - this->bytes));
+    uint8_t *newPos = newBytes +   (tagsStart - this->bytes);
+    
+    memcpy( newPos, newTagBytes, numNewTagBytes);
+    delete [] newTagBytes;
+    newPos += numNewTagBytes;
 
-
-GenericGeometry::~GenericGeometry()
-{
+    uint64_t numNonGeoBytes =      (geomStart - this->bytes);
+    memcpy( newPos, geomStart, this->numBytes - numNonGeoBytes);
+    newPos += this->numBytes - numNonGeoBytes;
+    
+    MUST( newPos - newBytes == (int64_t)newNumBytes, "serialization size mismatch");
     delete [] this->bytes;
+    
+    this->bytes = newBytes;
+    this->numBytes          = newNumBytes;
+    this->numBytesAllocated = newNumBytes;
 }
+
+
 
 
 FEATURE_TYPE GenericGeometry::getFeatureType() const 

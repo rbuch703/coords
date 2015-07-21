@@ -16,6 +16,7 @@
 #include "geom/envelope.h"
 #include "geom/geomSerializers.h"
 #include "geom/srsConversion.h"
+#include "geom/simplify.h"
 #include "containers/osmNodeStore.h"
 #include "containers/osmRelationStore.h"
 #include "containers/reverseIndex.h"
@@ -129,22 +130,16 @@ void addToTileSet(geos::geom::Geometry* &geometry,
                   uint64_t id,
                   GEOMETRY_FLAGS flags,
                   int8_t zIndex,
-                  RawTags tags,
+                  Tags &tags,
                   LodHandler* handler,
-                  int coarsestZoomLevel,
-                  bool createLods
-                  )
+                  int coarsestZoomLevel)
 {
     if (coarsestZoomLevel < 0)
         return;
     
-    if (!createLods)
-    {
-        GenericGeometry gen = serialize( geometry, id, flags, zIndex, tags);
-        handler->store(gen, gen.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
-        return;
-    }
-
+    uint8_t *tagBytes = RawTags::serialize(tags);
+    RawTags rawTags(tagBytes);
+    
     const void* const* storeAtLevel = handler->getZoomLevels();
     for (int zoomLevel = LodHandler::MAX_ZOOM_LEVEL; zoomLevel >= coarsestZoomLevel; zoomLevel--)
     {
@@ -164,13 +159,45 @@ void addToTileSet(geos::geom::Geometry* &geometry,
         //is still bigger than a single pixel after the simplification
         if (!handler->isArea() || simplifiedGeometry->getArea() >= pixelArea)
         {
-            GenericGeometry gen = serialize( simplifiedGeometry, id, flags, zIndex, tags);
+            GenericGeometry gen = serialize( simplifiedGeometry, id, flags, zIndex, rawTags);
             handler->store(gen, gen.getBounds(), zoomLevel);
         }
         delete geometry;
         geometry = simplifiedGeometry;
     }
+    
+    delete [] tagBytes;
 }
+
+void addLineToTileSet(OsmWay way, int8_t zIndex, LodHandler* handler, 
+                      int coarsestZoomLevel)
+{
+    MUST( ! handler->isArea(), "logic error");
+    if (coarsestZoomLevel < 0)
+        return;
+    
+    const void* const* storeAtLevel = handler->getZoomLevels();
+    
+    uint64_t numTagBytes = 0;
+    uint8_t *tagBytes = RawTags::serialize(way.tags, &numTagBytes);
+    
+    
+    for (int zoomLevel = LodHandler::MAX_ZOOM_LEVEL; zoomLevel >= coarsestZoomLevel; zoomLevel--)
+    {
+        if (!storeAtLevel[zoomLevel])
+            continue;
+            
+        double pixelWidthInCm = MAP_WIDTH_IN_CM / double(256 * (1ull << zoomLevel));
+        //double pixelArea = pixelWidthInCm * pixelWidthInCm; // in [cm²]
+        simplifyLine( way.refs, pixelWidthInCm);
+        
+        GenericGeometry gen = serializeWay( way.id, way.refs, tagBytes, numTagBytes, false, zIndex);
+        handler->store(gen, gen.getBounds(), zoomLevel);
+    }
+    
+    delete [] tagBytes;
+}
+
 
 void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory, bool createLods)
 {
@@ -192,25 +219,32 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
         if (! bounds.isValid())
             continue;
         
-        RawTags tags = geom.getTags();
-        TagDictionary tagsDict = tags.asDictionary();
+        TagDictionary tagsDict = geom.getTags().asDictionary();
 
         for (LodHandler* handler: lodHandlers)
         {
             int level = handler->applicableUpToZoomLevel(tagsDict, true);
-            
+            Tags tags( tagsDict.begin(), tagsDict.end());
+
             if (level < 0) //not applicable at all
                 continue;
 
+            if (!createLods)    //just store the full geometry
+            {
+                geom.replaceTags(tagsDict);
+                handler->store( geom, geom.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
+                continue;
+            }
+
             geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
             addToTileSet(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
-                         handler->getZIndex(tagsDict), tags, handler, level, createLods);
+                         handler->getZIndex(tagsDict), tags, handler, level);
 
             delete geosGeom;
         }
 
         if (++pos % 10000 == 0)
-            cout << "              " << (pos/1000) << "k polygons read" << endl;
+            cout << "        " << (pos/1000) << "k polygons read" << endl;
     }
     fclose(f);
 }
@@ -222,7 +256,7 @@ void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirect
     for (Chunk nodeChunk : nodes)
     {
         if (++numNodesRead % 1000000 == 0)
-            cout << "\t      " << (numNodesRead/1000000) << "M nodes read" << endl;
+            cout << "        " << (numNodesRead/1000000) << "M nodes read" << endl;
 
         OsmNode node(nodeChunk.getDataPtr());
         TagDictionary tagsDict( node.tags.begin(), node.tags.end());
@@ -246,12 +280,10 @@ void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirect
                     
                 handler->store(node, zoomLevel, handler->getZIndex(tagsDict));
             }
-            //addToTileSet(geosGeom, geom.getEntityId(), tags, handler, level);
-            //pointsStorage.add(node);
             
         }
     }
-    cerr << "\t          total: " << numNodesRead << " nodes." << endl;
+    cerr << "        total: " << numNodesRead << " nodes." << endl;
 }
 
 void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory, bool createLods)
@@ -260,16 +292,16 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
     uint64_t pos = 0;
     uint64_t numVertices = 0;
 
-    cerr << "\t          loading tags from boundary relations" << endl;
+    cerr << "        loading tags from boundary relations" << endl;
     map<uint64_t,TagDictionary> boundaryRelationTags= loadBoundaryRelationTags(storageDirectory);
         
     ReverseIndex wayReverseIndex(storageDirectory + "wayReverse", false);
-    cerr << "\t          loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
+    cerr << "        loaded " << boundaryRelationTags.size() << " boundary relations." << endl;
     
     // the IDs of ways that serve as outer ways of multipolygons.
     std::set<uint64_t> outerWayIds = 
         getSetFromFileEntries<uint64_t>( storageDirectory + "outerWayIds.bin");
-    std::cout << "\t          " << (outerWayIds.size()/1000) 
+    std::cout << "        " << (outerWayIds.size()/1000) 
               << "k ways are part of outer ways of multipolygons" << endl;      
 
 
@@ -302,21 +334,33 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
         for (LodHandler* handler: lodHandlers)
         {
             int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
-            if (level < 0)
+            if (level < 0)  //not applicable
                 continue;
-                
+
+            way.tags = vector<OsmKeyValuePair>(tagsDict.begin(), tagsDict.end());
+            int8_t zIndex = handler->getZIndex(tagsDict);
+            
+            if (!createLods)    //just store the full geometry
+            {
+                GenericGeometry gen = serializeWay( way, handler->isArea(), zIndex);
+                handler->store(gen, gen.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
+                continue;
+            }
+
             if (handler->isArea() && !way.isClosed())
                 continue;
                 
-            way.tags = vector<OsmKeyValuePair>(tagsDict.begin(), tagsDict.end());
-            geos::geom::Geometry *geosGeom = createGeosGeometry(way, handler->isArea());
-            uint8_t *tags = RawTags::serialize(way.tags);
-            addToTileSet(geosGeom, way.id, 
-                         handler->isArea() ? GEOMETRY_FLAGS::WAY_POLYGON : GEOMETRY_FLAGS::LINE,
-                         handler->getZIndex(tagsDict), RawTags(tags), handler, level, createLods);
-            delete [] tags;
+            if ( handler->isArea())
+            {
+                geos::geom::Geometry *geosGeom = createGeosGeometry(way, handler->isArea());
+                addToTileSet(geosGeom, way.id, GEOMETRY_FLAGS::WAY_POLYGON,
+                             zIndex, way.tags, handler, level);
 
-            delete geosGeom;
+                delete geosGeom;
+            } else {
+                addLineToTileSet( way, zIndex, handler, level);
+            }
+
         }
     }
 
@@ -367,7 +411,7 @@ int main(int argc, char** argv)
 
     cerr << "    stage 1c: parsing ways" << endl;
     parseWays(lodHandlers, storageDirectory, createLods);
-    
+
     cout << endl << "stage 2/2: subdividing meta nodes to individual nodes of no more than "
          << (LodHandler::MAX_NODE_SIZE/1000000) << "MB." << endl;
     /* the number of concurrently open files for a given process is limited by the OS (

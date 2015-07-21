@@ -73,6 +73,7 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/geom/genericGeometry.cc
                src/geom/geomSerializers.cc
                src/geom/ring.cc
+               src/geom/simplify.cc
                src/geom/srsConversion.cc
                src/containers/chunkedFile.cc
                src/containers/osmNodeStore.cc

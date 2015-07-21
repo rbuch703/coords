@@ -11,6 +11,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 //forward declaration
 namespace geos { namespace geom { class Geometry; } }
@@ -18,6 +19,7 @@ namespace geos { namespace geom { class Geometry; } }
 void serializePolygon(const Ring &poly, const Tags &tags, uint64_t relId, int8_t zIndex, FILE* fOut);
 
 GenericGeometry serializeWay(const OsmWay &way, bool asPolygon, int8_t zIndex);
+GenericGeometry serializeWay(uint64_t wayId, const std::vector<OsmGeoPosition> &vertices, const uint8_t *tagBytes, uint64_t numTagBytes, bool asPolygon, int8_t zIndex);
 GenericGeometry serializeNode(const OsmNode &node, int8_t zIndex);
 
 
