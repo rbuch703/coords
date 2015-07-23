@@ -160,7 +160,10 @@ void addToTileSetPreserveTopology(geos::geom::Geometry* &geometry,
         if (!handler->isArea() || simplifiedGeometry->getArea() >= pixelArea)
         {
             GenericGeometry gen = serialize( simplifiedGeometry, id, flags, zIndex, rawTags);
-            handler->store(gen, gen.getBounds(), zoomLevel);
+            #pragma omp critical (STORE_GEOMETRY)
+            {
+                handler->store(gen, gen.getBounds(), zoomLevel);
+            }
         }
         delete geometry;
         geometry = simplifiedGeometry;
@@ -196,12 +199,32 @@ void addToTileSet(OsmWay way, bool isPolygon, int8_t zIndex, LodHandler* handler
                 
         GenericGeometry gen = serializeWay( way.id, way.refs, tagBytes, numTagBytes, 
                                             isPolygon, zIndex);
-        handler->store(gen, gen.getBounds(), zoomLevel);
+        #pragma omp critical (STORE_GEOMETRY)
+        {
+            handler->store(gen, gen.getBounds(), zoomLevel);
+        }
     }
-    
     delete [] tagBytes;
 }
 
+static const int MULTIPOLYGON_BATCH_SIZE = 20000;
+std::vector<GenericGeometry> getNextMultipolygonBatch( FILE* f)
+{
+    std::vector<GenericGeometry> geometries;
+    int ch;
+    uint64_t oldPos = ftell(f);
+    while (geometries.size() < MULTIPOLYGON_BATCH_SIZE && (ch = fgetc(f)) != EOF)
+    {
+        ungetc(ch, f);
+        geometries.push_back(GenericGeometry(f));
+        MUST( geometries.back().getEntityType() == OSM_ENTITY_TYPE::RELATION, 
+             "found multipolygon that is not a relation");
+        
+    }
+    cout << "read " << ((ftell(f) - oldPos)/1000000) << "MB of multipolygon data in one batch" << endl;
+    return geometries;
+
+}
 
 void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory, bool createLods)
 {
@@ -209,46 +232,53 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
     
     MUST(f, "cannot open file 'multipolygons.bin'. Did you forget to run the multipolygon reconstructor?");
     int pos = 0;
-    int ch;
-    while ( (ch = fgetc(f)) != EOF)
+    std::vector<GenericGeometry> geometries;
+    
+    while ( (geometries = getNextMultipolygonBatch(f)).size() )
     {
-        ungetc(ch, f);
-        GenericGeometry geom(f);
-        MUST( geom.getEntityType() == OSM_ENTITY_TYPE::RELATION, 
-             "found multipolygon that is not a relation");
-        convertWgs84ToWebMercator(geom);
-
-        Envelope bounds = geom.getBounds();
+        GenericGeometry *geoms = geometries.data();
+        uint64_t numGeoms = geometries.size();
         
-        if (! bounds.isValid())
-            continue;
         
-        TagDictionary tagsDict = geom.getTags().asDictionary();
-
-        for (LodHandler* handler: lodHandlers)
+        #pragma omp parallel for schedule (dynamic, 100)
+        for (uint64_t i = 0; i < numGeoms; i++)
         {
-            int level = handler->applicableUpToZoomLevel(tagsDict, true);
-            Tags tags( tagsDict.begin(), tagsDict.end());
+            GenericGeometry &geom = geoms[i];
+            convertWgs84ToWebMercator(geom);
 
-            if (level < 0) //not applicable at all
+            Envelope bounds = geom.getBounds();
+            
+            if (! bounds.isValid())
                 continue;
+            
+            TagDictionary tagsDict = geom.getTags().asDictionary();
 
-            if (!createLods)    //just store the full geometry
+            for (LodHandler* handler: lodHandlers)
             {
-                geom.replaceTags(tagsDict);
-                handler->store( geom, geom.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
-                continue;
+                int level = handler->applicableUpToZoomLevel(tagsDict, true);
+                Tags tags( tagsDict.begin(), tagsDict.end());
+
+                if (level < 0) //not applicable at all
+                    continue;
+
+                if (!createLods)    //just store the full geometry
+                {
+                    geom.replaceTags(tagsDict);
+                    #pragma omp critical (STORE_GEOMETRY)
+                    {
+                        handler->store( geom, geom.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
+                    }
+                    continue;
+                }
+
+                geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
+                addToTileSetPreserveTopology(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
+                                             handler->getZIndex(tagsDict), tags, handler, level);
+
+                delete geosGeom;
             }
-
-            geos::geom::Geometry *geosGeom = createGeosGeometry(geom);
-            addToTileSetPreserveTopology(geosGeom, geom.getEntityId(), geom.getGeometryFlags(), 
-                                        handler->getZIndex(tagsDict), tags, handler, level);
-
-            delete geosGeom;
         }
-
-        if (++pos % 10000 == 0)
-            cout << "        " << (pos/1000) << "k polygons read" << endl;
+        cout << "        " << ((++pos)*10) << "k polygons read" << endl;
     }
     fclose(f);
 }
@@ -290,6 +320,27 @@ void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirect
     cerr << "        total: " << numNodesRead << " nodes." << endl;
 }
 
+static const int WAY_BATCH_SIZE = 100000;
+std::vector<OsmWay> getNextWayBatch( ChunkedFile::Iterator &current, const ChunkedFile::Iterator &beyond)
+{
+
+    uint64_t oldPos = (*current).getPositionInFile();
+    std::vector<OsmWay> geometries;
+    while (geometries.size() < WAY_BATCH_SIZE && (current != beyond))
+    {
+        const uint8_t* ptr = (*current).getDataPtr();
+        ++current;
+        
+        geometries.push_back(OsmWay(ptr));
+    }
+
+    cout << "read " << (((*current).getPositionInFile() - oldPos)/1000000) << "MB of way data in one batch" << endl;
+
+    return geometries;
+
+}
+
+
 void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirectory, bool createLods)
 {
     uint64_t numWays = 0;
@@ -308,71 +359,86 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
     std::cout << "        " << (outerWayIds.size()/1000) 
               << "k ways are part of outer ways of multipolygons" << endl;      
 
-
     pos = 0;
-    for (const Chunk & chunk : ChunkedFile(storageDirectory + "ways.data"))
+    ChunkedFile file(storageDirectory + "ways.data");
+    ChunkedFile::Iterator current = file.begin();
+    ChunkedFile::Iterator beyond  = file.end();
+    
+    std::vector<OsmWay> geometries;
+   
+    while ( (geometries = getNextWayBatch(current, beyond)).size() )
     {
-        const uint8_t* ptr = chunk.getDataPtr();
-        OsmWay way(ptr);
-        pos += 1;
-        if (pos % 1000000 == 0)
-            cout << (pos / 1000000) << "M ways read" << endl;
+        pos += geometries.size();
+        //if (pos % 1000000 == 0)
+        cout << (pos / 1000000) << "M ways read" << endl;
 
-        if (way.refs.size() < 2)
-        {
-            cout << ESC_FG_YELLOW << "[WARN] way " << way.id 
-                 << " has less than two vertices. Skipping." << ESC_RESET << endl;
-             continue;
-        }
-
-        numWays += 1;
-        numVertices += way.refs.size();
-        convertWgs84ToWebMercator(way);
-
-        if (wayReverseIndex.isReferenced(way.id))
-            way.addTagsFromBoundaryRelations( wayReverseIndex.getReferencingRelations(way.id),
-                                              boundaryRelationTags);
+        OsmWay *ways = geometries.data();
+        uint64_t numWays = geometries.size();
         
-
-        TagDictionary tagsDict( way.tags.begin(), way.tags.end());
-        for (LodHandler* handler: lodHandlers)
+        
+        #pragma omp parallel for schedule (dynamic, 1000)
+        for (uint64_t i = 0; i < numWays; i++)
         {
-            int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
-            if (level < 0)  //not applicable
-                continue;
 
-            way.tags = vector<OsmKeyValuePair>(tagsDict.begin(), tagsDict.end());
-            int8_t zIndex = handler->getZIndex(tagsDict);
-            
-            if (!createLods)    //just store the full geometry
+            OsmWay &way = ways[i];
+            if (way.refs.size() < 2)
             {
-                GenericGeometry gen = serializeWay( way, handler->isArea(), zIndex);
-                handler->store(gen, gen.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
-                continue;
+                cout << ESC_FG_YELLOW << "[WARN] way " << way.id 
+                     << " has less than two vertices. Skipping." << ESC_RESET << endl;
+                 continue;
             }
 
-            if (handler->isArea() && !way.isClosed())
-                continue;
+            numWays += 1;
+            numVertices += way.refs.size();
+            convertWgs84ToWebMercator(way);
+
+            if (wayReverseIndex.isReferenced(way.id))
+                way.addTagsFromBoundaryRelations( wayReverseIndex.getReferencingRelations(way.id),
+                                                  boundaryRelationTags);
             
-            /* we can use the non topology-preserving simplifier, if
-             * - the way does not represent a closed area, OR
-             * - the closed way has at most 5 refs (i.e. at most 4 actual vertices, as
-             *   first == last). In this case, any Douglas-Peucker simplification has at most
-             *   3 vertices, and thus cannot contain any self-intersections.
-             */   
-            if (! handler->isArea() || way.refs.size() <= 5)
-            {
-                addToTileSet( way, handler->isArea(), zIndex, handler, level);
-            } else
-            {
-                //cerr << way.refs.size() << endl;
-                geos::geom::Geometry *geosGeom = createGeosGeometry(way, handler->isArea());
-                addToTileSetPreserveTopology(geosGeom, way.id, GEOMETRY_FLAGS::WAY_POLYGON,
-                             zIndex, way.tags, handler, level);
 
-                delete geosGeom;
+            TagDictionary tagsDict( way.tags.begin(), way.tags.end());
+            for (LodHandler* handler: lodHandlers)
+            {
+                int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
+                if (level < 0)  //not applicable
+                    continue;
+
+                way.tags = vector<OsmKeyValuePair>(tagsDict.begin(), tagsDict.end());
+                int8_t zIndex = handler->getZIndex(tagsDict);
+                
+                if (!createLods)    //just store the full geometry
+                {
+                    GenericGeometry gen = serializeWay( way, handler->isArea(), zIndex);
+                    #pragma omp critical (STORE_GEOMETRY)
+                    {
+                        handler->store(gen, gen.getBounds(), LodHandler::MAX_ZOOM_LEVEL);
+                    }
+                    continue;
+                }
+
+                if (handler->isArea() && !way.isClosed())
+                    continue;
+                
+                /* we can use the non topology-preserving simplifier, if
+                 * - the way does not represent a closed area, OR
+                 * - the closed way has at most 5 refs (i.e. at most 4 actual vertices, as
+                 *   first == last). In the latter case, any Douglas-Peucker simplification has at most
+                 *   3 vertices, and thus cannot contain any self-intersections.
+                 */   
+                if (! handler->isArea() || way.refs.size() <= 5)
+                {
+                    addToTileSet( way, handler->isArea(), zIndex, handler, level);
+                } else
+                {
+                    //cerr << way.refs.size() << endl;
+                    geos::geom::Geometry *geosGeom = createGeosGeometry(way, handler->isArea());
+                    addToTileSetPreserveTopology(geosGeom, way.id, GEOMETRY_FLAGS::WAY_POLYGON,
+                                 zIndex, way.tags, handler, level);
+
+                    delete geosGeom;
+                }
             }
-
         }
     }
 

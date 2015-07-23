@@ -554,10 +554,13 @@ std::vector<uint64_t> buildMultipolygonGeometry(const std::string &storageDirect
             {
                 TagDictionary tags = getMultipolygonTags(poly, rel, ways, outerTags);
                 
-                #pragma omp critical
+                #pragma omp critical (SERIALIZE_POLYGON)
                 {
                     serializePolygon(*poly, Tags(tags.begin(), tags.end()), rel.id, 0, fOut);
-                    
+                }
+                
+                #pragma omp critical (ADD_WAY_ID)
+                {
                     for (uint64_t wayId : poly->wayIds)
                         outerWayIds.push_back(wayId);
                 }

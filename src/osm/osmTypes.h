@@ -57,6 +57,8 @@ struct OsmWay
             std::vector<OsmKeyValuePair> tags = std::vector<OsmKeyValuePair>());
             
     OsmWay( const uint8_t* &data_ptr);
+    OsmWay( OsmWay &&other);
+    OsmWay( const OsmWay &other) = default;
 
     uint64_t getSerializedSize(uint64_t *numTagBytesOut = nullptr) const;
     void serialize(FILE* f);

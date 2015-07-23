@@ -243,6 +243,16 @@ OsmWay::OsmWay( const uint8_t* &data)
         tags.push_back( std::make_pair(kv.first, kv.second));
 }
 
+OsmWay::OsmWay( OsmWay &&other)
+{
+    id = other.id;
+    version = other.version;
+    refs.swap( other.refs);
+    tags.swap( other.tags);
+}
+
+
+
 uint64_t OsmWay::getSerializedSize(uint64_t *numTagBytesOut) const
 {
     uint64_t nTagBytes = RawTags::getSerializedSize(tags);
