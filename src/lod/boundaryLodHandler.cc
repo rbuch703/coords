@@ -8,7 +8,7 @@ BoundaryLodHandler::BoundaryLodHandler(std::string tileDirectory, std::string ba
 }
 
 
-int BoundaryLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/) const
+int BoundaryLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/, double) const
 {
     if (tags.count("boundary") && tags.at("boundary") == "administrative")
     {

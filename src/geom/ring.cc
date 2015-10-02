@@ -29,6 +29,14 @@ Ring::Ring(geos::geom::Polygon *geosPolygon, const std::vector<uint64_t> wayIds)
     area = this->geosPolygon->getArea();
     MUST( area > 0, "ring without area");
     
+    const geos::geom::LineString *outer = this->geosPolygon->getExteriorRing();
+    const geos::geom::CoordinateSequence *coords = outer->getCoordinatesRO();
+    
+    for (const geos::geom::Coordinate &v : *coords->toVector())
+    {
+        bounds.add( v.x, v.y);
+    }
+    
 }
 
 double Ring::getArea() const
@@ -197,6 +205,13 @@ bool Ring::containsAsInner(const Ring &other) const
 
 bool Ring::contains(const Ring &other) const
 {
+    if (! bounds.contains(other.bounds)) 
+    {
+        //#warning debug test;
+        //MUST(! this->geosPolygon->contains(other.geosPolygon), "geometric error");
+        return false;
+    }
+
     return this->geosPolygon->contains(other.geosPolygon);
 }
 
@@ -204,6 +219,14 @@ bool Ring::boundariesTouch(const Ring &a, const Ring &b)
 {
     // cf. http://en.wikipedia.org/wiki/DE-9IM */
     static const std::string touchesMatrix = "****T****";
+    
+    if (! a.bounds.overlapsWith(b.bounds))
+    {
+        //#warning debug test;
+        //MUST(!a.geosPolygon->relate( b.geosPolygon, touchesMatrix ), "geometric error");
+        return false;
+    }
+    
     return a.geosPolygon->relate( b.geosPolygon, touchesMatrix );
 }
 
@@ -211,6 +234,14 @@ bool Ring::interiorIntersectsWith(const Ring &other) const
 {
     // cf. http://en.wikipedia.org/wiki/DE-9IM */
     static const std::string interiorsIntersectMatrix = "2********";
+
+    if (! bounds.overlapsWith(other.bounds))
+    {
+        //#warning debug test;
+        //MUST(!geosPolygon->relate( other.geosPolygon, interiorsIntersectMatrix), "geometric error");
+        return false;
+    }
+
     return geosPolygon->relate( other.geosPolygon, interiorsIntersectMatrix);
 }
 

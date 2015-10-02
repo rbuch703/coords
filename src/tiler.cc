@@ -28,8 +28,11 @@
 #include "lod/placeLodHandler.h"
 #include "lod/buildingPolygonLodHandler.h"
 #include "lod/landusePolygonLodHandler.h"
+#include "lod/landuseOverlayPolygonLodHandler.h"
 #include "lod/waterPolygonLodHandler.h"
 #include "lod/roadLodHandler.h"
+#include "lod/roadLabelLodHandler.h"
+#include "lod/roadMinorLabelLodHandler.h"
 #include "lod/boundaryLodHandler.h"
 #include "lod/waterwayLodHandler.h"
 
@@ -255,7 +258,8 @@ void parsePolygons(std::vector<LodHandler*> &lodHandlers, std::string storageDir
 
             for (LodHandler* handler: lodHandlers)
             {
-                int level = handler->applicableUpToZoomLevel(tagsDict, true);
+                //FIXME: compute actual area size
+                int level = handler->applicableUpToZoomLevel(tagsDict, true, 0.0);
                 Tags tags( tagsDict.begin(), tagsDict.end());
 
                 if (level < 0) //not applicable at all
@@ -299,8 +303,8 @@ void parseNodes(std::vector<LodHandler*> &lodHandlers, std::string storageDirect
         
         for (LodHandler* handler : lodHandlers)
         {
-            int coarsestZoomLevel = handler->applicableUpToZoomLevel(tagsDict, true);
-            
+            int coarsestZoomLevel = handler->applicableUpToZoomLevel(tagsDict, true, 0.0);
+            node.tags = Tags(tagsDict.begin(), tagsDict.end());
             if (coarsestZoomLevel < 0) //not applicable at all
                 continue;
 
@@ -397,10 +401,10 @@ void parseWays(std::vector<LodHandler*> &lodHandlers, std::string storageDirecto
                                                   boundaryRelationTags);
             
 
-            TagDictionary tagsDict( way.tags.begin(), way.tags.end());
             for (LodHandler* handler: lodHandlers)
             {
-                int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed());
+                TagDictionary tagsDict( way.tags.begin(), way.tags.end());
+                int level = handler->applicableUpToZoomLevel(tagsDict, way.isClosed(), way.getArea());
                 if (level < 0)  //not applicable
                     continue;
 
@@ -456,8 +460,11 @@ int main(int argc, char** argv)
     std::vector<LodHandler*> lodHandlers;
     lodHandlers.push_back( new BuildingPolygonLodHandler(tileDirectory, "building"));
     lodHandlers.push_back( new LandusePolygonLodHandler(tileDirectory, "landuse"));
+    lodHandlers.push_back( new LanduseOverlayPolygonLodHandler(tileDirectory, "landuseOverlay"));
     lodHandlers.push_back( new WaterPolygonLodHandler(tileDirectory, "water"));
     lodHandlers.push_back( new RoadLodHandler(tileDirectory, "road"));
+    lodHandlers.push_back( new RoadLabelLodHandler(tileDirectory, "roadLabel"));
+    lodHandlers.push_back( new RoadMinorLabelLodHandler(tileDirectory, "roadMinorLabel"));
     lodHandlers.push_back( new BoundaryLodHandler(tileDirectory, "boundary"));
     lodHandlers.push_back( new WaterwayLodHandler(tileDirectory, "waterway"));
     

@@ -10,12 +10,14 @@ BuildingPolygonLodHandler::BuildingPolygonLodHandler(std::string tileDirectory, 
 }
 
 
-int BuildingPolygonLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const
+int BuildingPolygonLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing, double) const
 {
     if (!isClosedRing)
         return -1;
         
-    if (tags.count("building") && tags["building"] != "no")
+    if (tags.count("building") && tags["building"] != "no"
+                               && tags["building"] != "0"
+                               && tags["building"] != "false")
         return 0;
         
     if (tags.count("railway") && tags["railway"] == "station")

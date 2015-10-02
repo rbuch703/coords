@@ -10,10 +10,13 @@ PlaceLodHandler::PlaceLodHandler(std::string tileDirectory, std::string baseName
 }
 
 
-int PlaceLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/) const
+int PlaceLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/, double) const
 {
     if (tags.count("place"))
+    {
+        tags.insert( make_pair("type", tags["place"]));
         return 0;
+    }
 
     return -1;
 }
@@ -28,6 +31,7 @@ int PlaceLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClose
  */
 int8_t PlaceLodHandler::getZIndex(const TagDictionary &tags) const
 {
+
     int64_t pop = 0;
     if (tags.count("population"))
         pop = atoll( tags.at("population").c_str());
@@ -35,9 +39,10 @@ int8_t PlaceLodHandler::getZIndex(const TagDictionary &tags) const
     if (pop < 1)
         pop = 1;
         
-    uint64_t popLog = log(pop) / log(1.2);
+    uint64_t popLog = - log(pop) / log(1.2);
     
     return popLog > 127 ? 127 : popLog;
+    //return 0;
     
 }
 

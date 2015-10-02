@@ -40,6 +40,16 @@ bool Envelope::overlapsWith(const Envelope &other) const
            (max( xMin, other.xMin) <= min( xMax, other.xMax));
 }
 
+bool Envelope::contains(const Envelope &other) const
+{   
+    if (xMin > xMax || yMin > yMax) //invalid --> not yet initialized
+        return false;
+
+    return (yMin <= other.yMin && xMin <= other.xMin && 
+            yMax >= other.yMax && xMax >= other.xMax);
+}
+
+
 bool Envelope::isValid() const
 {
     return (xMin <= xMax && yMin <= yMax);

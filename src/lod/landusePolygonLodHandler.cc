@@ -31,15 +31,34 @@ LandusePolygonLodHandler::LandusePolygonLodHandler(std::string tileDirectory, st
 }
 
 
-int LandusePolygonLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const
+int LandusePolygonLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing, double) const
 {
     if (!isClosedRing)
         return -1;
         
-    if (tags.count("landuse") && landuses.count(tags["landuse"])) return 0;
-    if (tags.count("natural") && naturals.count(tags["natural"])) return 0;
-    if (tags.count("leisure") && leisures.count(tags["leisure"])) return 0;
-    if (tags.count("amenity") && amenities.count(tags["amenity"])) return 0;
+    if (tags.count("landuse") && landuses.count(tags["landuse"])) 
+    {
+        tags.insert( make_pair("type", tags["landuse"]));
+        return 0;
+    }
+    
+    if (tags.count("leisure") && leisures.count(tags["leisure"])) 
+    {
+        tags.insert( make_pair("type", tags["leisure"]));
+        return 0;
+    }
+
+    if (tags.count("natural") && naturals.count(tags["natural"])) 
+    {
+        tags.insert( make_pair("type", tags["natural"]) );
+        return 0;
+    }
+
+    if (tags.count("amenity") && amenities.count(tags["amenity"])) 
+    {
+        tags.insert( make_pair("type", tags["amenity"]) );
+        return 0;
+    }
 
     if (tags.count("place") && (tags["place"] == "island" || tags["place"] == "islet"))
         return 0;

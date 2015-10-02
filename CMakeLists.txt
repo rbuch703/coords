@@ -88,10 +88,13 @@ ADD_EXECUTABLE(coordsCreateTiles
                src/lod/addressLodHandler.cc
                src/lod/placeLodHandler.cc
                src/lod/roadLodHandler.cc
+               src/lod/roadLabelLodHandler.cc
+               src/lod/roadMinorLabelLodHandler.cc
                src/lod/boundaryLodHandler.cc
                src/lod/waterwayLodHandler.cc
                src/lod/buildingPolygonLodHandler.cc
                src/lod/landusePolygonLodHandler.cc
+               src/lod/landuseOverlayPolygonLodHandler.cc
                src/lod/waterPolygonLodHandler.cc
                )
 

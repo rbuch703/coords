@@ -8,6 +8,7 @@
 
 #include "osm/osmTypes.h"
 #include "geom/ringSegment.h"
+#include "geom/envelope.h"
 
 
 
@@ -55,7 +56,8 @@ public:
 
 private:
 //    std::vector<OsmGeoPosition> vertices;
-    geos::geom::Polygon      *geosPolygon;
+    const geos::geom::Polygon * const geosPolygon;
+    Envelope bounds;
     double area;
 
 public:

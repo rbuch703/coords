@@ -15,6 +15,7 @@ public:
 
     void add (int32_t x, int32_t y);
     bool overlapsWith(const Envelope &other) const;
+    bool contains(const Envelope &other) const;
     bool isValid() const;    
 public:
     int32_t xMin, xMax;

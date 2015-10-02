@@ -6,7 +6,7 @@ Please note: These tools are prototypes and not yet ready for production use. Us
 
 Build Instructions (for Ubuntu 14.04)
 ----------------------------------------
-* `sudo apt-get install make git build-essential libprotobuf-dev protobuf-compiler libexpat1-dev cmake ruby-ronn` # install the required dependencies
+* `sudo apt-get install make git build-essential libprotobuf-dev protobuf-compiler libexpat1-dev cmake ruby-ronn libgeos++-dev` # install the required dependencies
 * `git clone https://github.com/rbuch703/coords.git` # clone the repository
 * `cd coords`
 * `cmake .`

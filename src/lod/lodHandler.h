@@ -21,7 +21,7 @@ public:
     
     virtual ~LodHandler();
     const void* const* getZoomLevels() const;
-    virtual int applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing) const = 0;
+    virtual int applicableUpToZoomLevel(TagDictionary &tags, bool isClosedRing, double area) const = 0;
     virtual int8_t getZIndex(const TagDictionary &tags) const;
     virtual bool isArea() const = 0;
     

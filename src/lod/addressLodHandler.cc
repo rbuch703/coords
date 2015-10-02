@@ -8,7 +8,7 @@ AddressLodHandler::AddressLodHandler(std::string tileDirectory, std::string base
 }
 
 
-int AddressLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/) const
+int AddressLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/, double) const
 {
     if (tags.count("addr:housenumber"))
         return 10;

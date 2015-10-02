@@ -1,10 +1,10 @@
 
-#include "roadLodHandler.h"
+#include "roadMinorLabelLodHandler.h"
 #include "config.h"
 
 #include <map>
 
-RoadLodHandler::RoadLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
+RoadMinorLabelLodHandler::RoadMinorLabelLodHandler(std::string tileDirectory, std::string baseName): LodHandler(tileDirectory, baseName)
 {
     enableLods({10, 9, 6});
 }
@@ -27,7 +27,7 @@ static const std::map<std::string, int64_t> highwayTypeZBias = {
 	{"motorway",       9},
 };
 
-int8_t RoadLodHandler::getZIndex(const TagDictionary &tags) const
+int8_t RoadMinorLabelLodHandler::getZIndex(const TagDictionary &tags) const
 {
     int64_t zIndex = 0;
     if (tags.count("layer"))
@@ -63,85 +63,52 @@ int8_t RoadLodHandler::getZIndex(const TagDictionary &tags) const
 }
 
 
-int RoadLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/, double) const
+int RoadMinorLabelLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/, double) const
 {
-    if (tags.count("highway"))
+    if (tags.count("highway") && (tags.count("name") || tags.count("ref")))
     {
         //if (tags.count("tunnel") && tags["tunnel"] != "no") return -1;
         //if (tags.count("brigde") && tags["bridge"] != "no") return -1;
         
         const std::string &type = tags.at("highway");
-        tags.insert(std::make_pair("type", type));
-
-        if (type == "motorway" || type == "trunk")
-        {
-            tags.insert(std::make_pair("stylegroup", "motorway"));
-            return 0;
-        }
+        tags.insert( make_pair("type", type));
         
+        if (! tags.count("oneway") && ! tags.count("name"))
+            return -1;
+        /*
         if (type == "primary" || type == "secondary")
         {
             tags.insert(std::make_pair("stylegroup", "mainroad"));
             return 7;
-        }
+        }*/
             
-        if ( type == "motorway_link" || type == "trunk_link" || type == "primary_link" ||
-             type == "secondary_link" || type == "tertiary" || type == "tertiary_link" ||
-             type == "residential" || type == "unclassified" || type == "road" ||
-             type == "living_street")
+        if ( type == "residential" || type == "unclassified" || type == "road" ||
+             type == "living_street" || type == "unknown")
         {
-            tags.insert(std::make_pair("stylegroup", "minorroad"));
-            
+                        
             return 10;
         }
             
-        
+        /*
         if ( type == "service" || type == "track")
         { 
             tags.insert(std::make_pair("stylegroup", "service"));
             return 12;
         }   
             
-            /*type == "raceway")
-        if (type == "platform" ||  || */
        if (type == "path"  || type == "cycleway" || type == "footway"  ||
            type == "pedestrian" || type == "steps" || type == "bridleway")
        {
             tags.insert(std::make_pair("stylegroup", "noauto"));
             
             return 13;
-       }
-
-
-        //these types are known, and judged as irrelevant for rendering;
-        //all other types are unknown        
-        /*if (type != "construction" && type != "proposed" && type != "no" &&
-            type != "byway" && type != "unsurfaced")
-            std::cout << "unknown road type '" << type << "'." << std::endl;*/
+       }*/
     }
     
-    if (tags.count("railway"))
-    {
-        //if (tags.count("tunnel") && tags["tunnel"] != "no") return -1;
-        //if (tags.count("brigde") && tags["bridge"] != "no") return -1;
-
-        const std::string &type = tags.at("railway");
-        tags.insert(std::make_pair("type", type));
-        tags.insert(std::make_pair("stylegroup", "railway"));
-
-        if (type == "rail") return 0;
-        
-        if (type == "abandoned"    || type == "tram"         || type == "disused"    || 
-            type == "subway"       || type == "narrow_gauge" || type == "light_rail" || 
-            type == "preserved"    || type == "monorail"     || type == "funicular" )
-            return 10;
-    }
-    
-
     return -1;
 }
 
-bool RoadLodHandler::isArea() const
+bool RoadMinorLabelLodHandler::isArea() const
 {
     return false;
 }

@@ -13,7 +13,7 @@ WaterwayLodHandler::WaterwayLodHandler(std::string tileDirectory, std::string ba
 }
 
 
-int WaterwayLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/) const
+int WaterwayLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isClosedRing*/, double) const
 {
     if (tags.count("waterway"))
     {
@@ -21,6 +21,8 @@ int WaterwayLodHandler::applicableUpToZoomLevel(TagDictionary &tags, bool/* isCl
          *      to mark the *area* of a river, while all features selected here represent
          *      bodies of water drawn as individual lines */
         const std::string type = tags.at("waterway");
+        tags.insert( make_pair( "type", type));
+        
         if (type == "river") return 0;
         if (type == "canal") return 0;
         if (type == "stream") return 10;
