@@ -127,21 +127,18 @@ ADD_CUSTOM_TARGET(man ALL)
 
 ADD_CUSTOM_COMMAND(
   TARGET man
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/man/coordsCreateStorage.1.ronn
   COMMAND ronn -r < ${CMAKE_CURRENT_SOURCE_DIR}/man/coordsCreateStorage.1.ronn > ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateStorage.1
   OUTPUTS ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateStorage.1
 )
 
 ADD_CUSTOM_COMMAND(
   TARGET man
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/man/coordsResolveStorage.1.ronn
   COMMAND ronn -r < ${CMAKE_CURRENT_SOURCE_DIR}/man/coordsResolveStorage.1.ronn > ${CMAKE_CURRENT_BINARY_DIR}/coordsResolveStorage.1
   OUTPUTS ${CMAKE_CURRENT_BINARY_DIR}/coordsResolveStorage.1
 )
 
 ADD_CUSTOM_COMMAND(
   TARGET man
-  SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/man/coordsCreateTiles.1.ronn
   COMMAND ronn -r < ${CMAKE_CURRENT_SOURCE_DIR}/man/coordsCreateTiles.1.ronn > ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateTiles.1
   OUTPUTS ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateTiles.1
 )
@@ -149,7 +146,6 @@ ADD_CUSTOM_COMMAND(
 
 ADD_CUSTOM_COMMAND(
   TARGET man
-  SOURCE man
   DEPENDS 
     ${CMAKE_CURRENT_BINARY_DIR}/coordsCreateStorage.1
     ${CMAKE_CURRENT_BINARY_DIR}/coordsResolveStorage.1
